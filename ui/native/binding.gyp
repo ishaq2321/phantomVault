@@ -9,15 +9,15 @@
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
         "../../core/include",
-        "../../build/core/include",
+        "../../core/build/include",
         "/usr/include/qt5",
         "/usr/include/x86_64-linux-gnu/qt5",
         "/usr/include/openssl"
       ],
       "libraries": [
-        "-L<(module_root_dir)/../../build/lib",
+        "-L<(module_root_dir)/../../core/build",
         "-lphantom_vault_core",
-        "-Wl,-rpath,<(module_root_dir)/../../build/lib"
+        "-Wl,-rpath,<(module_root_dir)/../../core/build"
       ],
       "cflags!": [ "-fno-exceptions" ],
       "cflags_cc!": [ "-fno-exceptions" ],
@@ -29,7 +29,7 @@
       "conditions": [
         ["OS=='linux'", {
           "libraries": [
-            "-Wl,-rpath,$$ORIGIN/../../build/lib"
+            "-Wl,-rpath,$ORIGIN/../../core/build"
           ]
         }]
       ]
