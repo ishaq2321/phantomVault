@@ -298,7 +298,14 @@ function createOverlayWindow(overlayData) {
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
 
-  overlayWindow.loadURL('http://127.0.0.1:5173');
+  // Load production build or development server
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) {
+    overlayWindow.loadURL('http://127.0.0.1:5173');
+  } else {
+    // Production: load from dist directory
+    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
 
   overlayWindow.webContents.once('did-finish-load', () => {
     // Send overlay data to the React app
@@ -335,12 +342,23 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL('http://127.0.0.1:5173');
+  // Load production build or development server
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) {
+    mainWindow.loadURL('http://127.0.0.1:5173');
+  } else {
+    // Production: load from dist directory
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
   
   // Show window when ready to prevent white flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    mainWindow.webContents.openDevTools();
+    
+    // Only open dev tools in development
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow.webContents.openDevTools();
+    }
     
     // Create system tray after window is shown (required on some Linux systems)
     createTray();
