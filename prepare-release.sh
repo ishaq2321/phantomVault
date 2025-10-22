@@ -29,6 +29,7 @@ cp README.md "$RELEASE_DIR/PROJECT_README.md"
 cp -r core "$RELEASE_DIR/"
 cp -r ui "$RELEASE_DIR/"
 cp -r systemd "$RELEASE_DIR/"
+cp -r assets "$RELEASE_DIR/"
 
 # Remove build artifacts and node_modules to reduce size
 rm -rf "$RELEASE_DIR/core/build"

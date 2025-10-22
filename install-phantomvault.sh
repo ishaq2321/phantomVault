@@ -267,11 +267,13 @@ if ! pgrep -f "phantom_vault_service" > /dev/null; then
 fi
 
 # Start Electron GUI in production mode
-if [ -f "dist/index.html" ]; then
+if [ -f "$INSTALL_DIR/ui/dist/index.html" ]; then
     # Production mode - serve the built files
     npx electron electron/main.js
 else
-    echo "❌ UI build not found. Please run the installer again."
+    echo "❌ UI build not found at $INSTALL_DIR/ui/dist/index.html"
+    echo "Available files in UI directory:"
+    ls -la "$INSTALL_DIR/ui/" || echo "UI directory not found"
     exit 1
 fi
 EOF
