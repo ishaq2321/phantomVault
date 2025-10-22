@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.2-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.0.3-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
 [![Release](https://img.shields.io/badge/release-ready-success.svg)]()
 
 ## 🚀 Overview
@@ -70,11 +70,11 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 1. **Download the latest release:**
    ```bash
    # Download from GitHub releases
-   wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.2-linux.tar.gz
+   wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.3-linux.tar.gz
    
    # Extract
-   tar -xzf phantomvault-v1.0.2-linux.tar.gz
-   cd phantomvault-v1.0.2-linux
+   tar -xzf phantomvault-v1.0.3-linux.tar.gz
+   cd phantomvault-v1.0.3-linux
    ```
 
 2. **Install with one command:**
@@ -94,9 +94,9 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 - **Root access** for installation (sudo)
 - **Internet connection** for dependencies
 
-> **✅ Latest Updates (v1.0.2):**
-> - Fixed installer compatibility with NodeSource Node.js installations
-> - Resolved "Source files not found" installer errors
+> **✅ Latest Updates (v1.0.3):**
+> - Fixed installer file copying logic and directory handling
+> - Resolved installer compatibility with NodeSource Node.js installations
 > - Enhanced dependency detection and path resolution
 > - Improved error messages for better troubleshooting
 
@@ -305,15 +305,15 @@ SOFTWARE.
 
 **Node.js/npm conflicts:**
 ```bash
-# If you see npm dependency conflicts, use the latest installer (v1.0.2+)
+# If you see npm dependency conflicts, use the latest installer (v1.0.3+)
 # The installer now handles NodeSource Node.js installations automatically
-wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.2-linux.tar.gz
+wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.3-linux.tar.gz
 ```
 
 **Source files not found:**
 ```bash
 # Ensure you're running the installer from the extracted directory
-cd phantomvault-v1.0.2-linux
+cd phantomvault-v1.0.3-linux
 sudo ./install-phantomvault.sh
 ```
 
@@ -370,7 +370,8 @@ openssl version
 
 ### 📈 Version History
 
-- **v1.0.2** - Fixed installer path detection and Node.js conflicts (current)
+- **v1.0.3** - Fixed installer file copying logic (current)
+- **v1.0.2** - Fixed installer path detection and Node.js conflicts
 - **v1.0.1** - Fixed Node.js/npm installation conflicts
 - **v1.0.0** - Desktop application with installer
 - **v0.9.0** - Native C++ service architecture
