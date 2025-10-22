@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.3-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.0.4-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
 [![Release](https://img.shields.io/badge/release-ready-success.svg)]()
 
 ## 🚀 Overview
@@ -70,11 +70,11 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 1. **Download the latest release:**
    ```bash
    # Download from GitHub releases
-   wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.3-linux.tar.gz
+   wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.4-linux.tar.gz
    
    # Extract
-   tar -xzf phantomvault-v1.0.3-linux.tar.gz
-   cd phantomvault-v1.0.3-linux
+   tar -xzf phantomvault-v1.0.4-linux.tar.gz
+   cd phantomvault-v1.0.4-linux
    ```
 
 2. **Install with one command:**
@@ -94,11 +94,12 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 - **Root access** for installation (sudo)
 - **Internet connection** for dependencies
 
-> **✅ Latest Updates (v1.0.3):**
-> - Fixed installer file copying logic and directory handling
-> - Resolved installer compatibility with NodeSource Node.js installations
-> - Enhanced dependency detection and path resolution
-> - Improved error messages for better troubleshooting
+> **✅ Latest Updates (v1.0.4):**
+> - Fixed TypeScript configuration issues in UI build
+> - Resolved circular dependency problems in project references
+> - Added proper tsconfig.node.json configuration
+> - Disabled declaration file generation to prevent conflicts
+> - Complete installer now works end-to-end without build errors
 
 ### 🗑️ Uninstallation
 
@@ -303,17 +304,17 @@ SOFTWARE.
 
 #### Installation Issues
 
-**Node.js/npm conflicts:**
+**TypeScript build errors:**
 ```bash
-# If you see npm dependency conflicts, use the latest installer (v1.0.3+)
-# The installer now handles NodeSource Node.js installations automatically
-wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.3-linux.tar.gz
+# If you see TypeScript build errors, use the latest installer (v1.0.4+)
+# The installer now has fixed TypeScript configuration
+wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.4-linux.tar.gz
 ```
 
 **Source files not found:**
 ```bash
 # Ensure you're running the installer from the extracted directory
-cd phantomvault-v1.0.3-linux
+cd phantomvault-v1.0.4-linux
 sudo ./install-phantomvault.sh
 ```
 
@@ -370,7 +371,8 @@ openssl version
 
 ### 📈 Version History
 
-- **v1.0.3** - Fixed installer file copying logic (current)
+- **v1.0.4** - Fixed TypeScript build configuration issues (current)
+- **v1.0.3** - Fixed installer file copying logic
 - **v1.0.2** - Fixed installer path detection and Node.js conflicts
 - **v1.0.1** - Fixed Node.js/npm installation conflicts
 - **v1.0.0** - Desktop application with installer
