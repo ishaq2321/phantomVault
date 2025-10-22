@@ -1,0 +1,294 @@
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut } = require('electron');
+const path = require('path');
+const ffi = require('ffi-napi');
+const ref = require('ref-napi');
+
+// Type definitions for FFI
+const StringPtr = ref.refType(ref.types.CString);
+const VoidPtr = ref.refType(ref.types.void);
+const UInt8Ptr = ref.refType(ref.types.uint8);
+
+let mainWindow = null;
+let tray = null;
+let phantomCore = null;
+
+// Load the native PhantomVault core library
+function loadNativeLibrary() {
+  const libPath = path.join(__dirname, '../../build/lib/libphantom_vault_core.so');
+  
+  try {
+    phantomCore = ffi.Library(libPath, {
+      // Core library
+      'PhantomVault_GetLibraryVersion': [StringPtr, []],
+      'PhantomVault_Cleanup': ['void', []],
+      
+      // Encryption Engine
+      'PhantomVault_CreateEncryptionEngine': [VoidPtr, []],
+      'PhantomVault_DestroyEncryptionEngine': ['void', [VoidPtr]],
+      'PhantomVault_GenerateKey': ['int', [VoidPtr, UInt8Ptr, 'int']],
+      'PhantomVault_GenerateIV': ['int', [VoidPtr, UInt8Ptr, 'int']],
+      'PhantomVault_GenerateSalt': ['int', [VoidPtr, UInt8Ptr, 'int']],
+      'PhantomVault_EncryptData': ['int', [VoidPtr, UInt8Ptr, 'int', UInt8Ptr, UInt8Ptr, UInt8Ptr, 'int']],
+      'PhantomVault_DecryptData': ['int', [VoidPtr, UInt8Ptr, 'int', UInt8Ptr, UInt8Ptr, UInt8Ptr, 'int']],
+      'PhantomVault_EncryptFile': ['int', [VoidPtr, StringPtr, StringPtr, UInt8Ptr, UInt8Ptr]],
+      'PhantomVault_DecryptFile': ['int', [VoidPtr, StringPtr, StringPtr, UInt8Ptr, UInt8Ptr]],
+      'PhantomVault_DeriveKeyFromPassword': ['int', [VoidPtr, StringPtr, UInt8Ptr, 'int', UInt8Ptr, 'int']],
+      
+      // File System
+      'PhantomVault_CreateFileSystem': [VoidPtr, []],
+      'PhantomVault_DestroyFileSystem': ['void', [VoidPtr]],
+      'PhantomVault_FileExists': ['int', [VoidPtr, StringPtr]],
+      'PhantomVault_HideFile': ['int', [VoidPtr, StringPtr]],
+      'PhantomVault_UnhideFile': ['int', [VoidPtr, StringPtr]],
+      'PhantomVault_CreateDirectories': ['int', [VoidPtr, StringPtr]],
+      
+      // Secure Storage
+      'PhantomVault_CreateSecureStorage': [VoidPtr, []],
+      'PhantomVault_DestroySecureStorage': ['void', [VoidPtr]],
+    });
+    
+    console.log('✅ Native library loaded successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to load native library:', error);
+    return false;
+  }
+}
+
+// Create the main application window
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    backgroundColor: '#1B1F3B',
+    frame: true,
+    show: false,
+    icon: path.join(__dirname, '../assets/icons/icon.png'),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  // Load the app
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
+
+  // Show window when ready
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // Handle window close
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+// Create system tray
+function createTray() {
+  const iconPath = path.join(__dirname, '../assets/icons/tray-icon.png');
+  tray = new Tray(iconPath);
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show PhantomVault',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+        }
+      },
+    },
+    {
+      label: 'Lock All Vaults',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.webContents.send('lock-all-vaults');
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Settings',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.webContents.send('show-settings');
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setToolTip('PhantomVault - Secure Folder Management');
+  tray.setContextMenu(contextMenu);
+
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+      }
+    }
+  });
+}
+
+// Register global shortcuts
+function registerShortcuts() {
+  // Ctrl+Alt+V - Show/Hide window
+  globalShortcut.register('CommandOrControl+Alt+V', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+      }
+    }
+  });
+
+  // Ctrl+Alt+L - Lock all vaults
+  globalShortcut.register('CommandOrControl+Alt+L', () => {
+    if (mainWindow) {
+      mainWindow.webContents.send('lock-all-vaults');
+    }
+  });
+}
+
+// IPC Handlers
+function setupIpcHandlers() {
+  // Get library version
+  ipcMain.handle('get-version', async () => {
+    if (!phantomCore) return 'Unknown';
+    try {
+      const version = phantomCore.PhantomVault_GetLibraryVersion();
+      return version || '1.0.0';
+    } catch (error) {
+      console.error('Error getting version:', error);
+      return '1.0.0';
+    }
+  });
+
+  // Folder selection dialog
+  ipcMain.handle('select-folder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Select Folder to Secure',
+    });
+    
+    if (result.canceled) {
+      return null;
+    }
+    
+    return result.filePaths[0];
+  });
+
+  // File operations
+  ipcMain.handle('file-exists', async (event, filePath) => {
+    const fs = phantomCore.PhantomVault_CreateFileSystem();
+    try {
+      const exists = phantomCore.PhantomVault_FileExists(fs, filePath);
+      return exists === 1;
+    } finally {
+      phantomCore.PhantomVault_DestroyFileSystem(fs);
+    }
+  });
+
+  // Window management
+  ipcMain.handle('minimize-to-tray', () => {
+    if (mainWindow) {
+      mainWindow.hide();
+    }
+  });
+
+  ipcMain.handle('show-window', () => {
+    if (mainWindow) {
+      mainWindow.show();
+    }
+  });
+
+  ipcMain.handle('quit-app', () => {
+    app.isQuitting = true;
+    app.quit();
+  });
+
+  // Notifications
+  ipcMain.handle('show-notification', (event, title, body) => {
+    const { Notification } = require('electron');
+    new Notification({ title, body }).show();
+  });
+}
+
+// App lifecycle
+app.whenReady().then(() => {
+  // Load native library
+  const loaded = loadNativeLibrary();
+  if (!loaded) {
+    dialog.showErrorBox(
+      'PhantomVault Error',
+      'Failed to load native library. Please ensure the core library is built correctly.'
+    );
+    app.quit();
+    return;
+  }
+
+  // Create window and tray
+  createWindow();
+  createTray();
+  registerShortcuts();
+  setupIpcHandlers();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    // Don't quit on window close, just hide to tray
+    // app.quit();
+  }
+});
+
+app.on('will-quit', () => {
+  // Unregister all shortcuts
+  globalShortcut.unregisterAll();
+  
+  // Cleanup native library
+  if (phantomCore) {
+    phantomCore.PhantomVault_Cleanup();
+  }
+});
+
+app.on('before-quit', () => {
+  app.isQuitting = true;
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
+  dialog.showErrorBox('PhantomVault Error', error.message);
+});

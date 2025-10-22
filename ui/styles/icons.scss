@@ -1,0 +1,206 @@
+@import 'design_system';
+
+// Icon Base Styles
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: $spacing-md;
+  height: $spacing-md;
+  user-select: none;
+  flex-shrink: 0;
+
+  // Size Variants
+  &--xs {
+    width: $spacing-sm;
+    height: $spacing-sm;
+  }
+
+  &--sm {
+    width: $spacing-md;
+    height: $spacing-md;
+  }
+
+  &--md {
+    width: $spacing-lg;
+    height: $spacing-lg;
+  }
+
+  &--lg {
+    width: $spacing-xl;
+    height: $spacing-xl;
+  }
+
+  // Color Variants
+  &--primary {
+    color: $color-primary;
+  }
+
+  &--secondary {
+    color: $color-secondary;
+  }
+
+  &--critical {
+    color: $color-critical;
+  }
+
+  &--success {
+    color: $color-success;
+  }
+
+  &--warning {
+    color: $color-warning;
+  }
+
+  &--error {
+    color: $color-error;
+  }
+
+  &--info {
+    color: $color-info;
+  }
+
+  &--disabled {
+    color: $color-disabled;
+    pointer-events: none;
+  }
+
+  // Interactive States
+  &--interactive {
+    cursor: pointer;
+    transition: transform $transition-fast, color $transition-fast;
+
+    &:hover {
+      transform: scale(1.1);
+      color: $color-primary;
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  // Animation Variants
+  &--spin {
+    animation: icon-spin 2s linear infinite;
+  }
+
+  &--pulse {
+    animation: icon-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  // Special States
+  &--secure {
+    filter: blur(4px);
+    transition: filter $transition-fast;
+
+    &:hover {
+      filter: blur(0);
+    }
+  }
+}
+
+// Icon Grid Layout
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: $spacing-md;
+  padding: $spacing-md;
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: $spacing-sm;
+    border-radius: $border-radius-md;
+    background-color: $color-surface;
+    transition: background-color $transition-fast;
+
+    &:hover {
+      background-color: rgba($color-primary, 0.1);
+    }
+  }
+
+  &__label {
+    margin-top: $spacing-xs;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+  }
+}
+
+// Icon Animations
+@keyframes icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes icon-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+// Icon Utilities
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-xs;
+
+  .icon {
+    flex-shrink: 0;
+  }
+}
+
+// Status Icon Combinations
+.status-icon {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 2px solid $color-background;
+  }
+
+  &--online::after {
+    background-color: $color-success;
+  }
+
+  &--offline::after {
+    background-color: $color-error;
+  }
+
+  &--away::after {
+    background-color: $color-warning;
+  }
+}
+
+// Icon Button Combinations
+.icon-button {
+  @extend .button;
+  padding: $spacing-xs;
+  border-radius: $border-radius-full;
+  
+  .icon {
+    margin: 0;
+  }
+}
+
+// Loading Icon States
+.loading-icon {
+  @extend .icon;
+  @extend .icon--spin;
+  color: $color-primary;
+} 

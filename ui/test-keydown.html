@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Keydown Test</title>
+</head>
+<body>
+    <h1>Press any key</h1>
+    <div id="output"></div>
+    <script>
+        console.log('Adding window keydown listener...');
+        window.addEventListener('keydown', (e) => {
+            console.log('Key pressed:', e.key);
+            document.getElementById('output').innerHTML += `<p>Key: ${e.key}</p>`;
+        }, { capture: true });
+        console.log('Listener added');
+    </script>
+</body>
+</html>

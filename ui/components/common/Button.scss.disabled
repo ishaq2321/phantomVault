@@ -1,0 +1,136 @@
+@import '../../styles/design_system';
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-family: $font-primary;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+  }
+
+  // Sizes
+  &--small {
+    padding: 6px 12px;
+    font-size: 13px;
+    min-height: 28px;
+  }
+
+  &--medium {
+    padding: 10px 20px;
+    font-size: 14px;
+    min-height: 36px;
+  }
+
+  &--large {
+    padding: 14px 28px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  // Variants
+  &--primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+
+    &:hover:not(.button--disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    &:active:not(.button--disabled) {
+      transform: translateY(0);
+    }
+  }
+
+  &--secondary {
+    background-color: $color-bg-secondary;
+    color: $color-text-primary;
+    border: 1px solid $color-border;
+
+    &:hover:not(.button--disabled) {
+      background-color: darken($color-bg-secondary, 5%);
+      border-color: darken($color-border, 10%);
+    }
+  }
+
+  &--outline {
+    background-color: transparent;
+    color: $color-primary;
+    border: 1px solid $color-primary;
+
+    &:hover:not(.button--disabled) {
+      background-color: rgba($color-primary, 0.1);
+    }
+  }
+
+  &--critical {
+    background-color: $color-error;
+    color: white;
+
+    &:hover:not(.button--disabled) {
+      background-color: darken($color-error, 10%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba($color-error, 0.4);
+    }
+
+    &:active:not(.button--disabled) {
+      transform: translateY(0);
+    }
+  }
+
+  // States
+  &--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  &--full-width {
+    width: 100%;
+  }
+
+  // Elements
+  &__text {
+    line-height: 1;
+  }
+
+  &__icon {
+    &--left {
+      margin-right: -4px;
+    }
+
+    &--right {
+      margin-left: -4px;
+    }
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+  }
+
+  &__loading-icon {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,254 @@
+@import '../../styles/design_system';
+@import '../../styles/animations';
+
+.setup-wizard {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: $color-background;
+  color: $color-text-primary;
+
+  // Header
+  &__header {
+    padding: $spacing-xl;
+    text-align: center;
+
+    &-logo {
+      width: 120px;
+      height: 120px;
+      margin-bottom: $spacing-lg;
+      animation: fade-in $transition-slow ease-out;
+    }
+
+    &-title {
+      @include heading-2xl;
+      margin-bottom: $spacing-md;
+      animation: slide-up $transition-slow ease-out;
+    }
+
+    &-subtitle {
+      @include text-lg;
+      color: $color-text-secondary;
+      animation: slide-up $transition-slow ease-out;
+      animation-delay: 0.2s;
+    }
+  }
+
+  // Content
+  &__content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-xl;
+  }
+
+  // Steps container
+  &__steps {
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  // Individual step
+  &__step {
+    display: none;
+    animation: fade-in $transition-normal ease-out;
+
+    &--active {
+      display: block;
+    }
+
+    &-header {
+      margin-bottom: $spacing-xl;
+      text-align: center;
+    }
+
+    &-title {
+      @include heading-xl;
+      margin-bottom: $spacing-sm;
+    }
+
+    &-description {
+      @include text-md;
+      color: $color-text-secondary;
+    }
+
+    &-content {
+      margin-bottom: $spacing-xl;
+    }
+  }
+
+  // Progress indicator
+  &__progress {
+    display: flex;
+    justify-content: center;
+    margin-bottom: $spacing-xl;
+    gap: $spacing-md;
+
+    &-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: $border-radius-full;
+      background-color: $color-surface;
+      transition: all $transition-fast;
+
+      &--active {
+        width: 24px;
+        background-color: $color-primary;
+      }
+
+      &--complete {
+        background-color: $color-success;
+      }
+    }
+  }
+
+  // Form elements
+  &__form {
+    &-group {
+      margin-bottom: $spacing-lg;
+    }
+
+    &-label {
+      display: block;
+      @include text-sm;
+      font-weight: $font-weight-medium;
+      margin-bottom: $spacing-xs;
+    }
+
+    &-input {
+      @extend .input;
+      width: 100%;
+    }
+
+    &-help {
+      @include text-sm;
+      color: $color-text-secondary;
+      margin-top: $spacing-xs;
+    }
+  }
+
+  // Security level selector
+  &__security-levels {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: $spacing-md;
+    margin-bottom: $spacing-xl;
+  }
+
+  &__security-level {
+    position: relative;
+    padding: $spacing-lg;
+    border-radius: $border-radius-lg;
+    background-color: $color-surface;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      transform: translateY(-2px);
+    }
+
+    &--selected {
+      border-color: $color-primary;
+      background-color: rgba($color-primary, 0.1);
+    }
+
+    &-icon {
+      @extend .icon;
+      @extend .icon--lg;
+      margin-bottom: $spacing-md;
+      color: $color-primary;
+    }
+
+    &-title {
+      @include text-md;
+      font-weight: $font-weight-semibold;
+      margin-bottom: $spacing-xs;
+    }
+
+    &-description {
+      @include text-sm;
+      color: $color-text-secondary;
+    }
+  }
+
+  // Navigation
+  &__nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-xl;
+    border-top: 1px solid $color-border;
+
+    &-back {
+      @extend .button;
+      @extend .button--outline;
+    }
+
+    &-next {
+      @extend .button;
+      @extend .button--primary;
+    }
+  }
+
+  // Completion animation
+  &__complete {
+    text-align: center;
+    padding: $spacing-2xl 0;
+
+    &-icon {
+      @extend .icon;
+      @extend .icon--2xl;
+      color: $color-success;
+      margin-bottom: $spacing-xl;
+      animation: success-bounce $transition-slow ease-out;
+    }
+
+    &-title {
+      @include heading-xl;
+      margin-bottom: $spacing-md;
+      animation: slide-up $transition-slow ease-out;
+    }
+
+    &-description {
+      @include text-lg;
+      color: $color-text-secondary;
+      margin-bottom: $spacing-xl;
+      animation: slide-up $transition-slow ease-out;
+      animation-delay: 0.2s;
+    }
+
+    &-action {
+      @extend .button;
+      @extend .button--primary;
+      animation: fade-in $transition-slow ease-out;
+      animation-delay: 0.4s;
+    }
+  }
+
+  // Responsive adjustments
+  @include media-breakpoint-down(md) {
+    &__security-levels {
+      grid-template-columns: 1fr;
+    }
+
+    &__header {
+      padding: $spacing-lg;
+
+      &-logo {
+        width: 80px;
+        height: 80px;
+      }
+    }
+
+    &__content {
+      padding: $spacing-lg;
+    }
+
+    &__nav {
+      padding: $spacing-lg;
+    }
+  }
+} 

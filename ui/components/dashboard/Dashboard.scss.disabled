@@ -1,0 +1,170 @@
+@import '../../styles/design_system';
+@import '../../styles/animations';
+
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "header header"
+    "main sidebar";
+  height: 100vh;
+  background-color: $color-background;
+  color: $color-text-primary;
+
+  // Header
+  &__header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $spacing-lg;
+    background-color: $color-surface;
+    border-bottom: 1px solid $color-border;
+
+    &-title {
+      @include heading-xl;
+      display: flex;
+      align-items: center;
+      gap: $spacing-sm;
+
+      .icon {
+        color: $color-primary;
+      }
+    }
+
+    &-actions {
+      display: flex;
+      gap: $spacing-md;
+    }
+  }
+
+  // Main content area
+  &__main {
+    grid-area: main;
+    padding: $spacing-lg;
+    overflow: auto;
+  }
+
+  // Sidebar
+  &__sidebar {
+    grid-area: sidebar;
+    background-color: $color-surface;
+    border-left: 1px solid $color-border;
+    overflow: auto;
+  }
+
+  // Search bar
+  &__search {
+    margin-bottom: $spacing-lg;
+    position: relative;
+
+    &-input {
+      @extend .input;
+      @extend .input--search;
+      width: 100%;
+    }
+  }
+
+  // View toggle
+  &__view-toggle {
+    display: flex;
+    gap: $spacing-xs;
+    margin-bottom: $spacing-lg;
+
+    &-button {
+      @extend .button;
+      @extend .button--outline;
+      padding: $spacing-sm;
+
+      &--active {
+        background-color: $color-primary;
+        color: $color-text-primary;
+      }
+
+      .icon {
+        margin-right: $spacing-xs;
+      }
+    }
+  }
+
+  // Empty state
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-2xl;
+    text-align: center;
+
+    &-icon {
+      @extend .icon;
+      @extend .icon--2xl;
+      color: $color-text-secondary;
+      margin-bottom: $spacing-lg;
+    }
+
+    &-title {
+      @include heading-lg;
+      margin-bottom: $spacing-sm;
+    }
+
+    &-description {
+      @include text-md;
+      color: $color-text-secondary;
+      margin-bottom: $spacing-lg;
+    }
+
+    &-action {
+      @extend .button;
+      @extend .button--primary;
+    }
+  }
+
+  // Responsive adjustments
+  @include media-breakpoint-down(lg) {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "main";
+
+    &__sidebar {
+      display: none;
+
+      &--mobile {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 300px;
+        z-index: $z-index-drawer;
+        transform: translateX(100%);
+        transition: transform $transition-normal;
+
+        &.active {
+          transform: translateX(0);
+        }
+      }
+    }
+  }
+
+  @include media-breakpoint-down(md) {
+    &__header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: $spacing-md;
+
+      &-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+
+    &__view-toggle {
+      width: 100%;
+      &-button {
+        flex: 1;
+      }
+    }
+  }
+} 
