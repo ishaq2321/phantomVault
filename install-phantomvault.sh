@@ -118,12 +118,21 @@ echo "============================================="
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# If we're in the source directory, copy files
-if [ -f "$(dirname "$0")/core/CMakeLists.txt" ]; then
-    echo "📋 Copying source files..."
-    cp -r "$(dirname "$0")"/* .
+# Get the directory where the installer script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if we're in the source directory
+if [ -f "$SCRIPT_DIR/core/CMakeLists.txt" ]; then
+    echo "📋 Copying source files from: $SCRIPT_DIR"
+    cp -r "$SCRIPT_DIR"/* .
+elif [ -f "./core/CMakeLists.txt" ]; then
+    echo "📋 Copying source files from current directory..."
+    cp -r ./* "$INSTALL_DIR/"
 else
-    echo "❌ Source files not found. Please run this installer from the PhantomVault directory."
+    echo "❌ Source files not found. Expected to find core/CMakeLists.txt"
+    echo "   Script location: $SCRIPT_DIR"
+    echo "   Current directory: $(pwd)"
+    echo "   Please ensure you're running this installer from the PhantomVault directory."
     exit 1
 fi
 
