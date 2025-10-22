@@ -4,6 +4,18 @@ core/build/
 ui/dist/
 ui/dist-electron/
 ui/node_modules/
+ui/native/node_modules/
+ui/native/build/
+
+# Package lock files
+package-lock.json
+ui/package-lock.json
+ui/native/package-lock.json
+
+# Vault data directories (should not be in repo)
+.phantom_vault/
+ui/.phantom_vault/
+ui/native/.phantom_vault/
 
 # Release packages
 releases/
