@@ -1,6 +1,6 @@
 # Core library CMake configuration
 cmake_minimum_required(VERSION 3.16)
-project(PhantomVaultCore VERSION 1.0.0 LANGUAGES CXX)
+project(PhantomVaultCore VERSION 1.0.4 LANGUAGES CXX)
 
 # Set CMake policies to suppress warnings
 cmake_policy(SET CMP0012 NEW)

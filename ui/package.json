@@ -1,6 +1,6 @@
 {
   "name": "phantom-vault-ui",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "PhantomVault - Secure Folder Management",
   "main": "electron/main.js",
   "scripts": {
