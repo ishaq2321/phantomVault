@@ -3,7 +3,7 @@
 # PhantomVault Release Preparation Script
 # Creates a distributable package for GitHub releases
 
-VERSION="1.0.2"
+VERSION="1.0.4"
 RELEASE_NAME="phantomvault-v${VERSION}-linux"
 RELEASE_DIR="releases/${RELEASE_NAME}"
 
