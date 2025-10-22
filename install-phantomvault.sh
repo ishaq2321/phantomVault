@@ -53,9 +53,33 @@ echo "============================================"
 if command -v apt &> /dev/null; then
     echo "📦 Detected APT package manager (Ubuntu/Debian)"
     apt update
-    apt install -y build-essential cmake libssl-dev libx11-dev libxtst-dev \
-                   libxi-dev qtbase5-dev qtbase5-dev-tools nlohmann-json3-dev \
-                   nodejs npm curl git
+    
+    # Check if Node.js is already installed
+    if command -v node &> /dev/null; then
+        echo "✅ Node.js already installed: $(node --version)"
+        # Install npm using Node.js if not present
+        if ! command -v npm &> /dev/null; then
+            echo "📦 Installing npm via Node.js..."
+            # Use corepack (comes with Node.js 16+) or install npm directly
+            if command -v corepack &> /dev/null; then
+                corepack enable npm
+            else
+                # Install npm globally using Node.js
+                curl -qL https://www.npmjs.com/install.sh | sh
+            fi
+        else
+            echo "✅ npm already installed: $(npm --version)"
+        fi
+        # Install system dependencies without nodejs/npm
+        apt install -y build-essential cmake libssl-dev libx11-dev libxtst-dev \
+                       libxi-dev qtbase5-dev qtbase5-dev-tools nlohmann-json3-dev \
+                       curl git
+    else
+        # Install everything including nodejs and npm
+        apt install -y build-essential cmake libssl-dev libx11-dev libxtst-dev \
+                       libxi-dev qtbase5-dev qtbase5-dev-tools nlohmann-json3-dev \
+                       nodejs npm curl git
+    fi
 elif command -v dnf &> /dev/null; then
     echo "📦 Detected DNF package manager (Fedora)"
     dnf install -y gcc-c++ cmake openssl-devel libX11-devel libXtst-devel \
@@ -74,7 +98,17 @@ else
     exit 1
 fi
 
-echo "✅ Dependencies installed successfully"
+# Verify Node.js and npm are working
+echo "🔍 Verifying Node.js and npm installation..."
+if command -v node &> /dev/null && command -v npm &> /dev/null; then
+    echo "✅ Node.js version: $(node --version)"
+    echo "✅ npm version: $(npm --version)"
+    echo "✅ Dependencies installed successfully"
+else
+    echo "❌ Node.js or npm installation failed"
+    echo "Please install Node.js and npm manually and try again"
+    exit 1
+fi
 
 echo ""
 echo "📁 Step 2: Creating installation directory..."
