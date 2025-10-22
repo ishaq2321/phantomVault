@@ -49,21 +49,8 @@ echo ""
 echo "🔧 Step 1: Installing system dependencies..."
 echo "============================================"
 
-# Install ImageMagick for icon conversion
-if ! command -v convert &> /dev/null; then
-    echo "📦 Installing ImageMagick for icon support..."
-    if command -v apt &> /dev/null; then
-        apt update && apt install -y imagemagick
-    elif command -v dnf &> /dev/null; then
-        dnf install -y ImageMagick
-    elif command -v pacman &> /dev/null; then
-        pacman -S --noconfirm imagemagick
-    else
-        echo "⚠️  Could not install ImageMagick automatically. SVG icon will be used."
-    fi
-else
-    echo "✅ ImageMagick already installed"
-fi
+# No need to install ImageMagick - we include a pre-made PNG icon
+echo "✅ Using pre-made PNG icon (no ImageMagick required)"
 
 # Detect package manager and install dependencies
 if command -v apt &> /dev/null; then
@@ -203,9 +190,17 @@ echo ""
 echo "🖼️  Step 4: Creating application icon..."
 echo "========================================"
 
-# Create a simple PhantomVault icon (SVG format)
+# Use pre-made PNG icon (no ImageMagick required)
 mkdir -p "$INSTALL_DIR/assets"
-cat > "$INSTALL_DIR/assets/phantomvault.svg" << 'EOF'
+
+# Copy the pre-made PNG icon from the release package
+if [ -f "assets/phantomvault.png" ]; then
+    cp "assets/phantomvault.png" "$INSTALL_DIR/assets/"
+    ICON_PATH="$INSTALL_DIR/assets/phantomvault.png"
+    echo "✅ Using pre-made PNG icon"
+else
+    # Fallback: create a simple SVG icon if PNG is missing
+    cat > "$INSTALL_DIR/assets/phantomvault.svg" << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -234,15 +229,8 @@ cat > "$INSTALL_DIR/assets/phantomvault.svg" << 'EOF'
   <circle cx="64" cy="64" r="50" fill="none" stroke="#7077A1" stroke-width="1" opacity="0.2"/>
 </svg>
 EOF
-
-# Convert SVG to PNG for better compatibility
-if command -v convert &> /dev/null; then
-    convert "$INSTALL_DIR/assets/phantomvault.svg" -resize 128x128 "$INSTALL_DIR/assets/phantomvault.png"
-    ICON_PATH="$INSTALL_DIR/assets/phantomvault.png"
-    echo "✅ Icon created: phantomvault.png"
-else
     ICON_PATH="$INSTALL_DIR/assets/phantomvault.svg"
-    echo "⚠️  Using SVG icon (ImageMagick not available)"
+    echo "⚠️  Using fallback SVG icon (PNG not found in package)"
 fi
 
 echo ""
