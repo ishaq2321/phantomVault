@@ -49,6 +49,22 @@ echo ""
 echo "🔧 Step 1: Installing system dependencies..."
 echo "============================================"
 
+# Install ImageMagick for icon conversion
+if ! command -v convert &> /dev/null; then
+    echo "📦 Installing ImageMagick for icon support..."
+    if command -v apt &> /dev/null; then
+        apt update && apt install -y imagemagick
+    elif command -v dnf &> /dev/null; then
+        dnf install -y ImageMagick
+    elif command -v pacman &> /dev/null; then
+        pacman -S --noconfirm imagemagick
+    else
+        echo "⚠️  Could not install ImageMagick automatically. SVG icon will be used."
+    fi
+else
+    echo "✅ ImageMagick already installed"
+fi
+
 # Detect package manager and install dependencies
 if command -v apt &> /dev/null; then
     echo "📦 Detected APT package manager (Ubuntu/Debian)"
@@ -160,10 +176,28 @@ echo "✅ C++ service built successfully"
 # Build Electron UI
 echo "🔧 Building Electron UI..."
 cd ../../ui
+
+# Install all dependencies including dev dependencies
+echo "📦 Installing UI dependencies..."
 npm install
+
+# Install missing dev dependencies that are needed for the launcher
+echo "📦 Installing additional dev dependencies..."
+npm install --save-dev concurrently wait-on
+
+# Build the UI
+echo "🏗️  Building UI with TypeScript and Vite..."
 npm run build
 
 echo "✅ Electron UI built successfully"
+
+# Build native addon
+echo "🔧 Building native addon..."
+cd native
+npm install
+npm run build
+cd ..
+echo "✅ Native addon built successfully"
 
 echo ""
 echo "🖼️  Step 4: Creating application icon..."
@@ -204,9 +238,11 @@ EOF
 # Convert SVG to PNG for better compatibility
 if command -v convert &> /dev/null; then
     convert "$INSTALL_DIR/assets/phantomvault.svg" -resize 128x128 "$INSTALL_DIR/assets/phantomvault.png"
+    ICON_PATH="$INSTALL_DIR/assets/phantomvault.png"
     echo "✅ Icon created: phantomvault.png"
 else
-    echo "⚠️  ImageMagick not found, using SVG icon"
+    ICON_PATH="$INSTALL_DIR/assets/phantomvault.svg"
+    echo "⚠️  Using SVG icon (ImageMagick not available)"
 fi
 
 echo ""
@@ -221,7 +257,7 @@ Type=Application
 Name=PhantomVault
 Comment=Secure Folder Encryption and Management
 Exec=$INSTALL_DIR/phantomvault-launcher.sh
-Icon=$INSTALL_DIR/assets/phantomvault.png
+Icon=$ICON_PATH
 Terminal=false
 Categories=Utility;Security;
 Keywords=encryption;security;vault;privacy;folders;
@@ -242,8 +278,14 @@ if ! pgrep -f "phantom_vault_service" > /dev/null; then
     sleep 2
 fi
 
-# Start Electron GUI
-npm run electron:dev
+# Start Electron GUI in production mode
+if [ -f "dist/index.html" ]; then
+    # Production mode - serve the built files
+    npx electron electron/main.js
+else
+    echo "❌ UI build not found. Please run the installer again."
+    exit 1
+fi
 EOF
 
 chmod +x "$INSTALL_DIR/phantomvault-launcher.sh"
