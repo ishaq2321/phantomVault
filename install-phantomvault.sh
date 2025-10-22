@@ -191,7 +191,7 @@ npm run build
 
 echo "✅ Electron UI built successfully"
 
-# Build native addon
+# Build native addon (now that C++ core is built and available)
 echo "🔧 Building native addon..."
 cd native
 npm install
