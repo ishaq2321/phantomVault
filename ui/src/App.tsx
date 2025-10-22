@@ -403,7 +403,13 @@ export const App: React.FC = () => {
         // Handle re-lock of temporarily unlocked folders
         console.log('🔒 Re-lock mode: Locking all temporary folders...');
         // TODO: Implement lockAllTemporary in the API
-        const relockResponse = { success: true, message: 'Relock not implemented yet' };
+        const relockResponse = { 
+          success: true, 
+          message: 'Relock not implemented yet',
+          locked: 0,
+          failed: 0,
+          errors: [] as string[]
+        };
         // const relockResponse = await window.phantomVault.folder.lockAllTemporary(
         //   activeProfile.id,
         //   input.password
@@ -434,10 +440,10 @@ export const App: React.FC = () => {
             // Silent - no notification needed
           }
         } else {
-          console.error('Re-lock failed:', relockResponse.error);
+          console.error('Re-lock failed:', (relockResponse as any).error);
           window.phantomVault.showNotification(
             'Re-Lock Failed',
-            relockResponse.error || 'Failed to lock temporary folders'
+            (relockResponse as any).error || 'Failed to lock temporary folders'
           );
         }
       } else if (input.isRecoveryKey) {

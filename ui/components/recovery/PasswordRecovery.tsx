@@ -103,7 +103,7 @@ export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({
               <Input
                 type="text"
                 value={answers[index]}
-                onChange={(e) => handleAnswerChange(index, (e.target as HTMLInputElement).value)}
+                onChange={(value) => handleAnswerChange(index, value)}
                 placeholder="Enter your answer"
                 className="password-recovery__answer-input"
                 disabled={isSubmitting || isLoading}
