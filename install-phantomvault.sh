@@ -114,27 +114,27 @@ echo ""
 echo "📁 Step 2: Creating installation directory..."
 echo "============================================="
 
-# Create installation directory
-mkdir -p "$INSTALL_DIR"
-cd "$INSTALL_DIR"
-
-# Get the directory where the installer script is located
+# Get the directory where the installer script is located BEFORE changing directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Check if we're in the source directory
+# Check if we can find the source files
 if [ -f "$SCRIPT_DIR/core/CMakeLists.txt" ]; then
-    echo "📋 Copying source files from: $SCRIPT_DIR"
-    cp -r "$SCRIPT_DIR"/* .
-elif [ -f "./core/CMakeLists.txt" ]; then
-    echo "📋 Copying source files from current directory..."
-    cp -r ./* "$INSTALL_DIR/"
+    echo "📋 Found source files in: $SCRIPT_DIR"
+    SOURCE_DIR="$SCRIPT_DIR"
 else
     echo "❌ Source files not found. Expected to find core/CMakeLists.txt"
     echo "   Script location: $SCRIPT_DIR"
-    echo "   Current directory: $(pwd)"
+    echo "   Looking for: $SCRIPT_DIR/core/CMakeLists.txt"
     echo "   Please ensure you're running this installer from the PhantomVault directory."
     exit 1
 fi
+
+# Create installation directory
+mkdir -p "$INSTALL_DIR"
+
+# Copy source files to installation directory
+echo "📋 Copying source files from $SOURCE_DIR to $INSTALL_DIR..."
+cp -r "$SOURCE_DIR"/* "$INSTALL_DIR/"
 
 echo "✅ Installation directory created: $INSTALL_DIR"
 
