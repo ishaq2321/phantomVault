@@ -57,20 +57,28 @@ export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
       
       // Notify Electron to re-register the hotkey
       // TODO: Implement registerGlobalHotkey in the API
-      // window.phantomVault.registerGlobalHotkey(hotkeyString)
-      //   .then(() => {
-          window.phantomVault.showNotification(
-            'Hotkey Updated',
-            `New hotkey: ${hotkeyString}`
-          );
-      //   })
-        .catch((err: any) => {
-          console.error('Failed to register hotkey:', err);
-          window.phantomVault.showNotification(
-            'Error',
-            'Failed to register hotkey. It may be in use by another application.'
-          );
-        });
+      try {
+        // window.phantomVault.registerGlobalHotkey(hotkeyString)
+        //   .then(() => {
+            window.phantomVault.showNotification(
+              'Hotkey Updated',
+              `New hotkey: ${hotkeyString}`
+            );
+        //   })
+        //   .catch((err: any) => {
+        //     console.error('Failed to register hotkey:', err);
+        //     window.phantomVault.showNotification(
+        //       'Error',
+        //       'Failed to register hotkey. It may be in use by another application.'
+        //     );
+        //   });
+      } catch (err: any) {
+        console.error('Failed to register hotkey:', err);
+        window.phantomVault.showNotification(
+          'Error',
+          'Failed to register hotkey. It may be in use by another application.'
+        );
+      }
     }
   };
 
