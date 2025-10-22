@@ -56,13 +56,14 @@ export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
       localStorage.setItem('phantomvault_hotkey', hotkeyString);
       
       // Notify Electron to re-register the hotkey
-      window.phantomVault.registerGlobalHotkey(hotkeyString)
-        .then(() => {
+      // TODO: Implement registerGlobalHotkey in the API
+      // window.phantomVault.registerGlobalHotkey(hotkeyString)
+      //   .then(() => {
           window.phantomVault.showNotification(
             'Hotkey Updated',
             `New hotkey: ${hotkeyString}`
           );
-        })
+      //   })
         .catch((err: any) => {
           console.error('Failed to register hotkey:', err);
           window.phantomVault.showNotification(

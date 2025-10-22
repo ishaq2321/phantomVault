@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Icon } from '../common/Icon';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -19,7 +19,6 @@ interface PasswordRecoveryProps {
 }
 
 export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({
-  vaultId,
   questions,
   onRecoverySuccess,
   onRecoveryCancel,
@@ -104,11 +103,11 @@ export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({
               <Input
                 type="text"
                 value={answers[index]}
-                onChange={(e) => handleAnswerChange(index, e.target.value)}
+                onChange={(e) => handleAnswerChange(index, (e.target as HTMLInputElement).value)}
                 placeholder="Enter your answer"
                 className="password-recovery__answer-input"
                 disabled={isSubmitting || isLoading}
-                required
+
               />
             </div>
           ))}

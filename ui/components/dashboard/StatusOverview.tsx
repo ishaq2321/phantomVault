@@ -1,6 +1,4 @@
 import React from 'react';
-import { Icon } from '../common/Icon';
-import { Button } from '../common/Button';
 import { formatBytes, formatDate } from '../../utils/formatters';
 // import './StatusOverview.scss';
 
