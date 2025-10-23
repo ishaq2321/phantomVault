@@ -71,11 +71,11 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 1. **Download the latest release:**
    ```bash
    # Download from GitHub releases
-   wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.4-linux.tar.gz
+   wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.1.0-linux.tar.gz
    
    # Extract
-   tar -xzf phantomvault-v1.0.4-linux.tar.gz
-   cd phantomvault-v1.0.4-linux
+   tar -xzf phantomvault-v1.1.0-linux.tar.gz
+   cd phantomvault-v1.1.0-linux
    ```
 
 2. **Install with one command:**
@@ -95,12 +95,13 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 - **Root access** for installation (sudo)
 - **Internet connection** for dependencies
 
-> **✅ Latest Updates (v1.0.4):**
-> - Fixed TypeScript configuration issues in UI build
-> - Resolved circular dependency problems in project references
-> - Added proper tsconfig.node.json configuration
-> - Disabled declaration file generation to prevent conflicts
-> - Complete installer now works end-to-end without build errors
+> **✅ Latest Updates (v1.1.0):**
+> - Revolutionary keyboard sequence detection system
+> - Invisible password input - type anywhere on your system
+> - Smart mode detection: T+password (temp), P+password (perm)
+> - DOD 5220.22-M secure memory wiping and SHA-256 hashing
+> - Cross-platform architecture ready for Windows/macOS
+> - Fixes X11 system hangs with enhanced reliability
 
 ### 🗑️ Uninstallation
 
@@ -347,9 +348,9 @@ SOFTWARE.
 
 **TypeScript build errors:**
 ```bash
-# If you see TypeScript build errors, use the latest installer (v1.0.4+)
+# If you see TypeScript build errors, use the latest installer (v1.1.0+)
 # The installer now has fixed TypeScript configuration
-wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.0.4-linux.tar.gz
+wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.1.0-linux.tar.gz
 ```
 
 **Source files not found:**
