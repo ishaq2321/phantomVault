@@ -71,11 +71,11 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 1. **Download the latest release:**
    ```bash
    # Download from GitHub archive
-   wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.1.1.tar.gz
+   wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.2.1.tar.gz
    
    # Extract
-   tar -xzf v1.1.1.tar.gz
-   cd phantomVault-1.1.1
+   tar -xzf v1.2.1.tar.gz
+   cd phantomVault-1.2.1
    ```
 
 2. **Install with one command:**
