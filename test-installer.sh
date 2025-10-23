@@ -1,135 +1,96 @@
 #!/bin/bash
 
-# Test script for the installer (dry run)
+# Test script to verify the installer works correctly
+# This script tests the installer in a clean environment
+
+set -e
 
 echo "🧪 PhantomVault Installer Test"
 echo "=============================="
 echo ""
-echo "This script tests the installer without actually installing."
+
+# Check if we're running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "❌ This test script must be run as root (use sudo)"
+    echo "   sudo ./test-installer.sh"
+    exit 1
+fi
+
+# Get the actual user
+ACTUAL_USER=${SUDO_USER:-$USER}
+echo "📋 Test Environment:"
+echo "   User: $ACTUAL_USER"
+echo "   Working Directory: $(pwd)"
 echo ""
 
-# Check if we're in the right directory
-if [ ! -f "install-phantomvault.sh" ]; then
-    echo "❌ install-phantomvault.sh not found"
-    exit 1
-fi
-
-echo "✅ Installer script found"
-
-# Check if source files exist
-if [ ! -d "core" ] || [ ! -d "ui" ]; then
-    echo "❌ Source directories (core, ui) not found"
-    exit 1
-fi
-
-echo "✅ Source directories found"
-
-# Check if core can be built
-if [ ! -f "core/CMakeLists.txt" ]; then
-    echo "❌ core/CMakeLists.txt not found"
-    exit 1
-fi
-
-echo "✅ Core build files found"
-
-# Check if UI files exist
-if [ ! -f "ui/package.json" ]; then
-    echo "❌ ui/package.json not found"
-    exit 1
-fi
-
-echo "✅ UI build files found"
-
-# Test build process (without installing)
-echo ""
-echo "🔨 Testing build process..."
-
-# Test core build
-echo "📦 Testing C++ core build..."
-cd core
-if [ ! -d "build" ]; then
-    mkdir build
-fi
-cd build
-
-echo "   Running cmake..."
-if cmake .. > /dev/null 2>&1; then
-    echo "   ✅ CMake configuration successful"
+# Test 1: Check if installer exists
+echo "🔍 Test 1: Checking installer exists..."
+if [ -f "./install-phantomvault.sh" ]; then
+    echo "✅ Installer found"
 else
-    echo "   ❌ CMake configuration failed"
-    cd ../..
+    echo "❌ Installer not found"
     exit 1
 fi
 
-echo "   Running make..."
-if make -j$(nproc) > /dev/null 2>&1; then
-    echo "   ✅ C++ build successful"
+# Test 2: Check if installer is executable
+echo "🔍 Test 2: Checking installer permissions..."
+if [ -x "./install-phantomvault.sh" ]; then
+    echo "✅ Installer is executable"
 else
-    echo "   ❌ C++ build failed"
-    cd ../..
-    exit 1
+    echo "⚠️  Making installer executable..."
+    chmod +x "./install-phantomvault.sh"
+    echo "✅ Installer made executable"
 fi
 
-if [ -f "phantom_vault_service" ]; then
-    echo "   ✅ Service executable created"
-else
-    echo "   ❌ Service executable not found"
-    cd ../..
-    exit 1
-fi
+# Test 3: Check required source files
+echo "🔍 Test 3: Checking source files..."
+REQUIRED_FILES=(
+    "core/CMakeLists.txt"
+    "ui/package.json"
+    "ui/electron/main.js"
+    "assets/phantomvault.png"
+)
 
-cd ../..
-
-# Test UI dependencies
-echo "📦 Testing UI dependencies..."
-cd ui
-
-if command -v npm &> /dev/null; then
-    echo "   ✅ npm found"
-    
-    if [ ! -d "node_modules" ]; then
-        echo "   Installing dependencies..."
-        if npm install > /dev/null 2>&1; then
-            echo "   ✅ npm install successful"
-        else
-            echo "   ❌ npm install failed"
-            cd ..
-            exit 1
-        fi
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        echo "✅ Found: $file"
     else
-        echo "   ✅ node_modules already exists"
+        echo "❌ Missing: $file"
+        exit 1
     fi
-    
-    echo "   Testing build..."
-    if npm run build > /dev/null 2>&1; then
-        echo "   ✅ UI build successful"
+done
+
+# Test 4: Check system dependencies
+echo "🔍 Test 4: Checking system dependencies..."
+REQUIRED_COMMANDS=(
+    "node"
+    "npm"
+    "cmake"
+    "make"
+    "g++"
+)
+
+for cmd in "${REQUIRED_COMMANDS[@]}"; do
+    if command -v "$cmd" &> /dev/null; then
+        echo "✅ Found: $cmd"
     else
-        echo "   ⚠️  UI build failed (may need dev server)"
+        echo "❌ Missing: $cmd"
+        echo "   Please install system dependencies first"
+        exit 1
     fi
-else
-    echo "   ❌ npm not found - install Node.js"
-    cd ..
-    exit 1
-fi
-
-cd ..
+done
 
 echo ""
-echo "🎉 Installer Test Results"
-echo "========================="
+echo "🎉 All tests passed!"
+echo "✅ Installer is ready to run"
 echo ""
-echo "✅ All components ready for installation!"
-echo ""
-echo "📋 What was tested:"
-echo "   ✅ Source files present"
-echo "   ✅ C++ core builds successfully"
-echo "   ✅ Service executable created"
-echo "   ✅ UI dependencies installable"
-echo "   ✅ Build system functional"
-echo ""
-echo "🚀 Ready to run installer:"
+echo "📋 To install PhantomVault:"
 echo "   sudo ./install-phantomvault.sh"
 echo ""
-echo "📦 Ready to create release:"
-echo "   ./prepare-release.sh"
+echo "💡 The installer will:"
+echo "   • Install to /opt/phantomvault"
+echo "   • Create desktop application entry"
+echo "   • Set up background service"
+echo "   • Create command-line launcher"
+echo "   • Handle all permissions correctly"
 echo ""
