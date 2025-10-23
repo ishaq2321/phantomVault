@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.2.1-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.2.2-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
 [![Release](https://img.shields.io/badge/release-ready-success.svg)]()
 
 ## 🚀 Overview
@@ -71,11 +71,11 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 1. **Download the latest release:**
    ```bash
    # Download from GitHub archive
-   wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.2.1.tar.gz
+   wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.2.2.tar.gz
    
    # Extract
-   tar -xzf v1.2.1.tar.gz
-   cd phantomVault-1.2.1
+   tar -xzf v1.2.2.tar.gz
+   cd phantomVault-1.2.2
    ```
 
 2. **Install with one command:**
@@ -414,7 +414,8 @@ openssl version
 
 ### 📈 Version History
 
-- **v1.2.1** - Fixed build issues and OpenSSL deprecation warnings (current)
+- **v1.2.2** - Fixed corrupted UI files and build system issues (current)
+- **v1.2.1** - Fixed build issues and OpenSSL deprecation warnings
 - **v1.2.0** - New GUI with enhanced VaultManager and modern React components
 - **v1.1.1** - Beautiful installer with colors and enhanced debugging
 - **v1.1.0** - Revolutionary keyboard sequence detection system
