@@ -1,0 +1,56 @@
+# Build directories
+build/
+core/build/
+ui/dist/
+ui/dist-electron/
+ui/node_modules/
+ui/native/node_modules/
+ui/native/build/
+
+# Package lock files
+package-lock.json
+ui/package-lock.json
+ui/native/package-lock.json
+
+# Vault data directories (should not be in repo)
+.phantom_vault/
+ui/.phantom_vault/
+ui/native/.phantom_vault/
+
+# Release packages
+releases/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Compiled binaries
+*.o
+*.so
+*.dll
+*.exe
+
+# Package files
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+*.AppImage
+
+# Test artifacts
+test_*
+*_test

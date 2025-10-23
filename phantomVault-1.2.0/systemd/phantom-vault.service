@@ -1,0 +1,33 @@
+[Unit]
+Description=PhantomVault Background Service - Secure Folder Encryption
+Documentation=https://github.com/ishaq2321/phantomvault
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/%i
+Environment=HOME=/home/%i
+ExecStart=/opt/phantomvault/core/build/phantom_vault_service
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/home/%i/.phantom_vault_storage
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=phantom-vault
+
+[Install]
+WantedBy=default.target

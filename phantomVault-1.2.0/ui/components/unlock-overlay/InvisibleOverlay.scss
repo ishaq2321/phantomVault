@@ -1,0 +1,100 @@
+/**
+ * Invisible Overlay Styles
+ * Designed for zero visual feedback during password entry
+ */
+
+.invisible-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  
+  &__backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: transparent; // Completely transparent
+    cursor: default;
+  }
+
+  &__input-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px; // Make it big enough to receive input
+    height: 50px;
+    overflow: visible; // Changed from hidden
+  }
+
+  &__input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.01; // Nearly invisible but not completely (0 can cause focus issues)
+    font-size: 16px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: transparent;
+    caret-color: transparent; // Hide cursor
+    pointer-events: auto; // Ensure it can receive input
+    
+    // Prevent any visual feedback
+    &:focus {
+      outline: none;
+      box-shadow: none;
+      background: transparent;
+    }
+
+    // Hide autofill background
+    &:-webkit-autofill,
+    &:-webkit-autofill:hover,
+    &:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0 1000px transparent inset;
+      transition: background-color 5000s ease-in-out 0s;
+    }
+  }
+
+  // Development mode hint (removed in production)
+  &__dev-hint {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-family: monospace;
+    z-index: 10000;
+    pointer-events: none;
+
+    p {
+      margin: 0.25rem 0;
+      
+      &:first-child {
+        font-weight: bold;
+        font-size: 1rem;
+      }
+    }
+  }
+}
+
+// Production mode - remove all hints
+body:not(.development-mode) {
+  .invisible-overlay__dev-hint {
+    display: none !important;
+  }
+}
+
+// Accessibility: Ensure input is focusable
+.invisible-overlay__input:focus-visible {
+  outline: none;
+}

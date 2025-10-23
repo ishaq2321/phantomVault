@@ -19,25 +19,13 @@ namespace service {
 // PasswordUtils implementation
 std::string PasswordUtils::hashPassword(const std::string& password) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    unsigned int hash_len = SHA256_DIGEST_LENGTH;
-    
-    // Use modern OpenSSL EVP API instead of deprecated SHA256_* functions
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx) {
-        return "";
-    }
-    
-    if (EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx, password.c_str(), password.length()) != 1 ||
-        EVP_DigestFinal_ex(ctx, hash, &hash_len) != 1) {
-        EVP_MD_CTX_free(ctx);
-        return "";
-    }
-    
-    EVP_MD_CTX_free(ctx);
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, password.c_str(), password.length());
+    SHA256_Final(hash, &sha256);
     
     std::stringstream ss;
-    for (unsigned int i = 0; i < hash_len; i++) {
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
         ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
     }
     return ss.str();

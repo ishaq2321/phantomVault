@@ -39,7 +39,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.0.0",
-    "@vitest/ui": "^0.34.6",
+    "@vitest/ui": "^4.0.1",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.1",
     "electron": "^27.0.0",
