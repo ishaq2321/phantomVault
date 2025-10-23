@@ -344,4 +344,4 @@ describe('usePasswordValidation', () => {
     expect(strength.feedback.length).toBeGreaterThan(0);
     expect(strength.feedback).toContain('Use at least 8 characters');
   });
-});"
+});

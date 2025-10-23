@@ -110,12 +110,12 @@ export const App: React.FC = () => {
         <div className={`app ${appState.theme} ${appState.isFullscreen ? 'fullscreen' : ''}`}>
           {/* Service Status Monitor */}
           <ServiceStatusMonitor 
-            className=\"service-status\"
+            className="service-status\"
             showDetails={false}
           />
 
           {/* Main Layout */}
-          <div className=\"app-layout\">
+          <div className="app-layout">
             {/* Sidebar */}
             <Sidebar
               currentView={appState.currentView}
@@ -126,7 +126,7 @@ export const App: React.FC = () => {
             />
 
             {/* Main Content Area */}
-            <div className=\"app-main\">
+            <div className="app-main">
               {/* Header */}
               <Header
                 currentView={appState.currentView}
@@ -141,14 +141,14 @@ export const App: React.FC = () => {
               {/* Content */}
               <MainContent
                 currentView={appState.currentView}
-                className=\"main-content\"
+                className="main-content\"
               />
 
               {/* Status Bar */}
               <StatusBar
                 currentView={appState.currentView}
                 serviceStatus={connectionState}
-                className=\"status-bar\"
+                className="status-bar\"
               />
             </div>
           </div>
@@ -158,14 +158,14 @@ export const App: React.FC = () => {
 
           {/* Connection Lost Overlay */}
           {!isConnected && (
-            <div className=\"connection-overlay\">
-              <div className=\"connection-message\">
-                <div className=\"connection-icon\">🔌</div>
+            <div className="connection-overlay">
+              <div className="connection-message">
+                <div className="connection-icon">🔌</div>
                 <h3>Connection Lost</h3>
                 <p>Unable to connect to PhantomVault service</p>
-                <div className=\"connection-actions\">
+                <div className="connection-actions">
                   <button 
-                    className=\"reconnect-button\"
+                    className="reconnect-button\"
                     onClick={() => window.location.reload()}
                   >
                     Restart Application

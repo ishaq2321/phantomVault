@@ -85,65 +85,65 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className={`app-header ${className}`}>
       {/* Left Section */}
-      <div className=\"header-left\">
+      <div className="header-left">
         <button 
           onClick={onSidebarToggle}
-          className=\"sidebar-toggle-button\"
-          title=\"Toggle sidebar (Ctrl+B)\"
+          className="sidebar-toggle-button\"
+          title="Toggle sidebar (Ctrl+B)\"
         >
           ☰
         </button>
         
-        <div className=\"view-info\">
-          <div className=\"view-title\">
-            <span className=\"view-icon\">{viewInfo.icon}</span>
+        <div className="view-info">
+          <div className="view-title">
+            <span className="view-icon">{viewInfo.icon}</span>
             <h1>{viewInfo.title}</h1>
           </div>
-          <p className=\"view-subtitle\">{viewInfo.subtitle}</p>
+          <p className="view-subtitle">{viewInfo.subtitle}</p>
         </div>
       </div>
 
       {/* Center Section */}
-      <div className=\"header-center\">
+      <div className="header-center">
         {/* Search Bar (for future implementation) */}
-        <div className=\"search-container\">
+        <div className="search-container">
           <input
-            type=\"text\"
-            placeholder=\"Search vaults, logs, settings...\"
-            className=\"search-input\"
+            type="text\"
+            placeholder="Search vaults, logs, settings...\"
+            className="search-input\"
             disabled
           />
-          <button className=\"search-button\" disabled>
+          <button className="search-button\" disabled>
             🔍
           </button>
         </div>
       </div>
 
       {/* Right Section */}
-      <div className=\"header-right\">
+      <div className="header-right">
         {/* Service Status Indicator */}
-        <div className=\"service-indicator\">
+        <div className="service-indicator">
           <span 
             className={`status-dot ${serviceConnected ? 'connected' : 'disconnected'}`}
             title={serviceConnected ? 'Service connected' : 'Service disconnected'}
           />
-          <span className=\"status-text\">
+          <span className="status-text">
             {serviceConnected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
 
         {/* Current Time */}
-        <div className=\"current-time\">
-          <span className=\"time-icon\">🕐</span>
-          <span className=\"time-text\">{getCurrentTime()}</span>
+        <div className="current-time">
+          <span className="time-icon">🕐</span>
+          <span className="time-text">{getCurrentTime()}</span>
         </div>
 
         {/* Control Buttons */}
-        <div className=\"header-controls\">
+        <div className="header-controls">
           {/* Theme Toggle */}
           <button
             onClick={handleThemeToggle}
-            className=\"control-button\"
+            className="control-button\"
             title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
           >
             {theme === 'light' ? '🌙' : '☀️'}
@@ -152,7 +152,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Fullscreen Toggle */}
           <button
             onClick={onFullscreenToggle}
-            className=\"control-button\"
+            className="control-button\"
             title={`${isFullscreen ? 'Exit' : 'Enter'} fullscreen (Ctrl+F)`}
           >
             {isFullscreen ? '🗗' : '🗖'}
@@ -160,8 +160,8 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Notifications */}
           <button
-            className=\"control-button\"
-            title=\"Notifications\"
+            className="control-button\"
+            title="Notifications\"
             onClick={() => {
               // In a real implementation, this would show notifications
               console.log('Opening notifications...');
@@ -171,66 +171,66 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* User Menu */}
-          <div className=\"user-menu-container\">
+          <div className="user-menu-container">
             <button
               onClick={handleUserMenuToggle}
-              className=\"user-menu-button\"
-              title=\"User menu\"
+              className="user-menu-button\"
+              title="User menu\"
             >
-              <div className=\"user-avatar\">
-                <span className=\"avatar-icon\">👤</span>
+              <div className="user-avatar">
+                <span className="avatar-icon">👤</span>
               </div>
-              <span className=\"user-name\">User</span>
-              <span className=\"dropdown-arrow\">{showUserMenu ? '▲' : '▼'}</span>
+              <span className="user-name">User</span>
+              <span className="dropdown-arrow">{showUserMenu ? '▲' : '▼'}</span>
             </button>
 
             {showUserMenu && (
-              <div className=\"user-menu-dropdown\">
-                <div className=\"menu-header\">
-                  <div className=\"user-info\">
-                    <div className=\"user-avatar large\">
-                      <span className=\"avatar-icon\">👤</span>
+              <div className="user-menu-dropdown">
+                <div className="menu-header">
+                  <div className="user-info">
+                    <div className="user-avatar large">
+                      <span className="avatar-icon">👤</span>
                     </div>
-                    <div className=\"user-details\">
-                      <span className=\"user-name\">PhantomVault User</span>
-                      <span className=\"user-email\">user@example.com</span>
+                    <div className="user-details">
+                      <span className="user-name">PhantomVault User</span>
+                      <span className="user-email">user@example.com</span>
                     </div>
                   </div>
                 </div>
                 
-                <div className=\"menu-items\">
-                  <button className=\"menu-item\">
-                    <span className=\"menu-icon\">👤</span>
-                    <span className=\"menu-text\">Profile</span>
+                <div className="menu-items">
+                  <button className="menu-item">
+                    <span className="menu-icon">👤</span>
+                    <span className="menu-text">Profile</span>
                   </button>
                   
-                  <button className=\"menu-item\">
-                    <span className=\"menu-icon\">🔒</span>
-                    <span className=\"menu-text\">Security</span>
+                  <button className="menu-item">
+                    <span className="menu-icon">🔒</span>
+                    <span className="menu-text">Security</span>
                   </button>
                   
-                  <button className=\"menu-item\">
-                    <span className=\"menu-icon\">⚙️</span>
-                    <span className=\"menu-text\">Preferences</span>
+                  <button className="menu-item">
+                    <span className="menu-icon">⚙️</span>
+                    <span className="menu-text">Preferences</span>
                   </button>
                   
-                  <div className=\"menu-separator\" />
+                  <div className="menu-separator\" />
                   
-                  <button className=\"menu-item\">
-                    <span className=\"menu-icon\">❓</span>
-                    <span className=\"menu-text\">Help & Support</span>
+                  <button className="menu-item">
+                    <span className="menu-icon">❓</span>
+                    <span className="menu-text">Help & Support</span>
                   </button>
                   
-                  <button className=\"menu-item\">
-                    <span className=\"menu-icon\">ℹ️</span>
-                    <span className=\"menu-text\">About</span>
+                  <button className="menu-item">
+                    <span className="menu-icon">ℹ️</span>
+                    <span className="menu-text">About</span>
                   </button>
                   
-                  <div className=\"menu-separator\" />
+                  <div className="menu-separator\" />
                   
-                  <button className=\"menu-item danger\">
-                    <span className=\"menu-icon\">🚪</span>
-                    <span className=\"menu-text\">Exit</span>
+                  <button className="menu-item danger">
+                    <span className="menu-icon">🚪</span>
+                    <span className="menu-text">Exit</span>
                   </button>
                 </div>
               </div>
@@ -242,7 +242,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Click outside to close user menu */}
       {showUserMenu && (
         <div 
-          className=\"menu-overlay\"
+          className="menu-overlay\"
           onClick={() => setShowUserMenu(false)}
         />
       )}

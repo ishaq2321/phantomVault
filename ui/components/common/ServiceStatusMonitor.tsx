@@ -151,20 +151,20 @@ export const ServiceStatusMonitor: React.FC<ServiceStatusMonitorProps> = ({
 
   return (
     <div className={`service-status-monitor ${className}`}>
-      <div className=\"status-indicator\">
+      <div className="status-indicator">
         <span 
-          className=\"status-icon\"
+          className="status-icon\"
           style={{ color: getStatusColor() }}
         >
           {getStatusIcon()}
         </span>
-        <span className=\"status-text\">{getStatusText()}</span>
+        <span className="status-text">{getStatusText()}</span>
         
         {!status.connected && !status.reconnecting && (
           <button 
             onClick={handleReconnect}
-            className=\"reconnect-button\"
-            title=\"Reconnect to service\"
+            className="reconnect-button\"
+            title="Reconnect to service\"
           >
             🔄 Reconnect
           </button>
@@ -172,27 +172,27 @@ export const ServiceStatusMonitor: React.FC<ServiceStatusMonitorProps> = ({
       </div>
 
       {showDetails && (
-        <div className=\"status-details\">
+        <div className="status-details">
           {status.lastConnected && (
-            <div className=\"detail-item\">
-              <span className=\"detail-label\">Last Connected:</span>
-              <span className=\"detail-value\">
+            <div className="detail-item">
+              <span className="detail-label">Last Connected:</span>
+              <span className="detail-value">
                 {status.lastConnected.toLocaleString()}
               </span>
             </div>
           )}
           
           {status.reconnectAttempts > 0 && (
-            <div className=\"detail-item\">
-              <span className=\"detail-label\">Reconnect Attempts:</span>
-              <span className=\"detail-value\">{status.reconnectAttempts}</span>
+            <div className="detail-item">
+              <span className="detail-label">Reconnect Attempts:</span>
+              <span className="detail-value">{status.reconnectAttempts}</span>
             </div>
           )}
           
           {status.error && (
-            <div className=\"detail-item error\">
-              <span className=\"detail-label\">Error:</span>
-              <span className=\"detail-value\">{status.error}</span>
+            <div className="detail-item error">
+              <span className="detail-label">Error:</span>
+              <span className="detail-value">{status.error}</span>
             </div>
           )}
         </div>

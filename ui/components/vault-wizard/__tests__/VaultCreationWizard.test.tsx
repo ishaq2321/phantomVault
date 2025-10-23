@@ -53,15 +53,15 @@ jest.mock('../../../contexts/AppContext', () => ({
 // Mock folder selector
 jest.mock('../../common/FolderSelector', () => ({
   FolderSelector: ({ value, onChange, error }: any) => (
-    <div data-testid=\"folder-selector\">
+    <div data-testid="folder-selector">
       <input
-        data-testid=\"folder-input\"
+        data-testid="folder-input\"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={error ? 'error' : ''}
       />
       <button
-        data-testid=\"folder-browse\"
+        data-testid="folder-browse\"
         onClick={() => onChange('/selected/folder')}
       >
         Browse
@@ -74,7 +74,7 @@ jest.mock('../../common/FolderSelector', () => ({
 jest.mock('../../common/KeyboardSequenceInput', () => ({
   KeyboardSequenceInput: ({ value, onChange }: any) => (
     <input
-      data-testid=\"keyboard-sequence-input\"
+      data-testid="keyboard-sequence-input\"
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
@@ -558,4 +558,4 @@ describe('VaultCreationWizard', () => {
       expect(defaultProps.onComplete).toHaveBeenCalled();
     });
   });
-});"
+});

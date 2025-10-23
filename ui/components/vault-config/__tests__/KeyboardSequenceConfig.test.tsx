@@ -37,13 +37,13 @@ const mockVaults: VaultInfo[] = [
 // Mock KeyboardSequenceInput component
 jest.mock('../../common/KeyboardSequenceInput', () => ({
   KeyboardSequenceInput: ({ value, onChange, existingSequences }: any) => (
-    <div data-testid=\"keyboard-sequence-input\">
+    <div data-testid="keyboard-sequence-input">
       <input
-        data-testid=\"sequence-input\"
+        data-testid="sequence-input\"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-      <div data-testid=\"existing-sequences\">
+      <div data-testid="existing-sequences">
         {existingSequences?.join(', ')}
       </div>
     </div>
@@ -140,7 +140,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should exclude current vault from existing sequences', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} currentVaultId=\"vault-1\" />
+        <KeyboardSequenceConfig {...defaultProps} currentVaultId="vault-1\" />
       </TestWrapper>
     );
 
@@ -168,7 +168,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should show sequence analysis for valid sequences', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"TestSeq123!\" />
+        <KeyboardSequenceConfig {...defaultProps} value="TestSeq123!\" />
       </TestWrapper>
     );
 
@@ -179,7 +179,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should calculate sequence strength correctly', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"ComplexSeq123!\" />
+        <KeyboardSequenceConfig {...defaultProps} value="ComplexSeq123!\" />
       </TestWrapper>
     );
 
@@ -193,7 +193,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should show weak strength for simple sequences', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"weak\" />
+        <KeyboardSequenceConfig {...defaultProps} value="weak\" />
       </TestWrapper>
     );
 
@@ -203,7 +203,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should detect and show conflicts', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"Personal Documents\" />
+        <KeyboardSequenceConfig {...defaultProps} value="Personal Documents\" />
       </TestWrapper>
     );
 
@@ -217,7 +217,7 @@ describe('KeyboardSequenceConfig', () => {
 
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"Personal Documents\" />
+        <KeyboardSequenceConfig {...defaultProps} value="Personal Documents\" />
       </TestWrapper>
     );
 
@@ -292,7 +292,7 @@ describe('KeyboardSequenceConfig', () => {
       <TestWrapper>
         <KeyboardSequenceConfig 
           {...defaultProps} 
-          value=\"existing\" 
+          value="existing\" 
           onChange={onChange} 
           showAdvancedOptions={true} 
         />
@@ -342,7 +342,7 @@ describe('KeyboardSequenceConfig', () => {
 
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"a\" />
+        <KeyboardSequenceConfig {...defaultProps} value="a\" />
       </TestWrapper>
     );
 
@@ -352,7 +352,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should calculate entropy correctly', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"abcdefgh\" />
+        <KeyboardSequenceConfig {...defaultProps} value="abcdefgh\" />
       </TestWrapper>
     );
 
@@ -363,7 +363,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should detect similar sequences', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"PersonalDocs\" />
+        <KeyboardSequenceConfig {...defaultProps} value="PersonalDocs\" />
       </TestWrapper>
     );
 
@@ -374,7 +374,7 @@ describe('KeyboardSequenceConfig', () => {
   test('should handle empty sequence gracefully', () => {
     render(
       <TestWrapper>
-        <KeyboardSequenceConfig {...defaultProps} value=\"\" />
+        <KeyboardSequenceConfig {...defaultProps} value="\" />
       </TestWrapper>
     );
 
@@ -410,4 +410,4 @@ describe('KeyboardSequenceConfig', () => {
     // Restore original Math.random
     Math.random = originalRandom;
   });
-});"
+});

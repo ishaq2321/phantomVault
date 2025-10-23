@@ -417,4 +417,4 @@ describe('validateVaultConfig', () => {
     const result = validateVaultConfig(config, mockVaults);
     expect(result.isValid).toBe(true); // Only validates provided fields
   });
-});"
+});

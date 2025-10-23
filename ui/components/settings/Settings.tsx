@@ -175,10 +175,10 @@ export const Settings: React.FC<SettingsProps> = ({
   return (
     <div className={`settings-container ${className}`}>
       {/* Header */}
-      <div className=\"settings-header\">
-        <div className=\"header-content\">
-          <h1 className=\"settings-title\">Settings</h1>
-          <p className=\"settings-subtitle\">
+      <div className="settings-header">
+        <div className="header-content">
+          <h1 className="settings-title">Settings</h1>
+          <p className="settings-subtitle">
             Configure your PhantomVault preferences and behavior
           </p>
         </div>
@@ -186,18 +186,18 @@ export const Settings: React.FC<SettingsProps> = ({
         {onClose && (
           <button 
             onClick={handleClose}
-            className=\"close-button\"
-            title=\"Close settings\"
+            className="close-button\"
+            title="Close settings\"
           >
             ✕
           </button>
         )}
       </div>
 
-      <div className=\"settings-content\">
+      <div className="settings-content">
         {/* Sidebar with tabs */}
-        <div className=\"settings-sidebar\">
-          <nav className=\"settings-nav\">
+        <div className="settings-sidebar">
+          <nav className="settings-nav">
             {SETTINGS_TABS.map(tab => (
               <button
                 key={tab.id}
@@ -205,39 +205,39 @@ export const Settings: React.FC<SettingsProps> = ({
                 className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
                 title={tab.description}
               >
-                <span className=\"nav-icon\">{tab.icon}</span>
-                <span className=\"nav-label\">{tab.label}</span>
+                <span className="nav-icon">{tab.icon}</span>
+                <span className="nav-label">{tab.label}</span>
               </button>
             ))}
           </nav>
           
           {/* Tab description */}
-          <div className=\"tab-description\">
+          <div className="tab-description">
             <p>{SETTINGS_TABS.find(tab => tab.id === activeTab)?.description}</p>
           </div>
         </div>
 
         {/* Main content area */}
-        <div className=\"settings-main\">
+        <div className="settings-main">
           {/* Tab content */}
-          <div className=\"tab-content\">
+          <div className="tab-content">
             {renderTabContent()}
           </div>
 
           {/* Save error */}
           {saveError && (
-            <div className=\"save-error\">
-              <span className=\"error-icon\">❌</span>
-              <span className=\"error-message\">{saveError}</span>
+            <div className="save-error">
+              <span className="error-icon">❌</span>
+              <span className="error-message">{saveError}</span>
             </div>
           )}
 
           {/* Action buttons */}
-          <div className=\"settings-actions\">
-            <div className=\"action-group\">
+          <div className="settings-actions">
+            <div className="action-group">
               <button 
                 onClick={resetToDefaults}
-                className=\"action-button secondary\"
+                className="action-button secondary\"
                 disabled={isSaving}
               >
                 Reset to Defaults
@@ -246,7 +246,7 @@ export const Settings: React.FC<SettingsProps> = ({
               {hasUnsavedChanges && (
                 <button 
                   onClick={discardChanges}
-                  className=\"action-button secondary\"
+                  className="action-button secondary\"
                   disabled={isSaving}
                 >
                   Discard Changes
@@ -254,15 +254,15 @@ export const Settings: React.FC<SettingsProps> = ({
               )}
             </div>
             
-            <div className=\"action-group\">
+            <div className="action-group">
               <button 
                 onClick={saveSettings}
-                className=\"action-button primary\"
+                className="action-button primary\"
                 disabled={!hasUnsavedChanges || isSaving}
               >
                 {isSaving ? (
                   <>
-                    <span className=\"loading-spinner\">⏳</span>
+                    <span className="loading-spinner">⏳</span>
                     Saving...
                   </>
                 ) : (
@@ -274,9 +274,9 @@ export const Settings: React.FC<SettingsProps> = ({
 
           {/* Unsaved changes indicator */}
           {hasUnsavedChanges && (
-            <div className=\"unsaved-changes-indicator\">
-              <span className=\"indicator-icon\">⚠️</span>
-              <span className=\"indicator-text\">You have unsaved changes</span>
+            <div className="unsaved-changes-indicator">
+              <span className="indicator-icon">⚠️</span>
+              <span className="indicator-text">You have unsaved changes</span>
             </div>
           )}
         </div>

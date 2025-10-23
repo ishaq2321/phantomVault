@@ -22,13 +22,13 @@ export interface MainContentProps {
  * Loading component for suspense fallback
  */
 const LoadingSpinner: React.FC<{ message?: string }> = ({ message = 'Loading...' }) => (
-  <div className=\"loading-container\">
-    <div className=\"loading-spinner\">
-      <div className=\"spinner-ring\"></div>
-      <div className=\"spinner-ring\"></div>
-      <div className=\"spinner-ring\"></div>
+  <div className="loading-container">
+    <div className="loading-spinner">
+      <div className="spinner-ring"></div>
+      <div className="spinner-ring"></div>
+      <div className="spinner-ring"></div>
     </div>
-    <p className=\"loading-message\">{message}</p>
+    <p className="loading-message">{message}</p>
   </div>
 );
 
@@ -55,27 +55,27 @@ class ViewErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className=\"error-container\">
-          <div className=\"error-content\">
-            <div className=\"error-icon\">⚠️</div>
+        <div className="error-container">
+          <div className="error-content">
+            <div className="error-icon">⚠️</div>
             <h2>Something went wrong</h2>
             <p>An error occurred while loading the {this.props.viewName} view.</p>
-            <div className=\"error-details\">
+            <div className="error-details">
               <details>
                 <summary>Error Details</summary>
                 <pre>{this.state.error?.stack}</pre>
               </details>
             </div>
-            <div className=\"error-actions\">
+            <div className="error-actions">
               <button 
                 onClick={() => this.setState({ hasError: false, error: null })}
-                className=\"retry-button\"
+                className="retry-button\"
               >
                 Try Again
               </button>
               <button 
                 onClick={() => window.location.reload()}
-                className=\"reload-button\"
+                className="reload-button\"
               >
                 Reload Application
               </button>
@@ -101,8 +101,8 @@ export const MainContent: React.FC<MainContentProps> = ({
     switch (currentView) {
       case 'dashboard':
         return (
-          <ViewErrorBoundary viewName=\"Dashboard\">
-            <Suspense fallback={<LoadingSpinner message=\"Loading dashboard...\" />}>
+          <ViewErrorBoundary viewName="Dashboard">
+            <Suspense fallback={<LoadingSpinner message="Loading dashboard...\" />}>
               <VaultDashboard />
             </Suspense>
           </ViewErrorBoundary>
@@ -110,8 +110,8 @@ export const MainContent: React.FC<MainContentProps> = ({
 
       case 'vaults':
         return (
-          <ViewErrorBoundary viewName=\"Vault Manager\">
-            <Suspense fallback={<LoadingSpinner message=\"Loading vault manager...\" />}>
+          <ViewErrorBoundary viewName="Vault Manager">
+            <Suspense fallback={<LoadingSpinner message="Loading vault manager...\" />}>
               <VaultManager />
             </Suspense>
           </ViewErrorBoundary>
@@ -119,8 +119,8 @@ export const MainContent: React.FC<MainContentProps> = ({
 
       case 'activity':
         return (
-          <ViewErrorBoundary viewName=\"Activity Monitor\">
-            <Suspense fallback={<LoadingSpinner message=\"Loading activity monitor...\" />}>
+          <ViewErrorBoundary viewName="Activity Monitor">
+            <Suspense fallback={<LoadingSpinner message="Loading activity monitor...\" />}>
               <EnhancedActivityMonitor 
                 maxEntries={1000}
                 autoScroll={true}
@@ -133,8 +133,8 @@ export const MainContent: React.FC<MainContentProps> = ({
 
       case 'settings':
         return (
-          <ViewErrorBoundary viewName=\"Settings\">
-            <Suspense fallback={<LoadingSpinner message=\"Loading settings...\" />}>
+          <ViewErrorBoundary viewName="Settings">
+            <Suspense fallback={<LoadingSpinner message="Loading settings...\" />}>
               <Settings />
             </Suspense>
           </ViewErrorBoundary>
@@ -142,14 +142,14 @@ export const MainContent: React.FC<MainContentProps> = ({
 
       default:
         return (
-          <div className=\"unknown-view\">
-            <div className=\"unknown-view-content\">
-              <div className=\"unknown-view-icon\">❓</div>
+          <div className="unknown-view">
+            <div className="unknown-view-content">
+              <div className="unknown-view-icon">❓</div>
               <h2>Unknown View</h2>
               <p>The requested view '{currentView}' could not be found.</p>
               <button 
                 onClick={() => window.location.reload()}
-                className=\"back-button\"
+                className="back-button\"
               >
                 Return to Dashboard
               </button>
@@ -161,7 +161,7 @@ export const MainContent: React.FC<MainContentProps> = ({
 
   return (
     <main className={`main-content ${className}`}>
-      <div className=\"content-container\">
+      <div className="content-container">
         {renderView()}
       </div>
     </main>

@@ -76,23 +76,23 @@ const NotificationItem: React.FC<{
       className={`notification-item ${notification.type} ${isVisible ? 'visible' : ''} ${isClosing ? 'closing' : ''}`}
       style={{ borderLeftColor: getColor() }}
     >
-      <div className=\"notification-content\">
-        <div className=\"notification-header\">
-          <span className=\"notification-icon\">{getIcon()}</span>
-          <h4 className=\"notification-title\">{notification.title}</h4>
+      <div className="notification-content">
+        <div className="notification-header">
+          <span className="notification-icon">{getIcon()}</span>
+          <h4 className="notification-title">{notification.title}</h4>
           <button 
             onClick={handleClose}
-            className=\"notification-close\"
-            title=\"Close notification\"
+            className="notification-close\"
+            title="Close notification\"
           >
             ✕
           </button>
         </div>
         
-        <p className=\"notification-message\">{notification.message}</p>
+        <p className="notification-message">{notification.message}</p>
         
         {notification.actions && notification.actions.length > 0 && (
-          <div className=\"notification-actions\">
+          <div className="notification-actions">
             {notification.actions.map((action, index) => (
               <button
                 key={index}
@@ -100,7 +100,7 @@ const NotificationItem: React.FC<{
                   action.action();
                   handleClose();
                 }}
-                className=\"notification-action-button\"
+                className="notification-action-button\"
               >
                 {action.label}
               </button>
@@ -111,7 +111,7 @@ const NotificationItem: React.FC<{
       
       {notification.duration && notification.duration > 0 && (
         <div 
-          className=\"notification-progress\"
+          className="notification-progress\"
           style={{ 
             animationDuration: `${notification.duration}ms`,
             backgroundColor: getColor()
@@ -172,11 +172,11 @@ export const NotificationContainer: React.FC<NotificationContainerProps> = ({
     <div className={`notification-container ${position} ${className}`}>
       {/* Clear All Button */}
       {notifications.length > 1 && (
-        <div className=\"notification-header-actions\">
+        <div className="notification-header-actions">
           <button 
             onClick={handleClearAll}
-            className=\"clear-all-button\"
-            title=\"Clear all notifications\"
+            className="clear-all-button\"
+            title="Clear all notifications\"
           >
             Clear All ({notifications.length})
           </button>
@@ -184,7 +184,7 @@ export const NotificationContainer: React.FC<NotificationContainerProps> = ({
       )}
 
       {/* Notifications */}
-      <div className=\"notifications-list\">
+      <div className="notifications-list">
         {notifications.map(notification => (
           <NotificationItem
             key={notification.id}
