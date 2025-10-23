@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.1.0-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.1.1-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
 [![Release](https://img.shields.io/badge/release-ready-success.svg)]()
 
 ## 🚀 Overview
@@ -71,11 +71,11 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 1. **Download the latest release:**
    ```bash
    # Download from GitHub archive
-   wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.1.0.tar.gz
+   wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.1.1.tar.gz
    
    # Extract
-   tar -xzf v1.1.0.tar.gz
-   cd phantomvault-1.1.0
+   tar -xzf v1.1.1.tar.gz
+   cd phantomVault-1.1.1
    ```
 
 2. **Install with one command:**
@@ -95,13 +95,13 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 - **Root access** for installation (sudo)
 - **Internet connection** for dependencies
 
-> **✅ Latest Updates (v1.1.0):**
+> **✅ Latest Updates (v1.1.1):**
+> - Beautiful installer with colors, progress bars, and animations
+> - Enhanced debugging for keyboard sequence detection troubleshooting
+> - Comprehensive logging and error reporting
 > - Revolutionary keyboard sequence detection system
 > - Invisible password input - type anywhere on your system
 > - Smart mode detection: T+password (temp), P+password (perm)
-> - DOD 5220.22-M secure memory wiping and SHA-256 hashing
-> - Cross-platform architecture ready for Windows/macOS
-> - Fixes X11 system hangs with enhanced reliability
 
 ### 🗑️ Uninstallation
 
@@ -348,9 +348,9 @@ SOFTWARE.
 
 **TypeScript build errors:**
 ```bash
-# If you see TypeScript build errors, use the latest installer (v1.1.0+)
-# The installer now has fixed TypeScript configuration
-wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.1.0.tar.gz
+# If you see TypeScript build errors, use the latest installer (v1.1.1+)
+# The installer now has beautiful interface and enhanced debugging
+wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.1.1.tar.gz
 ```
 
 **Source files not found:**
@@ -414,7 +414,8 @@ openssl version
 
 ### 📈 Version History
 
-- **v1.1.0** - Revolutionary keyboard sequence detection system (current)
+- **v1.1.1** - Beautiful installer with colors and enhanced debugging (current)
+- **v1.1.0** - Revolutionary keyboard sequence detection system
 - **v1.0.4** - Fixed TypeScript build configuration issues
 - **v1.0.3** - Fixed installer file copying logic
 - **v1.0.2** - Fixed installer path detection and Node.js conflicts
