@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { ActivityFilter } from '../../types';
-import { useVault } from '../../contexts';
+import { useVault } from '../../src/contexts';
 
 export interface ActivityFilterPanelProps {
   filters: ActivityFilter;

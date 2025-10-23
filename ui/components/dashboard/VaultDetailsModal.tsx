@@ -8,7 +8,7 @@ import React, { useState, useCallback } from 'react';
 import { VaultInfo, VaultAction } from '../../types';
 import { VaultMetadata } from './VaultMetadata';
 import { VaultStatusAnimation } from './VaultStatusAnimation';
-import { useVaultStatusAnimations } from '../../hooks';
+import { useVaultStatusAnimations } from '../../src/hooks';
 
 interface VaultDetailsModalProps {
   vault: VaultInfo;

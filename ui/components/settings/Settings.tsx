@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { AppSettings } from '../../types';
-import { useApp } from '../../contexts';
+import { useApp } from '../../src/contexts';
 import { GeneralSettings } from './GeneralSettings';
 import { SecuritySettings } from './SecuritySettings';
 import { UISettings } from './UISettings';

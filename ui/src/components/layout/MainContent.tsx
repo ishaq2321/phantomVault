@@ -8,10 +8,10 @@ import React, { Suspense } from 'react';
 import { AppView } from '../../App';
 
 // Import view components
-import { VaultDashboard } from '../dashboard/VaultDashboard';
-import { VaultManager } from '../vault-manager/VaultManager';
-import { EnhancedActivityMonitor } from '../activity-monitor/EnhancedActivityMonitor';
-import { Settings } from '../settings/Settings';
+import { VaultDashboard } from '../../../components/dashboard/VaultDashboard';
+import { VaultManager } from '../../../components/vault-manager/VaultManager';
+import { EnhancedActivityMonitor } from '../../../components/activity-monitor/EnhancedActivityMonitor';
+import { Settings } from '../../../components/settings/Settings';
 
 export interface MainContentProps {
   currentView: AppView;

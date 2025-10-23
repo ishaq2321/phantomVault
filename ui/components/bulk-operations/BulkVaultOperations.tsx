@@ -6,8 +6,8 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { VaultInfo, VaultOperationResult, BulkOperationProgress, BulkOperationResult } from '../../types';
-import { useVault, useApp } from '../../contexts';
-import { useVaultOperations } from '../../hooks';
+import { useVault, useApp } from '../../src/contexts';
+import { useVaultOperations } from '../../src/hooks';
 import { BulkOperationModal } from './BulkOperationModal';
 import { VaultSelectionList } from './VaultSelectionList';
 import { BulkOperationSummary } from './BulkOperationSummary';

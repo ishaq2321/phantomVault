@@ -13,8 +13,8 @@ import {
   VaultStatus,
   UnlockMode
 } from '../../types';
-import { useVault, useApp } from '../../contexts';
-import { useVaultOperations, useInterval, useVaultStatusMonitor } from '../../hooks';
+import { useVault, useApp } from '../../src/contexts';
+import { useVaultOperations, useInterval, useVaultStatusMonitor } from '../../src/hooks';
 import { VaultCard } from './VaultCard';
 import { VaultStatusIndicator } from './VaultStatusIndicator';
 import { QuickActions } from './QuickActions';

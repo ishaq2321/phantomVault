@@ -4,7 +4,10 @@
  * Common setup and utilities for vault operations tests
  */
 
+import React from 'react';
 import '@testing-library/jest-dom/vitest';
+import { AppProvider } from '../../../contexts/AppContext';
+import { VaultProvider } from '../../../contexts/VaultContext';
 
 // ==================== GLOBAL MOCKS ====================
 
@@ -147,32 +150,17 @@ export const createMockAppActions = () => ({
  */
 export const createTestWrapper = (mockVaults = [], mockActions = createMockAppActions()) => {
   return ({ children }: { children: React.ReactNode }) => {
-    const mockVaultState = {
-      vaults: mockVaults,
-      isLoading: false,
-      error: null,
-    };
-
-    const mockVaultActions = {
-      loadVaults: jest.fn(),
-      addVault: jest.fn(),
-      updateVault: jest.fn(),
-      removeVault: jest.fn(),
-      setLoading: jest.fn(),
-      setError: jest.fn(),
-    };
-
     return (
       <AppProvider>
-        <VaultProvider value={{ state: mockVaultState, actions: mockVaultActions }}>
+        <VaultProvider>
           {children}
         </VaultProvider>
       </AppProvider>
     );
   };
 };
-
 /**
+
  * Simulate a slow operation
  */
 export const createSlowOperation = (delay: number = 1000, success: boolean = true) => {

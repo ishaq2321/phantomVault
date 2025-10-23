@@ -6,8 +6,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { VaultInfo, VaultOperationResult, OperationProgress } from '../../types';
-import { useVault, useApp } from '../../contexts';
-import { useVaultOperations } from '../../hooks';
+import { useVault, useApp } from '../../src/contexts';
+import { useVaultOperations } from '../../src/hooks';
 import { PasswordPromptModal } from './PasswordPromptModal';
 import { OperationProgressModal } from './OperationProgressModal';
 import { ConfirmationModal } from '../common/ConfirmationModal';

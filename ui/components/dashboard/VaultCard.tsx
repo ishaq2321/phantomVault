@@ -14,7 +14,7 @@ import {
 import { PasswordPromptModal } from '../common/PasswordPromptModal';
 import { VaultStatusAnimation } from './VaultStatusAnimation';
 import { VaultMetadata, MetadataTooltip } from './VaultMetadata';
-import { useVaultStatusAnimations } from '../../hooks';
+import { useVaultStatusAnimations } from '../../src/hooks';
 
 interface VaultCardProps {
   vault: VaultInfo;

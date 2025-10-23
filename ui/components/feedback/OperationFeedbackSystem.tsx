@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { VaultOperationResult, OperationHistory, NotificationConfig } from '../../types';
-import { useApp } from '../../contexts';
+import { useApp } from '../../src/contexts';
 import { ToastNotification } from './ToastNotification';
 import { OperationHistoryPanel } from './OperationHistoryPanel';
 import { ErrorDetailsModal } from './ErrorDetailsModal';

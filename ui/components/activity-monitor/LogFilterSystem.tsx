@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { ActivityLogEntry, ActivityFilter, FilterPreset } from '../../types';
-import { useVault } from '../../contexts';
+import { useVault } from '../../src/contexts';
 
 export interface LogFilterSystemProps {
   entries: ActivityLogEntry[];

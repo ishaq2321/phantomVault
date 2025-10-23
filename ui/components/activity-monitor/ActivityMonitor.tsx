@@ -6,8 +6,8 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { ActivityLogEntry, ActivityFilter, ActivityStats } from '../../types';
-import { useApp } from '../../contexts';
-import { useActivityMonitor } from '../../hooks';
+import { useApp } from '../../src/contexts';
+import { useActivityMonitor } from '../../src/hooks';
 import { VirtualScrollList } from '../common/VirtualScrollList';
 import { ActivityLogItem } from './ActivityLogItem';
 import { ActivityFilterPanel } from './ActivityFilterPanel';

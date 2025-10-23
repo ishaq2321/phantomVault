@@ -14,8 +14,8 @@ import {
   EncryptionLevel,
   UnlockMode
 } from '../../types';
-import { useVault, useApp } from '../../contexts';
-import { useVaultOperations } from '../../hooks';
+import { useVault, useApp } from '../../src/contexts';
+import { useVaultOperations } from '../../src/hooks';
 import { PasswordStrengthIndicator } from '../common/PasswordStrengthIndicator';
 import { FolderSelector } from '../common/FolderSelector';
 import { KeyboardSequenceInput } from '../common/KeyboardSequenceInput';

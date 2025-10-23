@@ -12,7 +12,7 @@ import { Header } from './components/layout/Header';
 import { MainContent } from './components/layout/MainContent';
 import { StatusBar } from './components/layout/StatusBar';
 import { NotificationContainer } from './components/common/NotificationContainer';
-import { ServiceStatusMonitor } from './components/common/ServiceStatusMonitor';
+import { ServiceStatusMonitor } from '../components/common/ServiceStatusMonitor';
 import { useServiceConnection } from './hooks/useServiceConnection';
 import './App.css';
 

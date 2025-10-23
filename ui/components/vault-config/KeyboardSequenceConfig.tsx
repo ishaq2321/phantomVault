@@ -1,68 +1,398 @@
 /**
  * Keyboard Sequence Configuration Component
  * 
- * Advanced component for configuring keyboard sequences with validation and conflict detection
+ * Advanced keyboard sequence configuration with analysis, conflict detection,
+ * and generation capabilities for vault access sequences.
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { VaultInfo, ValidationResult } from '../../types';
-import { useVault } from '../../contexts';
-import { useVaultValidation } from '../../hooks/useVaultValidation';
+import React, { useState, useMemo, useCallback } from 'react';
 import { KeyboardSequenceInput } from '../common/KeyboardSequenceInput';
+import { useVaultContext } from '../../contexts/VaultContext';
+import { useVaultValidation } from '../../hooks/useVaultValidation';
+import './KeyboardSequenceConfig.css';
 
-export interface KeyboardSequenceConfigProps {
+// ==================== TYPES ====================
+
+interface KeyboardSequenceConfigProps {
   value: string;
-  onChange: (sequence: string) => void;
+  onChange: (value: string) => void;
   currentVaultId?: string;
-  className?: string;
   disabled?: boolean;
   showAdvancedOptions?: boolean;
 }
 
-interface SequenceConflict {
+interface SequenceAnalysis {
+  length: number;
+  entropy: number;
+  strength: 'WEAK' | 'MODERATE' | 'STRONG' | 'VERY_STRONG';
+  features: string[];
+}
+
+interface ConflictInfo {
   vaultId: string;
   vaultName: string;
   sequence: string;
   similarity: number;
 }
 
-/**
- * Keyboard sequence configuration component with advanced validation
- */
+type SequenceMode = 'simple' | 'advanced';
+
+// ==================== CONSTANTS ====================
+
+const CHARSET_SIZES = {
+  lowercase: 26,
+  uppercase: 26,
+  numbers: 10,
+  symbols: 32,
+};
+
+const STRENGTH_THRESHOLDS = {
+  WEAK: 30,
+  MODERATE: 50,
+  STRONG: 70,
+  VERY_STRONG: 90,
+};
+
+// ==================== UTILITY FUNCTIONS ====================
+
+const calculateEntropy = (sequence: string): number => {
+  if (!sequence) return 0;
+  
+  const hasLowercase = /[a-z]/.test(sequence);
+  const hasUppercase = /[A-Z]/.test(sequence);
+  const hasNumbers = /\d/.test(sequence);
+  const hasSymbols = /[^a-zA-Z0-9]/.test(sequence);
+  
+  let charsetSize = 0;
+  if (hasLowercase) charsetSize += CHARSET_SIZES.lowercase;
+  if (hasUppercase) charsetSize += CHARSET_SIZES.uppercase;
+  if (hasNumbers) charsetSize += CHARSET_SIZES.numbers;
+  if (hasSymbols) charsetSize += CHARSET_SIZES.symbols;
+  
+  return sequence.length * Math.log2(charsetSize || 1);
+};
+
+const analyzeSequence = (sequence: string): SequenceAnalysis => {
+  if (!sequence) {
+    return {
+      length: 0,
+      entropy: 0,
+      strength: 'WEAK',
+      features: [],
+    };
+  }
+  
+  const entropy = calculateEntropy(sequence);
+  const features: string[] = [];
+  
+  if (/[a-z]/.test(sequence)) features.push('Letters');
+  if (/[A-Z]/.test(sequence)) features.push('Mixed Case');
+  if (/\d/.test(sequence)) features.push('Numbers');
+  if (/[^a-zA-Z0-9]/.test(sequence)) features.push('Symbols');
+  if (sequence.length >= 8) features.push('Long');
+  if (!/(.)\1{2,}/.test(sequence)) features.push('No Repeats');
+  
+  let strength: SequenceAnalysis['strength'] = 'WEAK';
+  if (entropy >= STRENGTH_THRESHOLDS.VERY_STRONG) strength = 'VERY_STRONG';
+  else if (entropy >= STRENGTH_THRESHOLDS.STRONG) strength = 'STRONG';
+  else if (entropy >= STRENGTH_THRESHOLDS.MODERATE) strength = 'MODERATE';
+  
+  return {
+    length: sequence.length,
+    entropy,
+    strength,
+    features,
+  };
+};
+
+const calculateSimilarity = (str1: string, str2: string): number => {
+  if (!str1 || !str2) return 0;
+  if (str1 === str2) return 100;
+  
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 100;
+  
+  const editDistance = levenshteinDistance(longer, shorter);
+  return Math.round(((longer.length - editDistance) / longer.length) * 100);
+};
+
+const levenshteinDistance = (str1: string, str2: string): number => {
+  const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+  
+  for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
+  for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
+  
+  for (let j = 1; j <= str2.length; j++) {
+    for (let i = 1; i <= str1.length; i++) {
+      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1,
+        matrix[j - 1][i] + 1,
+        matrix[j - 1][i - 1] + indicator
+      );
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+};
+
+const generateRandomSequence = (length: number = 8): string => {
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  
+  const allChars = lowercase + uppercase + numbers + symbols;
+  let result = '';
+  
+  // Ensure at least one character from each category
+  result += lowercase[Math.floor(Math.random() * lowercase.length)];
+  result += uppercase[Math.floor(Math.random() * uppercase.length)];
+  result += numbers[Math.floor(Math.random() * numbers.length)];
+  result += symbols[Math.floor(Math.random() * symbols.length)];
+  
+  // Fill the rest randomly
+  for (let i = 4; i < length; i++) {
+    result += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  // Shuffle the result
+  return result.split('').sort(() => Math.random() - 0.5).join('');
+};
+
+// ==================== MAIN COMPONENT ====================
+
 export const KeyboardSequenceConfig: React.FC<KeyboardSequenceConfigProps> = ({
   value,
   onChange,
   currentVaultId,
-  className = '',
   disabled = false,
-  showAdvancedOptions = true,
+  showAdvancedOptions = false,
 }) => {
-  const { state: vaultState } = useVault();
-  const [showConflicts, setShowConflicts] = useState(false);
-  const [sequenceMode, setSequenceMode] = useState<'simple' | 'advanced'>('simple');
-
-  // ==================== VALIDATION ====================
-
-  const { validateField, getFieldError, hasFieldError } = useVaultValidation({
-    existingVaults: vaultState.vaults,
+  const { state } = useVaultContext();
+  const { validateField } = useVaultValidation({
+    existingVaults: state.vaults,
     currentVaultId,
   });
-
-  const validation = useMemo(() => {
-    return validateField('keyboardSequence', value);
-  }, [validateField, value]);
-
-  // ==================== CONFLICT DETECTION ====================
-
+  
+  const [showConflicts, setShowConflicts] = useState(true);
+  const [sequenceMode, setSequenceMode] = useState<SequenceMode>('simple');
+  
+  // ==================== COMPUTED VALUES ====================
+  
   const existingSequences = useMemo(() => {
-    return vaultState.vaults
+    return state.vaults
+      .filter(vault => vault.id !== currentVaultId)
+      .map(vault => vault.name);
+  }, [state.vaults, currentVaultId]);
+  
+  const analysis = useMemo(() => analyzeSequence(value), [value]);
+  
+  const conflicts = useMemo((): ConflictInfo[] => {
+    if (!value) return [];
+    
+    return state.vaults
       .filter(vault => vault.id !== currentVaultId)
       .map(vault => ({
         vaultId: vault.id,
         vaultName: vault.name,
-        sequence: vault.name, // Simplified - would use actual sequences
-      }));
-  }, [vaultState.vaults, currentVaultId]);
-
-  const sequenceConflicts = useMemo((): SequenceConflict[] => {
-    if (!value || value.length < 2) return [];\n\n    const conflicts: SequenceConflict[] = [];\n    const normalizedValue = value.toLowerCase();\n\n    existingSequences.forEach(({ vaultId, vaultName, sequence }) => {\n      const normalizedSequence = sequence.toLowerCase();\n      \n      // Exact match\n      if (normalizedValue === normalizedSequence) {\n        conflicts.push({\n          vaultId,\n          vaultName,\n          sequence,\n          similarity: 1.0\n        });\n        return;\n      }\n\n      // Substring match\n      if (normalizedValue.includes(normalizedSequence) || normalizedSequence.includes(normalizedValue)) {\n        const similarity = Math.min(normalizedValue.length, normalizedSequence.length) / \n                          Math.max(normalizedValue.length, normalizedSequence.length);\n        \n        if (similarity > 0.7) {\n          conflicts.push({\n            vaultId,\n            vaultName,\n            sequence,\n            similarity\n          });\n        }\n      }\n\n      // Levenshtein distance for similar sequences\n      const distance = calculateLevenshteinDistance(normalizedValue, normalizedSequence);\n      const maxLength = Math.max(normalizedValue.length, normalizedSequence.length);\n      const similarity = 1 - (distance / maxLength);\n      \n      if (similarity > 0.8 && distance <= 2) {\n        conflicts.push({\n          vaultId,\n          vaultName,\n          sequence,\n          similarity\n        });\n      }\n    });\n\n    // Sort by similarity (highest first)\n    return conflicts.sort((a, b) => b.similarity - a.similarity);\n  }, [value, existingSequences]);\n\n  // ==================== SEQUENCE ANALYSIS ====================\n\n  const sequenceAnalysis = useMemo(() => {\n    if (!value) return null;\n\n    const analysis = {\n      length: value.length,\n      hasNumbers: /\\d/.test(value),\n      hasLetters: /[a-zA-Z]/.test(value),\n      hasSymbols: /[!@#$%^&*()_+\\-=\\[\\]{}|;:,.<>?]/.test(value),\n      hasUppercase: /[A-Z]/.test(value),\n      hasLowercase: /[a-z]/.test(value),\n      entropy: calculateEntropy(value),\n      strength: 'weak' as 'weak' | 'medium' | 'strong'\n    };\n\n    // Calculate strength\n    let strengthScore = 0;\n    if (analysis.length >= 4) strengthScore++;\n    if (analysis.length >= 8) strengthScore++;\n    if (analysis.hasNumbers) strengthScore++;\n    if (analysis.hasLetters) strengthScore++;\n    if (analysis.hasSymbols) strengthScore++;\n    if (analysis.hasUppercase && analysis.hasLowercase) strengthScore++;\n    if (analysis.entropy > 3) strengthScore++;\n\n    if (strengthScore >= 6) analysis.strength = 'strong';\n    else if (strengthScore >= 4) analysis.strength = 'medium';\n\n    return analysis;\n  }, [value]);\n\n  // ==================== HANDLERS ====================\n\n  const handleSequenceChange = useCallback((newSequence: string) => {\n    onChange(newSequence);\n    \n    // Auto-show conflicts if any are detected\n    if (newSequence && sequenceConflicts.length > 0) {\n      setShowConflicts(true);\n    }\n  }, [onChange, sequenceConflicts.length]);\n\n  const generateRandomSequence = useCallback(() => {\n    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';\n    let result = '';\n    \n    // Generate 6-8 character sequence\n    const length = 6 + Math.floor(Math.random() * 3);\n    \n    for (let i = 0; i < length; i++) {\n      result += chars.charAt(Math.floor(Math.random() * chars.length));\n    }\n    \n    // Ensure it doesn't conflict\n    const wouldConflict = existingSequences.some(({ sequence }) => \n      sequence.toLowerCase() === result.toLowerCase()\n    );\n    \n    if (wouldConflict) {\n      // Try again with a different sequence\n      generateRandomSequence();\n    } else {\n      onChange(result);\n    }\n  }, [existingSequences, onChange]);\n\n  const clearSequence = useCallback(() => {\n    onChange('');\n    setShowConflicts(false);\n  }, [onChange]);\n\n  // ==================== RENDER HELPERS ====================\n\n  const renderSequenceAnalysis = () => {\n    if (!sequenceAnalysis) return null;\n\n    const getStrengthColor = (strength: string) => {\n      switch (strength) {\n        case 'strong': return '#4CAF50';\n        case 'medium': return '#FF9800';\n        case 'weak': return '#F44336';\n        default: return '#B4B4B4';\n      }\n    };\n\n    return (\n      <div className="sequence-analysis">\n        <div className="analysis-header">\n          <span className="analysis-title">Sequence Analysis</span>\n          <span \n            className="strength-indicator\"\n            style={{ color: getStrengthColor(sequenceAnalysis.strength) }}\n          >\n            {sequenceAnalysis.strength.toUpperCase()}\n          </span>\n        </div>\n        \n        <div className="analysis-details">\n          <div className="analysis-row">\n            <span className="analysis-label">Length:</span>\n            <span className="analysis-value">{sequenceAnalysis.length} characters</span>\n          </div>\n          \n          <div className="analysis-row">\n            <span className="analysis-label">Entropy:</span>\n            <span className="analysis-value">{sequenceAnalysis.entropy.toFixed(2)} bits</span>\n          </div>\n          \n          <div className="analysis-features">\n            {sequenceAnalysis.hasNumbers && <span className="feature-tag">Numbers</span>}\n            {sequenceAnalysis.hasLetters && <span className="feature-tag">Letters</span>}\n            {sequenceAnalysis.hasSymbols && <span className="feature-tag">Symbols</span>}\n            {sequenceAnalysis.hasUppercase && sequenceAnalysis.hasLowercase && \n              <span className="feature-tag">Mixed Case</span>}\n          </div>\n        </div>\n      </div>\n    );\n  };\n\n  const renderConflicts = () => {\n    if (sequenceConflicts.length === 0) return null;\n\n    return (\n      <div className="sequence-conflicts">\n        <div className="conflicts-header">\n          <span className="conflicts-title">\n            ⚠️ Potential Conflicts ({sequenceConflicts.length})\n          </span>\n          <button\n            type="button\"\n            onClick={() => setShowConflicts(!showConflicts)}\n            className="conflicts-toggle\"\n          >\n            {showConflicts ? '▼' : '▶'}\n          </button>\n        </div>\n        \n        {showConflicts && (\n          <div className="conflicts-list">\n            {sequenceConflicts.map((conflict) => (\n              <div key={conflict.vaultId} className="conflict-item">\n                <div className="conflict-info">\n                  <span className="conflict-vault">{conflict.vaultName}</span>\n                  <span className="conflict-sequence">\n                    Sequence: <code>{conflict.sequence}</code>\n                  </span>\n                </div>\n                <div className="conflict-similarity">\n                  {Math.round(conflict.similarity * 100)}% similar\n                </div>\n              </div>\n            ))}\n          </div>\n        )}\n      </div>\n    );\n  };\n\n  const renderAdvancedOptions = () => {\n    if (!showAdvancedOptions) return null;\n\n    return (\n      <div className="advanced-options">\n        <div className="options-header">\n          <span className="options-title">Advanced Options</span>\n        </div>\n        \n        <div className="options-content">\n          <div className="option-group">\n            <label className="option-label">\n              <input\n                type="radio\"\n                name="sequence-mode\"\n                value="simple\"\n                checked={sequenceMode === 'simple'}\n                onChange={(e) => setSequenceMode(e.target.value as 'simple' | 'advanced')}\n                disabled={disabled}\n              />\n              <span className="option-text">Simple Mode</span>\n            </label>\n            <span className="option-description">\n              Basic keyboard sequence for quick access\n            </span>\n          </div>\n          \n          <div className="option-group">\n            <label className="option-label">\n              <input\n                type="radio\"\n                name="sequence-mode\"\n                value="advanced\"\n                checked={sequenceMode === 'advanced'}\n                onChange={(e) => setSequenceMode(e.target.value as 'simple' | 'advanced')}\n                disabled={disabled}\n              />\n              <span className="option-text">Advanced Mode</span>\n            </label>\n            <span className="option-description">\n              Complex sequence with modifiers and special keys\n            </span>\n          </div>\n        </div>\n        \n        <div className="options-actions">\n          <button\n            type="button\"\n            onClick={generateRandomSequence}\n            className="action-button secondary\"\n            disabled={disabled}\n          >\n            🎲 Generate Random\n          </button>\n          \n          <button\n            type="button\"\n            onClick={clearSequence}\n            className="action-button secondary\"\n            disabled={disabled || !value}\n          >\n            🗑️ Clear\n          </button>\n        </div>\n      </div>\n    );\n  };\n\n  // ==================== MAIN RENDER ====================\n\n  return (\n    <div className={`keyboard-sequence-config ${className} ${disabled ? 'disabled' : ''}`}>\n      {/* Main Input */}\n      <KeyboardSequenceInput\n        value={value}\n        onChange={handleSequenceChange}\n        existingSequences={existingSequences.map(s => s.sequence)}\n        className={disabled ? 'readonly' : ''}\n      />\n\n      {/* Validation Error */}\n      {!validation.isValid && (\n        <div className="validation-error">\n          <span className="error-icon">⚠️</span>\n          <span className="error-message">{validation.errors[0]?.message}</span>\n        </div>\n      )}\n\n      {/* Sequence Analysis */}\n      {value && renderSequenceAnalysis()}\n\n      {/* Conflicts */}\n      {renderConflicts()}\n\n      {/* Advanced Options */}\n      {renderAdvancedOptions()}\n    </div>\n  );\n};\n\n// ==================== HELPER FUNCTIONS ====================\n\nfunction calculateLevenshteinDistance(str1: string, str2: string): number {\n  const matrix = [];\n  \n  for (let i = 0; i <= str2.length; i++) {\n    matrix[i] = [i];\n  }\n  \n  for (let j = 0; j <= str1.length; j++) {\n    matrix[0][j] = j;\n  }\n  \n  for (let i = 1; i <= str2.length; i++) {\n    for (let j = 1; j <= str1.length; j++) {\n      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {\n        matrix[i][j] = matrix[i - 1][j - 1];\n      } else {\n        matrix[i][j] = Math.min(\n          matrix[i - 1][j - 1] + 1,\n          matrix[i][j - 1] + 1,\n          matrix[i - 1][j] + 1\n        );\n      }\n    }\n  }\n  \n  return matrix[str2.length][str1.length];\n}\n\nfunction calculateEntropy(str: string): number {\n  const charCounts = new Map<string, number>();\n  \n  for (const char of str) {\n    charCounts.set(char, (charCounts.get(char) || 0) + 1);\n  }\n  \n  let entropy = 0;\n  const length = str.length;\n  \n  for (const count of charCounts.values()) {\n    const probability = count / length;\n    entropy -= probability * Math.log2(probability);\n  }\n  \n  return entropy;\n}"
+        sequence: vault.name, // Using name as sequence for demo
+        similarity: calculateSimilarity(value, vault.name),
+      }))
+      .filter(conflict => conflict.similarity > 50)
+      .sort((a, b) => b.similarity - a.similarity);
+  }, [value, state.vaults, currentVaultId]);
+  
+  const validation = useMemo(() => {
+    return validateField('keyboardSequence', value);
+  }, [validateField, value]);
+  
+  // ==================== EVENT HANDLERS ====================
+  
+  const handleGenerateRandom = useCallback(() => {
+    let attempts = 0;
+    let newSequence: string;
+    
+    do {
+      newSequence = generateRandomSequence(Math.floor(Math.random() * 3) + 6); // 6-8 chars
+      attempts++;
+    } while (
+      attempts < 10 && 
+      existingSequences.some(seq => calculateSimilarity(newSequence, seq) > 80)
+    );
+    
+    onChange(newSequence);
+  }, [onChange, existingSequences]);
+  
+  const handleClear = useCallback(() => {
+    onChange('');
+  }, [onChange]);
+  
+  const handleModeChange = useCallback((mode: SequenceMode) => {
+    setSequenceMode(mode);
+  }, []);
+  
+  // ==================== RENDER HELPERS ====================
+  
+  const renderValidationError = () => {
+    if (validation.isValid || !validation.errors.length) return null;
+    
+    return (
+      <div className="validation-error">
+        <span className="error-icon">⚠️</span>
+        <span className="error-message">{validation.errors[0].message}</span>
+      </div>
+    );
+  };
+  
+  const renderSequenceAnalysis = () => {
+    if (!value) return null;
+    
+    return (
+      <div className="sequence-analysis">
+        <div className="analysis-header">
+          <span className="analysis-title">Sequence Analysis</span>
+          <span className={`strength-indicator strength-${analysis.strength.toLowerCase()}`}>
+            {analysis.strength}
+          </span>
+        </div>
+        <div className="analysis-details">
+          <div className="analysis-row">
+            <span className="analysis-label">Length:</span>
+            <span className="analysis-value">{analysis.length} characters</span>
+          </div>
+          <div className="analysis-row">
+            <span className="analysis-label">Entropy:</span>
+            <span className="analysis-value">{analysis.entropy.toFixed(1)} bits</span>
+          </div>
+          {analysis.features.length > 0 && (
+            <div className="analysis-features">
+              {analysis.features.map(feature => (
+                <span key={feature} className="feature-tag">{feature}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  
+  const renderConflicts = () => {
+    if (!conflicts.length) return null;
+    
+    return (
+      <div className="sequence-conflicts">
+        <div className="conflicts-header">
+          <span className="conflicts-title">
+            ⚠️ Potential Conflicts ({conflicts.length})
+          </span>
+          <button
+            className="conflicts-toggle"
+            onClick={() => setShowConflicts(!showConflicts)}
+            aria-label={showConflicts ? 'Hide conflicts' : 'Show conflicts'}
+          >
+            {showConflicts ? '▼' : '▶'}
+          </button>
+        </div>
+        {showConflicts && (
+          <div className="conflicts-list">
+            {conflicts.map(conflict => (
+              <div key={conflict.vaultId} className="conflict-item">
+                <div className="conflict-info">
+                  <div className="conflict-vault">{conflict.vaultName}</div>
+                  <div className="conflict-sequence">
+                    Sequence: <code>{conflict.sequence}</code>
+                  </div>
+                </div>
+                <div className="conflict-similarity">
+                  {conflict.similarity}% similar
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  const renderAdvancedOptions = () => {
+    if (!showAdvancedOptions) return null;
+    
+    return (
+      <div className="advanced-options">
+        <div className="options-header">
+          <span className="options-title">Advanced Options</span>
+        </div>
+        <div className="options-content">
+          <div className="option-group">
+            <label className="option-label">
+              <input
+                type="radio"
+                name="sequenceMode"
+                value="simple"
+                checked={sequenceMode === 'simple'}
+                onChange={() => handleModeChange('simple')}
+              />
+              <span className="option-text">Simple Mode</span>
+            </label>
+            <div className="option-description">
+              Basic sequence input with standard validation
+            </div>
+          </div>
+          <div className="option-group">
+            <label className="option-label">
+              <input
+                type="radio"
+                name="sequenceMode"
+                value="advanced"
+                checked={sequenceMode === 'advanced'}
+                onChange={() => handleModeChange('advanced')}
+              />
+              <span className="option-text">Advanced Mode</span>
+            </label>
+            <div className="option-description">
+              Enhanced security analysis and conflict detection
+            </div>
+          </div>
+        </div>
+        <div className="options-actions">
+          <button
+            className="action-button secondary"
+            onClick={handleGenerateRandom}
+            disabled={disabled}
+          >
+            🎲 Generate Random
+          </button>
+          <button
+            className="action-button secondary"
+            onClick={handleClear}
+            disabled={disabled || !value}
+          >
+            🗑️ Clear
+          </button>
+        </div>
+      </div>
+    );
+  };
+  
+  // ==================== MAIN RENDER ====================
+  
+  return (
+    <div className={`keyboard-sequence-config ${disabled ? 'disabled' : ''}`}>
+      {renderValidationError()}
+      
+      <KeyboardSequenceInput
+        value={value}
+        onChange={onChange}
+        existingSequences={existingSequences}
+        disabled={disabled}
+      />
+      
+      {renderSequenceAnalysis()}
+      {renderConflicts()}
+      {renderAdvancedOptions()}
+    </div>
+  );
+};
