@@ -4,20 +4,21 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.4-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.1.0-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
 [![Release](https://img.shields.io/badge/release-ready-success.svg)]()
 
 ## 🚀 Overview
 
-PhantomVault is a **desktop application** that provides invisible folder encryption with instant global hotkey access. Lock and unlock your folders anywhere, anytime with simple keyboard shortcuts - no visible interface needed! The application runs completely in the background, securing your sensitive folders with military-grade encryption.
+PhantomVault is a **desktop application** that provides invisible folder encryption with revolutionary **keyboard sequence detection**. Lock and unlock your folders by simply typing your password anywhere on your system - no visible interface needed! The application runs completely in the background, securing your sensitive folders with military-grade encryption and truly invisible operation.
 
 ### ✨ Key Features
 
+- **🎯 Keyboard Sequence Detection**: Revolutionary invisible password input - type anywhere on your system
 - **🔐 Military-Grade Encryption**: AES-256-GCM encryption with PBKDF2 key derivation (100,000 iterations)
-- **⚡ Global Hotkeys**: `Ctrl+Alt+V` for instant lock/unlock, `Ctrl+Alt+R` for recovery access
-- **👻 Invisible Operation**: No black screens, popups, or interface disruption
+- **⚡ Global Hotkeys**: `Ctrl+Alt+V` triggers invisible sequence detection, `Ctrl+Alt+R` for recovery access
+- **👻 Truly Invisible Operation**: No windows, dialogs, or interface disruption - type passwords in any application
+- **🧠 Smart Mode Detection**: `T+password` (temporary), `P+password` (permanent), or plain password (default temporary)
 - **🖥️ Desktop Application**: Install once, use from Applications menu or hotkeys
-- **🔄 Smart Modes**: Temporary unlock (auto-locks) or permanent unlock (removes from vault)
 - **🔑 Recovery System**: Emergency access with recovery keys when passwords are forgotten
 - **👥 Multi-User Support**: Isolated vaults per user with secure permissions
 - **🛡️ Auto-Start Service**: Background service starts automatically on login
@@ -109,6 +110,43 @@ sudo ./uninstall-phantomvault.sh
 
 *Your vault data remains safe in `~/.phantom_vault_storage`*
 
+## 🎯 Revolutionary Keyboard Sequence Detection
+
+### 🧠 How It Works
+
+PhantomVault introduces **world-first keyboard sequence detection** technology:
+
+1. **Press `Ctrl+Alt+V`** - Activates invisible 10-second monitoring
+2. **Type anywhere** - In file manager, browser, terminal, any application
+3. **Password detected automatically** - Hidden within normal typing
+4. **Folders unlock instantly** - Zero visible interface
+
+### 🎯 Detection Examples
+
+```
+Type: "hello T1234 world"     → Detects T1234 (Temporary unlock)
+Type: "opening P1234 files"   → Detects P1234 (Permanent unlock)  
+Type: "folder 1234 access"    → Detects 1234 (Default temporary)
+Type: "no password here"      → Nothing detected, monitoring stops
+```
+
+### 🔒 Security & Privacy
+
+- **10-second timeout** - Monitoring automatically stops
+- **Secure memory wiping** - DOD 5220.22-M standard cleanup
+- **No persistent storage** - Keystrokes never saved to disk
+- **Hash verification** - Passwords verified against SHA-256 hashes
+- **Buffer size limits** - Prevents memory-based attacks
+
+### 🌍 Cross-Platform Status
+
+| Platform | Status | Technology |
+|----------|--------|------------|
+| **Linux X11** | ✅ Working | XInput2 keyboard hooks |
+| **Linux Wayland** | ⚠️ Needs permissions | libinput/evdev access |
+| **Windows** | 🔄 Ready | SetWindowsHookEx architecture |
+| **macOS** | 🔄 Ready | CGEventTap architecture |
+
 ## 🎯 Usage
 
 ### 🚀 First Time Setup
@@ -123,11 +161,12 @@ sudo ./uninstall-phantomvault.sh
 
 #### 🔓 Lock/Unlock Folders (`Ctrl+Alt+V`)
 1. Press **Ctrl+Alt+V** anywhere on your system
-2. Enter password with mode:
-   - **`Tmypassword`** - Temporary unlock (auto-locks when PC locks)
-   - **`Pmypassword`** - Permanent unlock (removes from vault)
-3. Press **Enter**
-4. Folders instantly appear/disappear!
+2. **Type your password anywhere** - in any application, mixed with other text:
+   - **`hello T1234 world`** - Detects T1234 for temporary unlock
+   - **`abc P1234 def`** - Detects P1234 for permanent unlock  
+   - **`test 1234 end`** - Detects 1234 for default temporary unlock
+3. **No Enter needed** - detection is automatic!
+4. Folders instantly appear/disappear with **zero visible interface**!
 
 #### 🔑 Emergency Recovery (`Ctrl+Alt+R`)
 1. Press **Ctrl+Alt+R**
@@ -179,7 +218,9 @@ systemctl --user restart phantom-vault.service
 
 - **AES-256-GCM Encryption** - Military-grade security
 - **PBKDF2 Key Derivation** - 100,000 iterations against brute force
-- **Secure Memory Handling** - Passwords cleared after use
+- **Secure Memory Handling** - DOD 5220.22-M standard memory wiping
+- **Keyboard Sequence Security** - 10-second monitoring timeout, secure buffer cleanup
+- **SHA-256 Password Hashing** - No plaintext password storage
 - **Automatic Backups** - Data protection during operations
 - **Recovery Keys** - Emergency access system
 - **Audit Logging** - Security event tracking
@@ -362,16 +403,18 @@ openssl version
 
 ### 🚀 Upcoming Features
 
-- **Windows & macOS Support** - Cross-platform desktop applications
+- **Windows & macOS Sequence Detection** - Cross-platform invisible password input
+- **Individual Folder Passwords** - Different passwords for different folders
+- **Advanced Pattern Matching** - Custom password formats and sequences
 - **Mobile Companion Apps** - Android/iOS remote management
 - **Cloud Backup Integration** - Secure encrypted cloud sync
 - **Hardware Security Keys** - YubiKey and FIDO2 support
 - **Network Vault Sharing** - Secure folder sharing between devices
-- **Advanced GUI Features** - Enhanced management interface
 
 ### 📈 Version History
 
-- **v1.0.4** - Fixed TypeScript build configuration issues (current)
+- **v1.1.0** - Revolutionary keyboard sequence detection system (current)
+- **v1.0.4** - Fixed TypeScript build configuration issues
 - **v1.0.3** - Fixed installer file copying logic
 - **v1.0.2** - Fixed installer path detection and Node.js conflicts
 - **v1.0.1** - Fixed Node.js/npm installation conflicts

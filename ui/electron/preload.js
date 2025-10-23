@@ -40,6 +40,10 @@ contextBridge.exposeInMainWorld('phantomVault', {
   getCurrentHotkey: () => ipcRenderer.invoke('get-current-hotkey'),
   showNotification: (title, body) => ipcRenderer.invoke('show-notification', title, body),
   closeOverlayWindow: () => ipcRenderer.invoke('close-overlay-window'),
+  
+  // Password input fallback
+  showPasswordDialog: (options) => ipcRenderer.invoke('show-password-dialog', options),
+  sendPasswordResult: (password) => ipcRenderer.invoke('send-password-result', password),
 
   // PhantomVault 2.0 - Hotkey Manager APIs
   hotkey: {

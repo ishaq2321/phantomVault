@@ -12,6 +12,7 @@
 #include <regex>
 #include <cctype>
 #include <algorithm>
+#include <chrono>
 
 namespace phantom_vault {
 namespace service {
@@ -101,10 +102,15 @@ public:
     bool initialize() {
         std::lock_guard<std::mutex> lock(mutex_);
         
-        // NO X11 DISPLAY NEEDED - completely terminal-based
-        display_ = nullptr;
+        // Open X11 display for invisible window input capture
+        display_ = XOpenDisplay(nullptr);
+        if (!display_) {
+            last_error_ = "Failed to open X display";
+            std::cout << "[InputOverlay] ERROR: " << last_error_ << std::endl;
+            return false;
+        }
         
-        std::cout << "[InputOverlay] Initialized for terminal input (no X11)" << std::endl;
+        std::cout << "[InputOverlay] Initialized for invisible X11 input capture" << std::endl;
         return true;
     }
 
@@ -177,32 +183,159 @@ public:
 
 private:
     bool createOverlayWindow() {
-        // NO WINDOW CREATION AT ALL - completely invisible operation
-        std::cout << "[InputOverlay] Using invisible terminal input (no X11 interaction)" << std::endl;
-        window_ = 0;  // No window needed
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        // Open X11 display if not already open
+        if (!display_) {
+            display_ = XOpenDisplay(nullptr);
+            if (!display_) {
+                last_error_ = "Failed to open X display";
+                std::cout << "[InputOverlay] ERROR: " << last_error_ << std::endl;
+                return false;
+            }
+        }
+        
+        // Create invisible window that captures all input
+        int screen = DefaultScreen(display_);
+        Window root = RootWindow(display_, screen);
+        
+        // Create a 1x1 invisible window positioned off-screen
+        XSetWindowAttributes attrs;
+        attrs.override_redirect = True;  // Bypass window manager
+        attrs.background_pixel = BlackPixel(display_, screen);
+        attrs.border_pixel = BlackPixel(display_, screen);
+        attrs.event_mask = KeyPressMask | KeyReleaseMask | FocusChangeMask;
+        
+        window_ = XCreateWindow(display_, root,
+                               -10, -10, 1, 1, 0,  // Off-screen, 1x1 size
+                               CopyFromParent, InputOutput, CopyFromParent,
+                               CWOverrideRedirect | CWBackPixel | CWBorderPixel | CWEventMask,
+                               &attrs);
+        
+        if (!window_) {
+            last_error_ = "Failed to create overlay window";
+            std::cout << "[InputOverlay] ERROR: " << last_error_ << std::endl;
+            return false;
+        }
+        
+        // Map the window (make it exist, but invisible)
+        XMapWindow(display_, window_);
+        
+        // Set input focus to our invisible window
+        XSetInputFocus(display_, window_, RevertToParent, CurrentTime);
+        
+        // Flush all X requests
+        XFlush(display_);
+        
+        std::cout << "[InputOverlay] Created invisible input capture window" << std::endl;
         return true;
     }
 
     void destroyOverlayWindow() {
-        // No X11 resources to clean up - using terminal input
-        std::cout << "[InputOverlay] Input capture cleaned up" << std::endl;
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        if (window_ && display_) {
+            // Restore focus to the previously focused window
+            XSetInputFocus(display_, PointerRoot, RevertToPointerRoot, CurrentTime);
+            
+            // Destroy our invisible window
+            XDestroyWindow(display_, window_);
+            XFlush(display_);
+            
+            std::cout << "[InputOverlay] Destroyed input capture window" << std::endl;
+        }
+        
         window_ = 0;
     }
 
     std::string captureInput(int timeout_seconds) {
-        std::cout << "\n🔐 Enter password (T+password for temporary, P+password for permanent): " << std::flush;
-        
-        // Use simple terminal input - no X11 interaction at all
-        std::string input;
-        std::getline(std::cin, input);
-        
-        if (input.empty()) {
-            std::cout << "[InputOverlay] No input provided" << std::endl;
+        if (!window_ || !display_) {
+            last_error_ = "Overlay window not created";
             return "";
         }
         
-        std::cout << "[InputOverlay] Password captured (length: " << input.length() << ")" << std::endl;
-        return input;
+        std::cout << "[InputOverlay] Capturing invisible input (timeout: " << timeout_seconds << "s)" << std::endl;
+        std::cout << "[InputOverlay] Type T+password (temporary) or P+password (permanent), then press Enter" << std::endl;
+        
+        input_buffer_.clear();
+        is_active_ = true;
+        should_cancel_ = false;
+        
+        // Set up timeout
+        auto start_time = std::chrono::steady_clock::now();
+        auto timeout_duration = std::chrono::seconds(timeout_seconds);
+        
+        XEvent event;
+        while (is_active_ && !should_cancel_) {
+            // Check for timeout
+            if (std::chrono::steady_clock::now() - start_time > timeout_duration) {
+                std::cout << "[InputOverlay] Input capture timed out" << std::endl;
+                break;
+            }
+            
+            // Check for X11 events with timeout
+            if (XPending(display_) > 0) {
+                XNextEvent(display_, &event);
+                
+                if (event.type == KeyPress && event.xkey.window == window_) {
+                    if (processKeyPress(&event.xkey)) {
+                        // Enter key pressed - input complete
+                        break;
+                    }
+                }
+            } else {
+                // No events pending, sleep briefly
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }
+        
+        is_active_ = false;
+        
+        if (should_cancel_) {
+            std::cout << "[InputOverlay] Input capture cancelled" << std::endl;
+            return "";
+        }
+        
+        if (input_buffer_.empty()) {
+            std::cout << "[InputOverlay] No input captured" << std::endl;
+            return "";
+        }
+        
+        std::cout << "[InputOverlay] Input captured successfully (length: " << input_buffer_.length() << ")" << std::endl;
+        return input_buffer_;
+    }
+    
+    bool processKeyPress(XKeyEvent* key_event) {
+        KeySym keysym = XkbKeycodeToKeysym(display_, key_event->keycode, 0, 0);
+        
+        if (keysym == XK_Return || keysym == XK_KP_Enter) {
+            // Enter key - complete input
+            return true;
+        } else if (keysym == XK_Escape) {
+            // Escape key - cancel input
+            should_cancel_ = true;
+            return true;
+        } else if (keysym == XK_BackSpace) {
+            // Backspace - remove last character
+            if (!input_buffer_.empty()) {
+                input_buffer_.pop_back();
+            }
+        } else {
+            // Regular character input
+            char buffer[32];
+            int len = XLookupString(key_event, buffer, sizeof(buffer), &keysym, nullptr);
+            
+            if (len > 0) {
+                // Add printable characters to input buffer
+                for (int i = 0; i < len; i++) {
+                    if (std::isprint(buffer[i])) {
+                        input_buffer_ += buffer[i];
+                    }
+                }
+            }
+        }
+        
+        return false; // Continue capturing
     }
 
     // X11 event handling methods removed - using terminal input instead
@@ -214,8 +347,10 @@ private:
         
         destroyOverlayWindow();
         
-        // No X11 display to close - terminal-based only
-        display_ = nullptr;
+        if (display_) {
+            XCloseDisplay(display_);
+            display_ = nullptr;
+        }
     }
 
     Display* display_;

@@ -2,6 +2,7 @@
 #include "phantom_vault/core.hpp"
 #include "phantom_vault/hotkey_manager.hpp"
 #include "phantom_vault/input_overlay.hpp"
+#include "phantom_vault/sequence_detector.hpp"
 #include "phantom_vault/service_vault_manager.hpp"
 #include "phantom_vault/recovery_manager.hpp"
 #include "phantom_vault/directory_protection.hpp"
@@ -29,6 +30,7 @@ public:
         , start_time_(std::chrono::steady_clock::now())
         , hotkey_manager_()
         , input_overlay_()
+        , sequence_detector_()
         , vault_manager_()
         , recovery_manager_()
         , directory_protection_()
@@ -46,10 +48,17 @@ public:
             return false;
         }
         
-        // Initialize input overlay
+        // Initialize input overlay (fallback)
         input_overlay_ = std::make_unique<InputOverlay>();
         if (!input_overlay_->initialize()) {
             last_error_ = "Failed to initialize input overlay: " + input_overlay_->getLastError();
+            return false;
+        }
+        
+        // Initialize sequence detector (primary method)
+        sequence_detector_ = std::make_unique<SequenceDetector>();
+        if (!sequence_detector_->initialize()) {
+            last_error_ = "Failed to initialize sequence detector: " + sequence_detector_->getLastError();
             return false;
         }
         
@@ -176,7 +185,7 @@ private:
     void handleUnlockHotkey() {
         std::cout << "\n=== UNLOCK HOTKEY PRESSED ===" << std::endl;
         
-        if (!input_overlay_ || !vault_manager_) {
+        if (!sequence_detector_ || !vault_manager_) {
             std::cout << "Required components not available" << std::endl;
             return;
         }
@@ -185,12 +194,12 @@ private:
         auto active_profile = vault_manager_->getActiveProfile();
         if (active_profile && vault_manager_->hasTemporaryUnlockedFolders(active_profile->id)) {
             std::cout << "Detected temporary folders - entering RE-LOCK mode" << std::endl;
-            handleRelockMode(active_profile);
+            handleRelockModeWithSequence(active_profile);
             return;
         }
         
-        // Normal unlock mode
-        handleUnlockMode();
+        // Normal unlock mode with sequence detection
+        handleUnlockModeWithSequence();
     }
     
     void handleUnlockMode() {
@@ -324,6 +333,173 @@ private:
         }
         
         std::cout << "================================\n" << std::endl;
+    }
+    
+    void handleUnlockModeWithSequence() {
+        std::cout << "=== SEQUENCE DETECTION MODE ===" << std::endl;
+        
+        // Get active profile and load folder passwords
+        auto active_profile = vault_manager_->getActiveProfile();
+        if (!active_profile) {
+            std::cout << "No active profile found - creating default profile..." << std::endl;
+            
+            // Create default profile for testing
+            std::string profile_name = "Default Profile";
+            std::string master_password = "1234"; // Default password for testing
+            std::string recovery_key = "1234-5678-9ABC-DEF0"; // Default recovery key for testing
+            
+            active_profile = vault_manager_->createProfile(profile_name, master_password, recovery_key);
+            
+            if (!active_profile) {
+                std::cout << "❌ Failed to create profile" << std::endl;
+                std::cout << "==================\n" << std::endl;
+                return;
+            }
+            
+            std::cout << "✅ Created default profile: " << active_profile->name << std::endl;
+            std::cout << "🔑 Recovery key: " << recovery_key << " (save this!)" << std::endl;
+        }
+        
+        // Load folder passwords for sequence detection
+        updateSequenceDetectorPasswords(active_profile->id);
+        
+        // Set up detection callback
+        sequence_detector_->setDetectionCallback([this, active_profile](const PasswordDetectionResult& result) {
+            handlePasswordDetection(result, active_profile->id);
+        });
+        
+        // Start sequence detection
+        if (sequence_detector_->startDetection(10)) {
+            std::cout << "✅ Sequence detection started (10 second timeout)" << std::endl;
+            std::cout << "   Type your password anywhere on the system..." << std::endl;
+            std::cout << "   - For temporary unlock: T+password (e.g., T1234)" << std::endl;
+            std::cout << "   - For permanent unlock: P+password (e.g., P1234)" << std::endl;
+            std::cout << "   - Default mode: just password (e.g., 1234) = temporary" << std::endl;
+            std::cout << "   - If sequence detection fails, GUI fallback will be available" << std::endl;
+        } else {
+            std::cout << "❌ Failed to start sequence detection: " << sequence_detector_->getLastError() << std::endl;
+            
+            // Send IPC message to GUI for fallback password dialog
+            if (ipc_server_) {
+                nlohmann::json fallback_request;
+                fallback_request["type"] = "password_dialog_request";
+                fallback_request["mode"] = "unlock";
+                fallback_request["reason"] = "sequence_detection_failed";
+                
+                IPCMessage fallback_msg(IPCMessageType::ERROR_NOTIFICATION, fallback_request.dump());
+                ipc_server_->broadcastMessage(fallback_msg);
+                
+                std::cout << "🔄 Sent fallback request to GUI clients" << std::endl;
+            } else {
+                // Final fallback to input overlay
+                std::cout << "🔄 Falling back to input overlay..." << std::endl;
+                handleUnlockMode();
+            }
+        }
+        
+        std::cout << "==================\n" << std::endl;
+    }
+    
+    void handleRelockModeWithSequence(std::shared_ptr<VaultProfile> profile) {
+        std::cout << "=== RE-LOCK SEQUENCE MODE ===" << std::endl;
+        
+        auto temp_folders = vault_manager_->getTemporaryUnlockedFolders(profile->id);
+        std::cout << "Found " << temp_folders.size() << " temporary folder(s) to lock" << std::endl;
+        
+        // Load folder passwords for sequence detection
+        updateSequenceDetectorPasswords(profile->id);
+        
+        // Set up detection callback for re-lock
+        sequence_detector_->setDetectionCallback([this, profile](const PasswordDetectionResult& result) {
+            handleRelockPasswordDetection(result, profile->id);
+        });
+        
+        // Start sequence detection
+        if (sequence_detector_->startDetection(10)) {
+            std::cout << "✅ Re-lock sequence detection started (10 second timeout)" << std::endl;
+            std::cout << "   Type your password anywhere to lock temporary folders..." << std::endl;
+        } else {
+            std::cout << "❌ Failed to start sequence detection: " << sequence_detector_->getLastError() << std::endl;
+            
+            // Fallback to input overlay
+            std::cout << "🔄 Falling back to input overlay..." << std::endl;
+            handleRelockMode(profile);
+        }
+        
+        std::cout << "===================\n" << std::endl;
+    }
+    
+    void updateSequenceDetectorPasswords(const std::string& profile_id) {
+        if (!sequence_detector_ || !vault_manager_) {
+            return;
+        }
+        
+        // Get all folders for the profile
+        auto folders = vault_manager_->getFolders(profile_id);
+        
+        std::vector<FolderPassword> folder_passwords;
+        for (const auto& folder : folders) {
+            // For now, use a simple test password system
+            // In production, this would load actual folder passwords
+            std::string test_password = "1234"; // Default test password
+            std::string password_hash = PasswordUtils::hashPassword(test_password);
+            
+            FolderPassword fp(
+                folder.id,
+                folder.folder_name,
+                password_hash,
+                folder.original_path,
+                folder.is_locked
+            );
+            
+            folder_passwords.push_back(fp);
+        }
+        
+        // Update sequence detector with folder passwords
+        sequence_detector_->updateFolderPasswords(folder_passwords);
+        
+        std::cout << "[SequenceDetector] Updated with " << folder_passwords.size() << " folder password(s)" << std::endl;
+    }
+    
+    void handlePasswordDetection(const PasswordDetectionResult& result, const std::string& profile_id) {
+        std::cout << "\n🎯 PASSWORD DETECTED!" << std::endl;
+        std::cout << "   Folder ID: " << result.folder_id << std::endl;
+        std::cout << "   Mode: " << (result.mode == UnlockMode::TEMPORARY ? "Temporary" : "Permanent") << std::endl;
+        
+        // For now, unlock all folders with the detected password
+        // TODO: Implement individual folder unlocking in ServiceVaultManager
+        UnlockResult unlock_result = vault_manager_->unlockFolders(profile_id, result.password, result.mode);
+        
+        if (unlock_result.success_count > 0) {
+            std::cout << "✅ Successfully unlocked " << unlock_result.success_count << " folder(s) in " 
+                      << (result.mode == UnlockMode::TEMPORARY ? "temporary" : "permanent") << " mode" << std::endl;
+            
+            if (unlock_result.failed_count > 0) {
+                std::cout << "⚠️  " << unlock_result.failed_count << " folder(s) failed to unlock" << std::endl;
+            }
+        } else {
+            std::cout << "❌ Failed to unlock folders" << std::endl;
+            for (const auto& error : unlock_result.error_messages) {
+                std::cout << "  Error: " << error << std::endl;
+            }
+        }
+        
+        std::cout << "==================\n" << std::endl;
+    }
+    
+    void handleRelockPasswordDetection(const PasswordDetectionResult& result, const std::string& profile_id) {
+        std::cout << "\n🔒 RE-LOCK PASSWORD DETECTED!" << std::endl;
+        
+        // Lock all temporary folders with the detected password
+        int locked_count = vault_manager_->lockAllTemporaryFolders(profile_id, result.password);
+        
+        if (locked_count > 0) {
+            std::cout << "✅ Successfully locked " << locked_count << " temporary folder(s)" << std::endl;
+        } else {
+            std::cout << "❌ Failed to lock folders (wrong password?)" << std::endl;
+        }
+        
+        std::cout << "===================\n" << std::endl;
     }
 
     void serviceLoop() {
@@ -622,6 +798,12 @@ private:
                 return handleLockFolders(msg, client_id);
             });
         
+        // PASSWORD_INPUT handler (fallback method)
+        ipc_server_->setMessageHandler(IPCMessageType::PASSWORD_INPUT,
+            [this](const IPCMessage& msg, const std::string& client_id) -> IPCMessage {
+                return handlePasswordInput(msg, client_id);
+            });
+        
         std::cout << "[IPC] Message handlers configured" << std::endl;
     }
     
@@ -824,6 +1006,59 @@ private:
         }
     }
     
+    IPCMessage handlePasswordInput(const IPCMessage& msg, const std::string& client_id) {
+        std::cout << "[IPC] Handling PASSWORD_INPUT from " << client_id << std::endl;
+        
+        try {
+            nlohmann::json request = nlohmann::json::parse(msg.payload);
+            std::string raw_password = request["password"];
+            std::string mode_str = request.value("mode", "unlock");
+            
+            // Parse password using the same T/P prefix format as sequence detection
+            PasswordInput parsed_input = PasswordParser::parseInput(raw_password);
+            
+            if (vault_manager_) {
+                auto active_profile = vault_manager_->getActiveProfile();
+                if (!active_profile) {
+                    return IPCMessage(IPCMessageType::ERROR_NOTIFICATION, "No active profile");
+                }
+                
+                nlohmann::json response;
+                
+                if (mode_str == "unlock") {
+                    // Unlock folders
+                    UnlockResult result = vault_manager_->unlockFolders(active_profile->id, parsed_input.password, parsed_input.mode);
+                    
+                    response["success"] = (result.success_count > 0);
+                    response["unlocked_count"] = result.success_count;
+                    response["failed_count"] = result.failed_count;
+                    response["mode"] = (parsed_input.mode == UnlockMode::TEMPORARY) ? "T" : "P";
+                    
+                    if (!result.error_messages.empty()) {
+                        response["errors"] = result.error_messages;
+                    }
+                } else if (mode_str == "lock") {
+                    // Lock temporary folders
+                    int locked_count = vault_manager_->lockAllTemporaryFolders(active_profile->id, parsed_input.password);
+                    
+                    response["success"] = (locked_count > 0);
+                    response["locked_count"] = locked_count;
+                }
+                
+                // Broadcast folder status update to all clients
+                broadcastFolderStatusUpdate();
+                
+                return IPCMessage(IPCMessageType::FOLDER_STATUS_UPDATE, response.dump());
+            }
+            
+            return IPCMessage(IPCMessageType::ERROR_NOTIFICATION, "Vault manager not available");
+            
+        } catch (const std::exception& e) {
+            return IPCMessage(IPCMessageType::ERROR_NOTIFICATION, 
+                            "Failed to parse PASSWORD_INPUT request: " + std::string(e.what()));
+        }
+    }
+    
     void sendVaultStateUpdate(const std::string& client_id = "") {
         if (!ipc_server_) return;
         
@@ -869,6 +1104,7 @@ private:
     // Hotkey and input components
     std::unique_ptr<HotkeyManager> hotkey_manager_;
     std::unique_ptr<InputOverlay> input_overlay_;
+    std::unique_ptr<SequenceDetector> sequence_detector_;
     std::unique_ptr<ServiceVaultManager> vault_manager_;
     std::unique_ptr<RecoveryManager> recovery_manager_;
     std::unique_ptr<DirectoryProtection> directory_protection_;

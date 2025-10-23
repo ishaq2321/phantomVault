@@ -17,6 +17,7 @@ add_executable(core_tests
     system_tray_test.cpp
     startup_manager_test.cpp
     process_concealer_test.cpp
+    sequence_detector_test.cpp
     test_vault_metadata_manager.cpp
     test_vault_encryption_manager.cpp
     test_vault_storage_manager.cpp

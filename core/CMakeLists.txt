@@ -36,6 +36,7 @@ add_library(phantom_vault_core SHARED
     src/service_simple.cpp
     src/hotkey_manager.cpp
     src/input_overlay.cpp
+    src/sequence_detector.cpp
     src/service_vault_manager.cpp
     src/recovery_manager.cpp
     src/directory_protection.cpp

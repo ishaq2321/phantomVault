@@ -535,11 +535,135 @@ function setupIpcHandlers() {
     return true;
   });
 
+  // Password input fallback (when sequence detection fails)
+  ipcMain.handle('show-password-dialog', async (event, options = {}) => {
+    const { title = 'PhantomVault', placeholder = 'Enter password...', mode = 'unlock' } = options;
+    
+    console.log(`🔐 [FALLBACK] Showing password dialog for ${mode}`);
+    
+    // Create a small, focused password dialog
+    const passwordWindow = new BrowserWindow({
+      width: 400,
+      height: 200,
+      modal: true,
+      parent: mainWindow,
+      show: false,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      alwaysOnTop: true,
+      frame: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dirname, 'preload.js'),
+      },
+    });
+
+    // Create simple HTML for password input
+    const passwordHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #2d3748;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 160px;
+          }
+          .container {
+            text-align: center;
+          }
+          h3 {
+            margin: 0 0 15px 0;
+            font-size: 14px;
+            color: #a0aec0;
+          }
+          input {
+            width: 300px;
+            padding: 10px;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            background: #1a202c;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+          }
+          input:focus {
+            outline: none;
+            border-color: #63b3ed;
+          }
+          .hint {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #718096;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h3>${title}</h3>
+          <input type="password" id="passwordInput" placeholder="${placeholder}" autofocus>
+          <div class="hint">T+password (temporary) • P+password (permanent) • ESC to cancel</div>
+        </div>
+        <script>
+          const input = document.getElementById('passwordInput');
+          
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              window.electronAPI.sendPasswordResult(input.value);
+            } else if (e.key === 'Escape') {
+              window.electronAPI.sendPasswordResult(null);
+            }
+          });
+          
+          // Auto-focus
+          setTimeout(() => input.focus(), 100);
+          
+          // Auto-close after 30 seconds
+          setTimeout(() => {
+            window.electronAPI.sendPasswordResult(null);
+          }, 30000);
+        </script>
+      </body>
+      </html>
+    `;
+
+    passwordWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(passwordHtml));
+    
+    return new Promise((resolve) => {
+      // Handle password result
+      ipcMain.once('password-result', (event, password) => {
+        passwordWindow.close();
+        resolve(password);
+      });
+      
+      passwordWindow.once('closed', () => {
+        resolve(null);
+      });
+      
+      passwordWindow.show();
+      passwordWindow.focus();
+    });
+  });
+
   // Close overlay window
   ipcMain.handle('close-overlay-window', async () => {
     console.log('🚪 Closing overlay window');
     closeOverlayWindow();
     return { success: true };
+  });
+
+  // Handle password result from dialog
+  ipcMain.handle('send-password-result', async (event, password) => {
+    ipcMain.emit('password-result', event, password);
+    return true;
   });
   
   // Hide folder (Linux: prepend dot to make it hidden)

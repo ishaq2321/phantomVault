@@ -30,6 +30,7 @@ enum class IPCMessageType {
     LOCK_FOLDERS,           // Lock folders
     CREATE_PROFILE,         // Create new profile
     DELETE_PROFILE,         // Delete profile
+    PASSWORD_INPUT,         // Password input from GUI (fallback method)
     
     // Bidirectional
     PING,                   // Connection test
