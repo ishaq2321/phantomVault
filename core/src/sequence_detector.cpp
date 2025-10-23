@@ -390,7 +390,7 @@ private:
             // 2. Checking against encrypted password hints
             // 3. Using a challenge-response system
             
-            std::vector<std::string> test_passwords = {"1234", "password", "test", "admin", "secret"};
+            std::vector<std::string> test_passwords = {"1234", "2321", "password", "test", "admin", "secret"};
             
             for (const std::string& test_pwd : test_passwords) {
                 std::string check_pwd = test_pwd;

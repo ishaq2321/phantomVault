@@ -17,6 +17,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 
 namespace phantom_vault {
 namespace service {
@@ -384,6 +385,39 @@ private:
         // Load folder passwords for sequence detection
         std::cout << "🔧 [SEQUENCE] Loading folder passwords for detection..." << std::endl;
         updateSequenceDetectorPasswords(active_profile->id);
+        
+        // Check if we have any folders, if not create a test folder
+        auto folders = vault_manager_->getFolders(active_profile->id);
+        if (folders.empty()) {
+            std::cout << "⚠️  [SEQUENCE] No folders found in vault - creating test folder..." << std::endl;
+            
+            // Create a test folder in /tmp for demonstration
+            std::string test_folder_path = "/tmp/phantom_test_folder";
+            
+            // Create the test folder if it doesn't exist
+            if (!std::filesystem::exists(test_folder_path)) {
+                try {
+                    std::filesystem::create_directory(test_folder_path);
+                    
+                    // Add some test content
+                    std::ofstream test_file(test_folder_path + "/test.txt");
+                    test_file << "This is a test folder for PhantomVault sequence detection.\n";
+                    test_file << "Password: 1234 or 2321\n";
+                    test_file << "Try typing: T1234 or T2321 anywhere after pressing Ctrl+Alt+V\n";
+                    test_file.close();
+                    
+                    std::cout << "✅ [SEQUENCE] Created test folder: " << test_folder_path << std::endl;
+                    std::cout << "📁 [SEQUENCE] Added test content to folder" << std::endl;
+                } catch (const std::exception& e) {
+                    std::cout << "❌ [SEQUENCE] Failed to create test folder: " << e.what() << std::endl;
+                }
+            } else {
+                std::cout << "✅ [SEQUENCE] Test folder already exists: " << test_folder_path << std::endl;
+            }
+            
+            // Reload folder passwords after potential folder creation
+            updateSequenceDetectorPasswords(active_profile->id);
+        }
         
         // Set up detection callback
         std::cout << "🔧 [SEQUENCE] Setting up detection callback..." << std::endl;
