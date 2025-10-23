@@ -1,205 +1,284 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Settings Component
+ * 
+ * Main settings interface with tabbed categories for different preferences
+ */
 
-interface SettingsProps {
-  onClose: () => void;
+import React, { useState, useCallback, useEffect } from 'react';
+import { AppSettings } from '../../types';
+import { useApp } from '../../contexts';
+import { GeneralSettings } from './GeneralSettings';
+import { SecuritySettings } from './SecuritySettings';
+import { UISettings } from './UISettings';
+import { AdvancedSettings } from './AdvancedSettings';
+
+export interface SettingsProps {
+  className?: string;
+  onClose?: () => void;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ onClose }) => {
-  const [hotkey, setHotkey] = useState<string>('CommandOrControl+Shift+P');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
+type SettingsTab = 'general' | 'security' | 'ui' | 'advanced';
 
+interface SettingsTabInfo {
+  id: SettingsTab;
+  label: string;
+  icon: string;
+  description: string;
+}
+
+const SETTINGS_TABS: SettingsTabInfo[] = [
+  {
+    id: 'general',
+    label: 'General',
+    icon: '⚙️',
+    description: 'Basic application preferences and behavior',
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    icon: '🔒',
+    description: 'Security settings and authentication preferences',
+  },
+  {
+    id: 'ui',
+    label: 'Interface',
+    icon: '🎨',
+    description: 'Theme, layout, and visual preferences',
+  },
+  {
+    id: 'advanced',
+    label: 'Advanced',
+    icon: '🔧',
+    description: 'Advanced configuration and debugging options',
+  },
+];
+
+/**
+ * Main settings component
+ */
+export const Settings: React.FC<SettingsProps> = ({
+  className = '',
+  onClose,
+}) => {
+  const { state: appState, actions: appActions } = useApp();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [localSettings, setLocalSettings] = useState<AppSettings>(appState.settings);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Check for unsaved changes
   useEffect(() => {
-    // Load saved hotkey from storage
-    const loadHotkey = async () => {
-      try {
-        const saved = localStorage.getItem('phantomvault_hotkey');
-        if (saved) {
-          setHotkey(saved);
-        }
-      } catch (err) {
-        console.error('Failed to load hotkey:', err);
-      }
-    };
-    loadHotkey();
+    const hasChanges = JSON.stringify(localSettings) !== JSON.stringify(appState.settings);
+    setHasUnsavedChanges(hasChanges);
+  }, [localSettings, appState.settings]);
+
+  // Handle settings change
+  const handleSettingsChange = useCallback((changes: Partial<AppSettings>) => {
+    setLocalSettings(prev => ({ ...prev, ...changes }));
+    setSaveError(null);
   }, []);
 
-  const handleStartRecording = () => {
-    setIsRecording(true);
-    setRecordedKeys([]);
-  };
+  // Save settings
+  const saveSettings = useCallback(async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    
+    try {
+      await appActions.updateSettings(localSettings);
+      setHasUnsavedChanges(false);
+      
+      // Show success notification
+      appActions.addNotification({
+        type: 'success',
+        title: 'Settings Saved',
+        message: 'Your preferences have been saved successfully.',
+        duration: 3000,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save settings';
+      setSaveError(errorMessage);
+      
+      appActions.addNotification({
+        type: 'error',
+        title: 'Save Failed',
+        message: errorMessage,
+        duration: 5000,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [localSettings, appActions]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (!isRecording) return;
+  // Reset settings to defaults
+  const resetToDefaults = useCallback(() => {
+    const defaultSettings: AppSettings = {
+      theme: 'dark',
+      autoStart: false,
+      notifications: true,
+      minimizeToTray: true,
+      autoLock: true,
+      lockTimeout: 15,
+    };
     
-    e.preventDefault();
-    
-    const keys: string[] = [];
-    
-    if (e.ctrlKey || e.metaKey) keys.push('CommandOrControl');
-    if (e.shiftKey) keys.push('Shift');
-    if (e.altKey) keys.push('Alt');
-    
-    // Get the actual key
-    const key = e.key.toUpperCase();
-    if (key !== 'CONTROL' && key !== 'SHIFT' && key !== 'ALT' && key !== 'META') {
-      keys.push(key);
+    setLocalSettings(defaultSettings);
+    setSaveError(null);
+  }, []);
+
+  // Discard changes
+  const discardChanges = useCallback(() => {
+    setLocalSettings(appState.settings);
+    setSaveError(null);
+  }, [appState.settings]);
+
+  // Handle tab change
+  const handleTabChange = useCallback((tab: SettingsTab) => {
+    setActiveTab(tab);
+  }, []);
+
+  // Handle close with unsaved changes check
+  const handleClose = useCallback(() => {
+    if (hasUnsavedChanges) {
+      const shouldDiscard = window.confirm(
+        'You have unsaved changes. Are you sure you want to close without saving?'
+      );
+      
+      if (!shouldDiscard) {
+        return;
+      }
     }
     
-    if (keys.length > 1) { // Need at least modifier + key
-      const hotkeyString = keys.join('+');
-      setRecordedKeys(keys);
-      setHotkey(hotkeyString);
-      setIsRecording(false);
-      
-      // Save to storage
-      localStorage.setItem('phantomvault_hotkey', hotkeyString);
-      
-      // Notify Electron to re-register the hotkey
-      // TODO: Implement registerGlobalHotkey in the API
-      try {
-        // window.phantomVault.registerGlobalHotkey(hotkeyString)
-        //   .then(() => {
-            window.phantomVault.showNotification(
-              'Hotkey Updated',
-              `New hotkey: ${hotkeyString}`
-            );
-        //   })
-        //   .catch((err: any) => {
-        //     console.error('Failed to register hotkey:', err);
-        //     window.phantomVault.showNotification(
-        //       'Error',
-        //       'Failed to register hotkey. It may be in use by another application.'
-        //     );
-        //   });
-      } catch (err: any) {
-        console.error('Failed to register hotkey:', err);
-        window.phantomVault.showNotification(
-          'Error',
-          'Failed to register hotkey. It may be in use by another application.'
-        );
-      }
+    onClose?.();
+  }, [hasUnsavedChanges, onClose]);
+
+  // Render tab content
+  const renderTabContent = () => {
+    const commonProps = {
+      settings: localSettings,
+      onSettingsChange: handleSettingsChange,
+    };
+
+    switch (activeTab) {
+      case 'general':
+        return <GeneralSettings {...commonProps} />;
+      case 'security':
+        return <SecuritySettings {...commonProps} />;
+      case 'ui':
+        return <UISettings {...commonProps} />;
+      case 'advanced':
+        return <AdvancedSettings {...commonProps} />;
+      default:
+        return null;
     }
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}>
-      <div style={{
-        backgroundColor: '#2D3250',
-        borderRadius: '12px',
-        padding: '2rem',
-        maxWidth: '500px',
-        width: '90%',
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#F6F6F6' }}>
-            ⚙️ Settings
-          </h2>
-          <button onClick={onClose} style={{
-            background: 'none',
-            border: 'none',
-            color: '#F6F6F6',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            padding: '0.25rem',
-          }}>
+    <div className={`settings-container ${className}`}>
+      {/* Header */}
+      <div className=\"settings-header\">
+        <div className=\"header-content\">
+          <h1 className=\"settings-title\">Settings</h1>
+          <p className=\"settings-subtitle\">
+            Configure your PhantomVault preferences and behavior
+          </p>
+        </div>
+        
+        {onClose && (
+          <button 
+            onClick={handleClose}
+            className=\"close-button\"
+            title=\"Close settings\"
+          >
             ✕
           </button>
+        )}
+      </div>
+
+      <div className=\"settings-content\">
+        {/* Sidebar with tabs */}
+        <div className=\"settings-sidebar\">
+          <nav className=\"settings-nav\">
+            {SETTINGS_TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
+                title={tab.description}
+              >
+                <span className=\"nav-icon\">{tab.icon}</span>
+                <span className=\"nav-label\">{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+          
+          {/* Tab description */}
+          <div className=\"tab-description\">
+            <p>{SETTINGS_TABS.find(tab => tab.id === activeTab)?.description}</p>
+          </div>
         </div>
 
-        <div style={{ marginBottom: '2rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '1rem', color: '#F6F6F6' }}>
-            Global Unlock Hotkey
-          </h3>
-          <p style={{ fontSize: '0.875rem', color: '#B4B4B4', marginBottom: '1rem' }}>
-            Press this keyboard combination from anywhere to unlock your vaults
-          </p>
-
-          <div style={{
-            padding: '1rem',
-            backgroundColor: '#1B1F3B',
-            borderRadius: '8px',
-            border: '2px solid #424769',
-            marginBottom: '1rem',
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: '1.25rem', fontWeight: '600', color: '#7077A1', marginBottom: '0.5rem' }}>
-              {hotkey}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#B4B4B4' }}>
-              Current hotkey
-            </div>
+        {/* Main content area */}
+        <div className=\"settings-main\">
+          {/* Tab content */}
+          <div className=\"tab-content\">
+            {renderTabContent()}
           </div>
 
-          <div
-            onKeyDown={handleKeyPress}
-            tabIndex={0}
-            style={{
-              padding: '1.5rem',
-              backgroundColor: isRecording ? '#424769' : '#1B1F3B',
-              border: `2px dashed ${isRecording ? '#7077A1' : '#424769'}`,
-              borderRadius: '8px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-            onClick={handleStartRecording}
-          >
-            {isRecording ? (
-              <>
-                <div style={{ fontSize: '1rem', color: '#F6F6F6', marginBottom: '0.5rem' }}>
-                  ⌨️ Press your desired key combination...
-                </div>
-                {recordedKeys.length > 0 && (
-                  <div style={{ fontSize: '1.25rem', fontWeight: '600', color: '#7077A1' }}>
-                    {recordedKeys.join(' + ')}
-                  </div>
+          {/* Save error */}
+          {saveError && (
+            <div className=\"save-error\">
+              <span className=\"error-icon\">❌</span>
+              <span className=\"error-message\">{saveError}</span>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className=\"settings-actions\">
+            <div className=\"action-group\">
+              <button 
+                onClick={resetToDefaults}
+                className=\"action-button secondary\"
+                disabled={isSaving}
+              >
+                Reset to Defaults
+              </button>
+              
+              {hasUnsavedChanges && (
+                <button 
+                  onClick={discardChanges}
+                  className=\"action-button secondary\"
+                  disabled={isSaving}
+                >
+                  Discard Changes
+                </button>
+              )}
+            </div>
+            
+            <div className=\"action-group\">
+              <button 
+                onClick={saveSettings}
+                className=\"action-button primary\"
+                disabled={!hasUnsavedChanges || isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <span className=\"loading-spinner\">⏳</span>
+                    Saving...
+                  </>
+                ) : (
+                  'Save Settings'
                 )}
-              </>
-            ) : (
-              <div style={{ fontSize: '1rem', color: '#B4B4B4' }}>
-                Click here to change hotkey
-              </div>
-            )}
+              </button>
+            </div>
           </div>
 
-          <div style={{
-            marginTop: '1rem',
-            padding: '0.75rem',
-            backgroundColor: '#1B1F3B',
-            borderRadius: '8px',
-            fontSize: '0.75rem',
-            color: '#B4B4B4',
-          }}>
-            💡 <strong>Tip:</strong> Use a combination like Ctrl+Shift+P or Ctrl+Alt+V
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{
-            padding: '0.75rem 2rem',
-            backgroundColor: '#7077A1',
-            color: '#F6F6F6',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '1rem',
-            fontWeight: '500',
-            cursor: 'pointer',
-          }}>
-            Done
-          </button>
+          {/* Unsaved changes indicator */}
+          {hasUnsavedChanges && (
+            <div className=\"unsaved-changes-indicator\">
+              <span className=\"indicator-icon\">⚠️</span>
+              <span className=\"indicator-text\">You have unsaved changes</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

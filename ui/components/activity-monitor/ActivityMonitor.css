@@ -1,0 +1,612 @@
+/**
+ * Activity Monitor Styles
+ * 
+ * CSS styles for the activity monitor and related components
+ */
+
+/* ==================== MAIN CONTAINER ==================== */
+
+.activity-monitor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #2D3250;
+  border-radius: 12px;
+  border: 1px solid #424769;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #F6F6F6;
+  overflow: hidden;
+}
+
+/* ==================== HEADER ==================== */
+
+.activity-monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+  background-color: #1B1F3B;
+  border-bottom: 1px solid #424769;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.monitor-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #F6F6F6;
+}
+
+.entry-count {
+  font-size: 0.875rem;
+  color: #B4B4B4;
+  background-color: rgba(112, 119, 161, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.header-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.new-entries-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #FF9800;
+  border: none;
+  border-radius: 6px;
+  color: #FFFFFF;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.refresh-button,
+.export-button,
+.clear-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-button {
+  background-color: #424769;
+  color: #F6F6F6;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background-color: #525a7a;
+}
+
+.export-button {
+  background-color: #2196F3;
+  color: #FFFFFF;
+}
+
+.export-button:hover:not(:disabled) {
+  background-color: #1976D2;
+}
+
+.clear-button {
+  background-color: #F44336;
+  color: #FFFFFF;
+}
+
+.clear-button:hover:not(:disabled) {
+  background-color: #D32F2F;
+}
+
+.button-icon {
+  font-size: 0.875rem;
+}
+
+/* ==================== CONTENT ==================== */
+
+.activity-monitor-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ==================== LOG CONTAINER ==================== */
+
+.activity-log-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background-color: #1B1F3B;
+  border-bottom: 1px solid #424769;
+}
+
+.log-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.scroll-button {
+  padding: 0.375rem 0.75rem;
+  background-color: #424769;
+  border: none;
+  border-radius: 6px;
+  color: #F6F6F6;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.scroll-button:hover {
+  background-color: #525a7a;
+}
+
+.auto-scroll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #F6F6F6;
+  cursor: pointer;
+}
+
+.auto-scroll-toggle input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ==================== LOG SCROLL ==================== */
+
+.activity-log-scroll {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #2D3250;
+}
+
+.activity-log-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.activity-log-scroll::-webkit-scrollbar-track {
+  background-color: #1B1F3B;
+}
+
+.activity-log-scroll::-webkit-scrollbar-thumb {
+  background-color: #424769;
+  border-radius: 4px;
+}
+
+.activity-log-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #525a7a;
+}
+
+/* ==================== EMPTY LOG ==================== */
+
+.empty-log {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-message {
+  font-size: 1rem;
+  color: #B4B4B4;
+  margin-bottom: 1rem;
+}
+
+.retry-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #7077A1;
+  border: none;
+  border-radius: 8px;
+  color: #FFFFFF;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retry-button:hover {
+  background-color: #5a6085;
+}
+
+/* ==================== LOG ITEM ==================== */
+
+.activity-log-item {
+  position: relative;
+  display: flex;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #424769;
+  transition: all 0.2s;
+}
+
+.activity-log-item:hover {
+  background-color: rgba(112, 119, 161, 0.05);
+}
+
+.activity-log-item.compact {
+  padding: 0.5rem 1.5rem;
+}
+
+.level-indicator {
+  display: flex;
+  align-items: flex-start;
+  margin-right: 1rem;
+  margin-top: 0.125rem;
+}
+
+.level-icon {
+  font-size: 1.25rem;
+}
+
+.log-item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.log-item-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.timestamp {
+  display: flex;
+  align-items: center;
+}
+
+.timestamp-text {
+  font-size: 0.75rem;
+  color: #B4B4B4;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.vault-name {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.vault-icon {
+  font-size: 0.75rem;
+}
+
+.vault-text {
+  font-size: 0.75rem;
+  color: #7077A1;
+  font-weight: 500;
+}
+
+.level-badge {
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.level-text {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.log-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.message-text {
+  flex: 1;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: #F6F6F6;
+}
+
+.details-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background-color: #424769;
+  border: none;
+  border-radius: 4px;
+  color: #F6F6F6;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.details-toggle:hover {
+  background-color: #525a7a;
+}
+
+.toggle-icon {
+  font-size: 0.625rem;
+}
+
+.log-details {
+  margin-top: 0.5rem;
+  padding: 1rem;
+  background-color: #1B1F3B;
+  border: 1px solid #424769;
+  border-radius: 8px;
+}
+
+.details-header {
+  margin-bottom: 0.5rem;
+}
+
+.details-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #7077A1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.details-content {
+  overflow-x: auto;
+}
+
+.details-text {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #F6F6F6;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.log-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-left: 1rem;
+}
+
+.action-button {
+  padding: 0.25rem;
+  background-color: #424769;
+  border: none;
+  border-radius: 4px;
+  color: #F6F6F6;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-button:hover {
+  background-color: #525a7a;
+}
+
+.severity-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+/* ==================== LEVEL COLORS ==================== */
+
+.activity-log-item.info .severity-bar {
+  background-color: #2196F3;
+}
+
+.activity-log-item.warning .severity-bar {
+  background-color: #FF9800;
+}
+
+.activity-log-item.error .severity-bar {
+  background-color: #F44336;
+}
+
+.activity-log-item.debug .severity-bar {
+  background-color: #9E9E9E;
+}
+
+/* ==================== VIRTUAL SCROLL ==================== */
+
+.virtual-scroll-list {
+  width: 100%;
+}
+
+.virtual-scroll-list.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-list-message {
+  color: #B4B4B4;
+  font-size: 0.875rem;
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+@media (max-width: 768px) {
+  .activity-monitor-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .header-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .log-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .log-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .log-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .log-message {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .log-item-actions {
+    flex-direction: row;
+    margin-left: 0;
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .activity-monitor-header {
+    padding: 1rem;
+  }
+  
+  .monitor-title {
+    font-size: 1.25rem;
+  }
+  
+  .activity-log-item {
+    padding: 0.75rem 1rem;
+  }
+  
+  .level-indicator {
+    margin-right: 0.75rem;
+  }
+  
+  .level-icon {
+    font-size: 1rem;
+  }
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+
+.activity-monitor:focus-within {
+  outline: 2px solid #7077A1;
+  outline-offset: 2px;
+}
+
+.refresh-button:focus,
+.export-button:focus,
+.clear-button:focus,
+.scroll-button:focus,
+.details-toggle:focus,
+.action-button:focus {
+  outline: 2px solid #7077A1;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .activity-monitor {
+    border-color: #FFFFFF;
+  }
+  
+  .activity-log-item {
+    border-bottom-color: #FFFFFF;
+  }
+  
+  .log-details {
+    border-color: #FFFFFF;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .activity-log-item,
+  .refresh-button,
+  .export-button,
+  .clear-button,
+  .scroll-button,
+  .details-toggle,
+  .action-button {
+    transition: none;
+  }
+  
+  .new-entries-button {
+    animation: none;
+  }
+}
+
+/* ==================== PRINT STYLES ==================== */
+
+@media print {
+  .activity-monitor {
+    background: white !important;
+    color: black !important;
+    border: 1px solid #ccc !important;
+  }
+  
+  .header-controls,
+  .log-controls,
+  .log-item-actions {
+    display: none !important;
+  }
+  
+  .activity-log-item {
+    border-bottom: 1px solid #ccc !important;
+    background: white !important;
+  }
+}
