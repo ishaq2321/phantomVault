@@ -37,5 +37,10 @@
     "src",
     "components",
     "src/types/**/*"
+  ],
+  "exclude": [
+    "**/*.test.*",
+    "**/__tests__/**",
+    "node_modules"
   ]
 }

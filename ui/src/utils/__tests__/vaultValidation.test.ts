@@ -24,7 +24,7 @@ const mockVaults: VaultInfo[] = [
     name: 'Personal Documents',
     path: '/home/user/personal',
     status: 'unmounted',
-    lastAccessed: new Date('2024-01-01'),
+    lastAccess: new Date('2024-01-01'),
     size: 1024 * 1024 * 100, // 100MB
     folderCount: 25
   },
@@ -33,7 +33,7 @@ const mockVaults: VaultInfo[] = [
     name: 'Work Files',
     path: '/home/user/work',
     status: 'mounted',
-    lastAccessed: new Date('2024-01-02'),
+    lastAccess: new Date('2024-01-02'),
     size: 1024 * 1024 * 500, // 500MB
     folderCount: 50
   }
