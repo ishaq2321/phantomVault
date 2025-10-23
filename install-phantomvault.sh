@@ -145,9 +145,12 @@ echo ""
 echo "🔨 Step 3: Building PhantomVault..."
 echo "==================================="
 
+# Change to installation directory for all builds
+cd "$INSTALL_DIR"
+
 # Build C++ core
 echo "🔧 Building C++ core service..."
-cd core
+cd "$INSTALL_DIR/core"
 mkdir -p build
 cd build
 cmake ..
@@ -162,7 +165,7 @@ echo "✅ C++ service built successfully"
 
 # Build Electron UI
 echo "🔧 Building Electron UI..."
-cd ../../ui
+cd "$INSTALL_DIR/ui"
 
 # Fix ownership for npm operations (since we're running as root)
 chown -R "$ACTUAL_USER:$ACTUAL_USER" .
@@ -186,6 +189,10 @@ if [ ! -f "dist/index.html" ]; then
     sudo -u "$ACTUAL_USER" npm run build
     if [ ! -f "dist/index.html" ]; then
         echo "❌ UI build failed after retry"
+        echo "Checking for errors..."
+        ls -la .
+        echo "Package.json content:"
+        cat package.json | grep -A 10 -B 10 "scripts"
         exit 1
     fi
 fi
@@ -194,7 +201,7 @@ echo "✅ Electron UI built successfully"
 
 # Build native addon (now that C++ core is built and available)
 echo "🔧 Building native addon..."
-cd native
+cd "$INSTALL_DIR/ui/native"
 
 # Fix ownership for native addon build
 chown -R "$ACTUAL_USER:$ACTUAL_USER" .
@@ -209,7 +216,6 @@ if [ ! -f "build/Release/phantom_vault_addon.node" ]; then
     exit 1
 fi
 
-cd ..
 echo "✅ Native addon built successfully"
 
 echo ""
@@ -219,9 +225,8 @@ echo "========================================"
 # Use pre-made PNG icon (no ImageMagick required)
 mkdir -p "$INSTALL_DIR/assets"
 
-# Copy the pre-made PNG icon from the release package
-if [ -f "assets/phantomvault.png" ]; then
-    cp "assets/phantomvault.png" "$INSTALL_DIR/assets/"
+# Copy the pre-made PNG icon from the installation directory
+if [ -f "$INSTALL_DIR/assets/phantomvault.png" ]; then
     ICON_PATH="$INSTALL_DIR/assets/phantomvault.png"
     echo "✅ Using pre-made PNG icon"
 else
@@ -292,30 +297,17 @@ if ! pgrep -f "phantom_vault_service" > /dev/null; then
     sleep 2
 fi
 
-# Start Electron GUI in production mode
-if [ -f "$INSTALL_DIR/ui/dist/index.html" ]; then
-    # Production mode - serve the built files
-    npx electron electron/main.js
-else
+# Verify UI build exists
+if [ ! -f "$INSTALL_DIR/ui/dist/index.html" ]; then
     echo "❌ UI build not found at $INSTALL_DIR/ui/dist/index.html"
-    echo "Available files in UI directory:"
-    ls -la "$INSTALL_DIR/ui/" || echo "UI directory not found"
-    echo ""
-    echo "🔧 Attempting to rebuild UI..."
-    if command -v npm > /dev/null; then
-        npm run build
-        if [ -f "$INSTALL_DIR/ui/dist/index.html" ]; then
-            echo "✅ UI rebuilt successfully, starting application..."
-            npx electron electron/main.js
-        else
-            echo "❌ UI rebuild failed"
-            exit 1
-        fi
-    else
-        echo "❌ npm not found, cannot rebuild UI"
-        exit 1
-    fi
+    echo "This should not happen after a successful installation."
+    echo "Please reinstall PhantomVault."
+    exit 1
 fi
+
+# Start Electron GUI in production mode
+echo "🚀 Starting PhantomVault..."
+npx electron electron/main.js
 EOF
 
 chmod +x "$INSTALL_DIR/phantomvault-launcher.sh"
@@ -390,18 +382,31 @@ chmod +x "$INSTALL_DIR/core/build/phantom_vault_service"
 
 # Verify critical files exist
 echo "🔍 Verifying installation..."
+
+# Check UI build
 if [ ! -f "$INSTALL_DIR/ui/dist/index.html" ]; then
     echo "❌ Critical file missing: $INSTALL_DIR/ui/dist/index.html"
-    echo "Installation may be incomplete"
-    exit 1
+    echo "Attempting final UI build..."
+    cd "$INSTALL_DIR/ui"
+    sudo -u "$ACTUAL_USER" npm run build
+    if [ ! -f "$INSTALL_DIR/ui/dist/index.html" ]; then
+        echo "❌ Final UI build failed"
+        echo "Directory contents:"
+        ls -la "$INSTALL_DIR/ui/"
+        echo "Dist directory:"
+        ls -la "$INSTALL_DIR/ui/dist/" 2>/dev/null || echo "Dist directory does not exist"
+        exit 1
+    fi
 fi
 
+# Check C++ service
 if [ ! -f "$INSTALL_DIR/core/build/phantom_vault_service" ]; then
     echo "❌ Critical file missing: $INSTALL_DIR/core/build/phantom_vault_service"
     echo "Installation may be incomplete"
     exit 1
 fi
 
+# Check native addon
 if [ ! -f "$INSTALL_DIR/ui/native/build/Release/phantom_vault_addon.node" ]; then
     echo "❌ Critical file missing: $INSTALL_DIR/ui/native/build/Release/phantom_vault_addon.node"
     echo "Installation may be incomplete"
@@ -409,6 +414,9 @@ if [ ! -f "$INSTALL_DIR/ui/native/build/Release/phantom_vault_addon.node" ]; the
 fi
 
 echo "✅ All critical files verified"
+echo "   • UI build: $INSTALL_DIR/ui/dist/index.html"
+echo "   • C++ service: $INSTALL_DIR/core/build/phantom_vault_service"
+echo "   • Native addon: $INSTALL_DIR/ui/native/build/Release/phantom_vault_addon.node"
 echo "✅ Permissions set correctly"
 
 echo ""
