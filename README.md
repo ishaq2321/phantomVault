@@ -70,12 +70,12 @@ PhantomVault uses a hybrid architecture combining a native C++ background servic
 
 1. **Download the latest release:**
    ```bash
-   # Download from GitHub releases
-   wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.1.0-linux.tar.gz
+   # Download from GitHub archive
+   wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.1.0.tar.gz
    
    # Extract
-   tar -xzf phantomvault-v1.1.0-linux.tar.gz
-   cd phantomvault-v1.1.0-linux
+   tar -xzf v1.1.0.tar.gz
+   cd phantomvault-1.1.0
    ```
 
 2. **Install with one command:**
@@ -350,7 +350,7 @@ SOFTWARE.
 ```bash
 # If you see TypeScript build errors, use the latest installer (v1.1.0+)
 # The installer now has fixed TypeScript configuration
-wget https://github.com/ishaq2321/phantomvault/releases/latest/download/phantomvault-v1.1.0-linux.tar.gz
+wget https://github.com/ishaq2321/phantomvault/archive/refs/tags/v1.1.0.tar.gz
 ```
 
 **Source files not found:**
