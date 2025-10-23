@@ -290,6 +290,11 @@ sudo -u "$ACTUAL_USER" npm install
 echo "📦 Installing additional dev dependencies..."
 sudo -u "$ACTUAL_USER" npm install --save-dev concurrently wait-on typescript
 
+# Compile TypeScript files for Electron
+echo "🔧 Compiling TypeScript files..."
+sudo -u "$ACTUAL_USER" npx tsc --project electron/tsconfig.json || echo "⚠️ Electron TypeScript compilation had warnings (continuing)"
+sudo -u "$ACTUAL_USER" npx tsc --project src/services/tsconfig.json || echo "⚠️ Services TypeScript compilation had warnings (continuing)"
+
 # Build the UI as the actual user
 echo "🏗️  Building UI with TypeScript and Vite..."
 sudo -u "$ACTUAL_USER" npm run build
@@ -462,11 +467,14 @@ EOF
 # Enable and start service
 systemctl daemon-reload
 systemctl enable phantom-vault.service
+systemctl start phantom-vault.service
 
-# Start service for the current user
-sudo -u "$ACTUAL_USER" systemctl --user daemon-reload
-sudo -u "$ACTUAL_USER" systemctl --user enable phantom-vault.service
-sudo -u "$ACTUAL_USER" systemctl --user start phantom-vault.service
+# Verify service is running
+if systemctl is-active --quiet phantom-vault.service; then
+    echo "✅ Service started successfully"
+else
+    echo "⚠️ Service may need manual start: sudo systemctl start phantom-vault"
+fi
 
 echo "✅ Background service configured and started"
 

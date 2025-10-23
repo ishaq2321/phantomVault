@@ -53,8 +53,8 @@ try {
 let VaultProfileManager = null;
 let VaultFolderManager = null;
 try {
-  const profileModule = require('./VaultProfileManager');
-  const folderModule = require('./VaultFolderManager');
+  const profileModule = require('../src/services/VaultProfileManager');
+  const folderModule = require('../src/services/VaultFolderManager');
   VaultProfileManager = profileModule.VaultProfileManager;
   VaultFolderManager = folderModule.VaultFolderManager;
 } catch (error) {
