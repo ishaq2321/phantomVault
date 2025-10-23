@@ -31,6 +31,8 @@
     }
   },
   "include": [
-    "src"
+    "src",
+    "components",
+    "src/types/**/*"
   ]
 }
