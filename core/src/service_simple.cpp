@@ -183,22 +183,34 @@ private:
     }
     
     void handleUnlockHotkey() {
-        std::cout << "\n=== UNLOCK HOTKEY PRESSED ===" << std::endl;
+        std::cout << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+        std::cout << "🔓 [C++ SERVICE] UNLOCK HOTKEY PRESSED" << std::endl;
+        std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+        
+        // Debug component availability
+        std::cout << "🔍 [DEBUG] Component status:" << std::endl;
+        std::cout << "   - Sequence Detector: " << (sequence_detector_ ? "✅ Available" : "❌ NULL") << std::endl;
+        std::cout << "   - Vault Manager: " << (vault_manager_ ? "✅ Available" : "❌ NULL") << std::endl;
+        std::cout << "   - IPC Server: " << (ipc_server_ ? "✅ Available" : "❌ NULL") << std::endl;
         
         if (!sequence_detector_ || !vault_manager_) {
-            std::cout << "Required components not available" << std::endl;
+            std::cout << "❌ [ERROR] Required components not available" << std::endl;
+            std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
             return;
         }
         
         // Check if we have temporary folders to re-lock
         auto active_profile = vault_manager_->getActiveProfile();
+        std::cout << "🔍 [DEBUG] Active profile: " << (active_profile ? active_profile->name : "None") << std::endl;
+        
         if (active_profile && vault_manager_->hasTemporaryUnlockedFolders(active_profile->id)) {
-            std::cout << "Detected temporary folders - entering RE-LOCK mode" << std::endl;
+            std::cout << "🔒 [MODE] Detected temporary folders - entering RE-LOCK mode" << std::endl;
             handleRelockModeWithSequence(active_profile);
             return;
         }
         
         // Normal unlock mode with sequence detection
+        std::cout << "🔓 [MODE] Entering UNLOCK mode with sequence detection" << std::endl;
         handleUnlockModeWithSequence();
     }
     
@@ -336,68 +348,91 @@ private:
     }
     
     void handleUnlockModeWithSequence() {
-        std::cout << "=== SEQUENCE DETECTION MODE ===" << std::endl;
+        std::cout << "🎯 [SEQUENCE] Starting sequence detection mode" << std::endl;
         
         // Get active profile and load folder passwords
         auto active_profile = vault_manager_->getActiveProfile();
+        std::cout << "🔍 [DEBUG] Checking for active profile..." << std::endl;
+        
         if (!active_profile) {
-            std::cout << "No active profile found - creating default profile..." << std::endl;
+            std::cout << "⚠️  [PROFILE] No active profile found - creating default profile..." << std::endl;
             
             // Create default profile for testing
             std::string profile_name = "Default Profile";
             std::string master_password = "1234"; // Default password for testing
             std::string recovery_key = "1234-5678-9ABC-DEF0"; // Default recovery key for testing
             
+            std::cout << "🔧 [PROFILE] Creating profile with:" << std::endl;
+            std::cout << "   - Name: " << profile_name << std::endl;
+            std::cout << "   - Test Password: " << master_password << std::endl;
+            std::cout << "   - Recovery Key: " << recovery_key << std::endl;
+            
             active_profile = vault_manager_->createProfile(profile_name, master_password, recovery_key);
             
             if (!active_profile) {
-                std::cout << "❌ Failed to create profile" << std::endl;
-                std::cout << "==================\n" << std::endl;
+                std::cout << "❌ [ERROR] Failed to create profile" << std::endl;
+                std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
                 return;
             }
             
-            std::cout << "✅ Created default profile: " << active_profile->name << std::endl;
-            std::cout << "🔑 Recovery key: " << recovery_key << " (save this!)" << std::endl;
+            std::cout << "✅ [PROFILE] Created default profile: " << active_profile->name << std::endl;
+            std::cout << "🔑 [PROFILE] Recovery key: " << recovery_key << " (save this!)" << std::endl;
+        } else {
+            std::cout << "✅ [PROFILE] Found active profile: " << active_profile->name << std::endl;
         }
         
         // Load folder passwords for sequence detection
+        std::cout << "🔧 [SEQUENCE] Loading folder passwords for detection..." << std::endl;
         updateSequenceDetectorPasswords(active_profile->id);
         
         // Set up detection callback
+        std::cout << "🔧 [SEQUENCE] Setting up detection callback..." << std::endl;
         sequence_detector_->setDetectionCallback([this, active_profile](const PasswordDetectionResult& result) {
+            std::cout << "🎯 [CALLBACK] Password detection callback triggered!" << std::endl;
             handlePasswordDetection(result, active_profile->id);
         });
         
         // Start sequence detection
+        std::cout << "🚀 [SEQUENCE] Starting keyboard sequence detection..." << std::endl;
+        std::cout << "🔍 [DEBUG] Sequence detector status: " << (sequence_detector_->isActive() ? "Already active" : "Inactive") << std::endl;
+        
         if (sequence_detector_->startDetection(10)) {
-            std::cout << "✅ Sequence detection started (10 second timeout)" << std::endl;
-            std::cout << "   Type your password anywhere on the system..." << std::endl;
-            std::cout << "   - For temporary unlock: T+password (e.g., T1234)" << std::endl;
-            std::cout << "   - For permanent unlock: P+password (e.g., P1234)" << std::endl;
-            std::cout << "   - Default mode: just password (e.g., 1234) = temporary" << std::endl;
-            std::cout << "   - If sequence detection fails, GUI fallback will be available" << std::endl;
+            std::cout << "✅ [SEQUENCE] Sequence detection started successfully!" << std::endl;
+            std::cout << "⏱️  [SEQUENCE] Timeout: 10 seconds" << std::endl;
+            std::cout << "📊 [SEQUENCE] Stats: " << sequence_detector_->getStats() << std::endl;
+            std::cout << "" << std::endl;
+            std::cout << "🎯 [INSTRUCTIONS] Type your password anywhere on the system:" << std::endl;
+            std::cout << "   💡 For temporary unlock: T1234 (or mixed: hello T1234 world)" << std::endl;
+            std::cout << "   💡 For permanent unlock: P1234 (or mixed: abc P1234 def)" << std::endl;
+            std::cout << "   💡 Default mode: 1234 (or mixed: test 1234 end) = temporary" << std::endl;
+            std::cout << "   ⚠️  If no password detected in 10 seconds, monitoring stops" << std::endl;
+            std::cout << "" << std::endl;
+            std::cout << "🔍 [MONITORING] Keyboard sequence detection is now active..." << std::endl;
         } else {
-            std::cout << "❌ Failed to start sequence detection: " << sequence_detector_->getLastError() << std::endl;
+            std::cout << "❌ [ERROR] Failed to start sequence detection!" << std::endl;
+            std::cout << "🔍 [DEBUG] Error: " << sequence_detector_->getLastError() << std::endl;
+            std::cout << "🔍 [DEBUG] Detector initialized: " << (sequence_detector_ ? "Yes" : "No") << std::endl;
             
             // Send IPC message to GUI for fallback password dialog
             if (ipc_server_) {
+                std::cout << "🔄 [FALLBACK] Sending fallback request to GUI clients..." << std::endl;
                 nlohmann::json fallback_request;
                 fallback_request["type"] = "password_dialog_request";
                 fallback_request["mode"] = "unlock";
                 fallback_request["reason"] = "sequence_detection_failed";
+                fallback_request["error"] = sequence_detector_->getLastError();
                 
                 IPCMessage fallback_msg(IPCMessageType::ERROR_NOTIFICATION, fallback_request.dump());
-                ipc_server_->broadcastMessage(fallback_msg);
+                int sent_count = ipc_server_->broadcastMessage(fallback_msg);
                 
-                std::cout << "🔄 Sent fallback request to GUI clients" << std::endl;
+                std::cout << "📡 [IPC] Sent fallback request to " << sent_count << " GUI client(s)" << std::endl;
             } else {
-                // Final fallback to input overlay
-                std::cout << "🔄 Falling back to input overlay..." << std::endl;
+                std::cout << "⚠️  [FALLBACK] No IPC server available, using input overlay..." << std::endl;
                 handleUnlockMode();
             }
         }
         
-        std::cout << "==================\n" << std::endl;
+        std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::endl;
     }
     
     void handleRelockModeWithSequence(std::shared_ptr<VaultProfile> profile) {

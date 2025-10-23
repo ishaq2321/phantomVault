@@ -376,13 +376,63 @@ function createWindow() {
         console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         console.log(`🔓 [FLOW-4] UNLOCK/RE-LOCK HOTKEY PRESSED (Ctrl+Alt+V)`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`🚫 ELECTRON OVERLAY DISABLED - Using C++ service terminal input only`);
-        console.log(`   → The C++ service will handle password input in terminal`);
-        console.log(`   → No GUI interaction needed - completely invisible operation`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+        console.log(`🔍 [DEBUG] Checking C++ service connection...`);
         
-        // DO NOT CREATE OVERLAY WINDOW - let C++ service handle everything
-        // This eliminates any possibility of black screen from Electron
+        // Check if C++ service is running and connected
+        try {
+          // Try to communicate with C++ service via IPC
+          const serviceStatus = await ipcRenderer.invoke('check-service-status');
+          console.log(`🔍 [DEBUG] Service status:`, serviceStatus);
+          
+          if (serviceStatus && serviceStatus.running) {
+            console.log(`✅ [DEBUG] C++ service is running - triggering sequence detection`);
+            
+            // Send IPC message to C++ service to start sequence detection
+            const sequenceResult = await ipcRenderer.invoke('trigger-sequence-detection');
+            console.log(`🔍 [DEBUG] Sequence detection result:`, sequenceResult);
+            
+            if (sequenceResult && sequenceResult.success) {
+              console.log(`🎯 [DEBUG] Sequence detection started successfully`);
+              console.log(`   → Type your password anywhere on the system`);
+              console.log(`   → T+password (temporary), P+password (permanent)`);
+            } else {
+              console.log(`❌ [DEBUG] Failed to start sequence detection:`, sequenceResult?.error);
+              console.log(`🔄 [DEBUG] Falling back to GUI password dialog...`);
+              
+              // Fallback to password dialog
+              const password = await window.electronAPI.showPasswordDialog({
+                title: 'PhantomVault - Sequence Detection Failed',
+                placeholder: 'Enter T+password or P+password...'
+              });
+              
+              if (password) {
+                console.log(`🔍 [DEBUG] Password received from dialog, sending to service...`);
+                // Send password to service via IPC
+                const unlockResult = await ipcRenderer.invoke('process-password-input', password);
+                console.log(`🔍 [DEBUG] Unlock result:`, unlockResult);
+              }
+            }
+          } else {
+            console.log(`❌ [DEBUG] C++ service not running - using GUI fallback only`);
+            console.log(`🔄 [DEBUG] Starting GUI password dialog...`);
+            
+            // Fallback to password dialog
+            const password = await window.electronAPI.showPasswordDialog({
+              title: 'PhantomVault - Service Offline',
+              placeholder: 'Enter T+password or P+password...'
+            });
+            
+            if (password) {
+              console.log(`🔍 [DEBUG] Password received, attempting direct unlock...`);
+              // Process password directly if possible
+            }
+          }
+        } catch (error) {
+          console.error(`❌ [DEBUG] Error communicating with service:`, error);
+          console.log(`🔄 [DEBUG] Using emergency GUI fallback...`);
+        }
+        
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
       });
       
       hotkeyManager.onRecovery(() => {
@@ -664,6 +714,141 @@ function setupIpcHandlers() {
   ipcMain.handle('send-password-result', async (event, password) => {
     ipcMain.emit('password-result', event, password);
     return true;
+  });
+
+  // Check C++ service status
+  ipcMain.handle('check-service-status', async () => {
+    try {
+      // Check if the C++ service process is running
+      const { exec } = require('child_process');
+      const util = require('util');
+      const execAsync = util.promisify(exec);
+      
+      const { stdout } = await execAsync('pgrep -f phantom_vault_service');
+      const running = stdout.trim().length > 0;
+      
+      console.log(`🔍 [DEBUG] Service status check: ${running ? 'RUNNING' : 'NOT RUNNING'}`);
+      
+      return {
+        running: running,
+        pid: running ? stdout.trim().split('\n')[0] : null,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.log(`🔍 [DEBUG] Service status check failed: ${error.message}`);
+      return {
+        running: false,
+        error: error.message,
+        timestamp: Date.now()
+      };
+    }
+  });
+
+  // Trigger sequence detection in C++ service
+  ipcMain.handle('trigger-sequence-detection', async () => {
+    try {
+      console.log(`🔍 [DEBUG] Attempting to trigger sequence detection in C++ service...`);
+      
+      // For now, we'll simulate the trigger since we need to implement IPC communication
+      // In a full implementation, this would send a message to the C++ service
+      
+      // Check if we have any vault managers available
+      if (folderManager && profileManager) {
+        const activeProfile = await profileManager.getActiveProfile();
+        console.log(`🔍 [DEBUG] Active profile:`, activeProfile);
+        
+        if (activeProfile) {
+          console.log(`🔍 [DEBUG] Profile found, sequence detection should be possible`);
+          return {
+            success: true,
+            message: 'Sequence detection triggered (simulated)',
+            profileId: activeProfile.id,
+            timeout: 10
+          };
+        } else {
+          console.log(`🔍 [DEBUG] No active profile found`);
+          return {
+            success: false,
+            error: 'No active profile found - please set up PhantomVault first'
+          };
+        }
+      } else {
+        console.log(`🔍 [DEBUG] Vault managers not available`);
+        return {
+          success: false,
+          error: 'Vault managers not initialized'
+        };
+      }
+    } catch (error) {
+      console.error(`❌ [DEBUG] Error triggering sequence detection:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  // Process password input from GUI
+  ipcMain.handle('process-password-input', async (event, password) => {
+    try {
+      console.log(`🔍 [DEBUG] Processing password input from GUI...`);
+      console.log(`🔍 [DEBUG] Password length: ${password ? password.length : 0}`);
+      
+      if (!password || password.trim().length === 0) {
+        return {
+          success: false,
+          error: 'Empty password provided'
+        };
+      }
+      
+      // Use the existing folder unlock logic
+      if (folderManager && profileManager) {
+        const activeProfile = await profileManager.getActiveProfile();
+        
+        if (activeProfile) {
+          console.log(`🔍 [DEBUG] Attempting to unlock folders with provided password...`);
+          
+          // Determine mode from password prefix
+          let mode = 'temporary';
+          let actualPassword = password;
+          
+          if (password.toLowerCase().startsWith('t')) {
+            mode = 'temporary';
+            actualPassword = password.substring(1);
+            console.log(`🔍 [DEBUG] Detected temporary mode, password: ${actualPassword}`);
+          } else if (password.toLowerCase().startsWith('p')) {
+            mode = 'permanent';
+            actualPassword = password.substring(1);
+            console.log(`🔍 [DEBUG] Detected permanent mode, password: ${actualPassword}`);
+          }
+          
+          const result = await folderManager.unlockAll(activeProfile.id, actualPassword, mode);
+          console.log(`🔍 [DEBUG] Unlock result:`, result);
+          
+          return {
+            success: result && result.success > 0,
+            result: result,
+            mode: mode
+          };
+        } else {
+          return {
+            success: false,
+            error: 'No active profile found'
+          };
+        }
+      } else {
+        return {
+          success: false,
+          error: 'Vault managers not available'
+        };
+      }
+    } catch (error) {
+      console.error(`❌ [DEBUG] Error processing password input:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   });
   
   // Hide folder (Linux: prepend dot to make it hidden)

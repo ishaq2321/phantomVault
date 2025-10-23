@@ -5,26 +5,125 @@
 
 set -e  # Exit on any error
 
+# Beautiful Colors and Formatting
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m' # No Color
+
+# Progress tracking
+TOTAL_STEPS=8
+CURRENT_STEP=0
+START_TIME=$(date +%s)
+
+# Beautiful progress bar function
+show_progress() {
+    local current=$1
+    local total=$2
+    local width=50
+    local percentage=$((current * 100 / total))
+    local completed=$((current * width / total))
+    local remaining=$((width - completed))
+    
+    printf "\r${CYAN}["
+    printf "%*s" $completed | tr ' ' '█'
+    printf "%*s" $remaining | tr ' ' '░'
+    printf "] ${WHITE}%d%%${NC} " $percentage
+}
+
+# Step header function
+step_header() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    local title="$1"
+    local estimated_time="$2"
+    
+    echo ""
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║${NC} ${BOLD}Step $CURRENT_STEP/$TOTAL_STEPS: $title${NC}"
+    echo -e "${PURPLE}║${NC} ${DIM}Estimated time: $estimated_time${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════════════════════╗${NC}"
+    show_progress $CURRENT_STEP $TOTAL_STEPS
+    echo ""
+}
+
+# Success message function
+success_msg() {
+    echo -e "   ${GREEN}✅ $1${NC}"
+}
+
+# Info message function
+info_msg() {
+    echo -e "   ${BLUE}ℹ️  $1${NC}"
+}
+
+# Warning message function
+warn_msg() {
+    echo -e "   ${YELLOW}⚠️  $1${NC}"
+}
+
+# Error message function
+error_msg() {
+    echo -e "   ${RED}❌ $1${NC}"
+}
+
+# Spinner function for long operations
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "    \b\b\b\b"
+}
+
 INSTALL_DIR="/opt/phantomvault"
 DESKTOP_FILE="/usr/share/applications/phantomvault.desktop"
 SERVICE_FILE="/etc/systemd/system/phantom-vault.service"
 BIN_LINK="/usr/local/bin/phantomvault"
 
-echo "🔐 PhantomVault Installer"
-echo "========================"
+# Beautiful header
+clear
+echo -e "${PURPLE}"
+echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+echo "║                                                                              ║"
+echo "║                    🔐 ${WHITE}PhantomVault v1.1.0 Installer${PURPLE}                      ║"
+echo "║                                                                              ║"
+echo "║              ${CYAN}Revolutionary Keyboard Sequence Detection${PURPLE}                ║"
+echo "║                                                                              ║"
+echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
 echo ""
-echo "This installer will:"
-echo "  ✅ Install PhantomVault to $INSTALL_DIR"
-echo "  ✅ Create desktop application entry"
-echo "  ✅ Set up background service (auto-start)"
-echo "  ✅ Install dependencies"
-echo "  ✅ Create application launcher"
+echo -e "${BOLD}${WHITE}🚀 World's First Invisible Folder Encryption System${NC}"
+echo ""
+echo -e "${GREEN}This installer will set up:${NC}"
+echo -e "  ${GREEN}✨${NC} Invisible keyboard sequence detection"
+echo -e "  ${GREEN}🔐${NC} Military-grade AES-256-GCM encryption"
+echo -e "  ${GREEN}⚡${NC} Global hotkey system (Ctrl+Alt+V)"
+echo -e "  ${GREEN}🖥️${NC} Desktop application with system tray"
+echo -e "  ${GREEN}🛡️${NC} Auto-start background service"
+echo -e "  ${GREEN}📦${NC} Complete dependency management"
+echo ""
+echo -e "${CYAN}Installation Details:${NC}"
+echo -e "  ${DIM}Target Directory:${NC} $INSTALL_DIR"
+echo -e "  ${DIM}Estimated Time:${NC} 2-5 minutes"
+echo -e "  ${DIM}Internet Required:${NC} Yes (for dependencies)"
 echo ""
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
-    echo "❌ Please run this installer as root (use sudo)"
-    echo "   sudo ./install-phantomvault.sh"
+    error_msg "Please run this installer as root (use sudo)"
+    echo -e "   ${YELLOW}sudo ./install-phantomvault.sh${NC}"
     exit 1
 fi
 
@@ -32,72 +131,85 @@ fi
 ACTUAL_USER=${SUDO_USER:-$USER}
 ACTUAL_HOME=$(eval echo ~$ACTUAL_USER)
 
-echo "📋 Installation Details:"
-echo "   User: $ACTUAL_USER"
-echo "   Home: $ACTUAL_HOME"
-echo "   Install Directory: $INSTALL_DIR"
+echo -e "${BOLD}System Information:${NC}"
+echo -e "  ${DIM}User:${NC} $ACTUAL_USER"
+echo -e "  ${DIM}Home:${NC} $ACTUAL_HOME"
+echo -e "  ${DIM}OS:${NC} $(lsb_release -d 2>/dev/null | cut -f2 || echo "Linux")"
+echo -e "  ${DIM}Architecture:${NC} $(uname -m)"
 echo ""
 
-read -p "Continue with installation? (y/N): " -n 1 -r
+echo -e "${YELLOW}⚠️  This installer requires root privileges to:${NC}"
+echo -e "  • Install system dependencies"
+echo -e "  • Create system service files"
+echo -e "  • Set up desktop integration"
+echo ""
+
+read -p "$(echo -e ${BOLD}Continue with installation? [y/N]:${NC} )" -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Installation cancelled."
+    echo -e "${RED}Installation cancelled.${NC}"
     exit 1
 fi
 
-echo ""
-echo "🔧 Step 1: Installing system dependencies..."
-echo "============================================"
+step_header "Installing System Dependencies" "30-60 seconds"
 
-# No need to install ImageMagick - we include a pre-made PNG icon
-echo "✅ Using pre-made PNG icon (no ImageMagick required)"
+info_msg "Using pre-made PNG icon (no ImageMagick required)"
 
 # Detect package manager and install dependencies
 if command -v apt &> /dev/null; then
-    echo "📦 Detected APT package manager (Ubuntu/Debian)"
-    apt update
+    info_msg "Detected APT package manager (Ubuntu/Debian)"
+    echo -e "   ${DIM}Updating package lists...${NC}"
+    apt update > /dev/null 2>&1 &
+    spinner $!
+    success_msg "Package lists updated"
     
     # Check if Node.js is already installed
     if command -v node &> /dev/null; then
-        echo "✅ Node.js already installed: $(node --version)"
+        success_msg "Node.js already installed: $(node --version)"
         # Install npm using Node.js if not present
         if ! command -v npm &> /dev/null; then
-            echo "📦 Installing npm via Node.js..."
+            info_msg "Installing npm via Node.js..."
             # Use corepack (comes with Node.js 16+) or install npm directly
             if command -v corepack &> /dev/null; then
-                corepack enable npm
+                corepack enable npm > /dev/null 2>&1
             else
                 # Install npm globally using Node.js
-                curl -qL https://www.npmjs.com/install.sh | sh
+                curl -qL https://www.npmjs.com/install.sh | sh > /dev/null 2>&1
             fi
         else
-            echo "✅ npm already installed: $(npm --version)"
+            success_msg "npm already installed: $(npm --version)"
         fi
         # Install system dependencies without nodejs/npm
+        info_msg "Installing C++ build tools and libraries..."
         apt install -y build-essential cmake libssl-dev libx11-dev libxtst-dev \
                        libxi-dev qtbase5-dev qtbase5-dev-tools nlohmann-json3-dev \
-                       curl git
+                       curl git > /dev/null 2>&1 &
+        spinner $!
     else
         # Install everything including nodejs and npm
+        info_msg "Installing complete development environment..."
         apt install -y build-essential cmake libssl-dev libx11-dev libxtst-dev \
                        libxi-dev qtbase5-dev qtbase5-dev-tools nlohmann-json3-dev \
-                       nodejs npm curl git
+                       nodejs npm curl git > /dev/null 2>&1 &
+        spinner $!
     fi
 elif command -v dnf &> /dev/null; then
-    echo "📦 Detected DNF package manager (Fedora)"
+    info_msg "Detected DNF package manager (Fedora)"
     dnf install -y gcc-c++ cmake openssl-devel libX11-devel libXtst-devel \
                    libXi-devel qt5-qtbase-devel nlohmann-json-devel \
-                   nodejs npm curl git
+                   nodejs npm curl git > /dev/null 2>&1 &
+    spinner $!
 elif command -v pacman &> /dev/null; then
-    echo "📦 Detected Pacman package manager (Arch Linux)"
+    info_msg "Detected Pacman package manager (Arch Linux)"
     pacman -S --noconfirm base-devel cmake openssl libx11 libxtst libxi \
-                          qt5-base nlohmann-json nodejs npm curl git
+                          qt5-base nlohmann-json nodejs npm curl git > /dev/null 2>&1 &
+    spinner $!
 else
-    echo "❌ Unsupported package manager. Please install dependencies manually:"
-    echo "   - build-essential/base-devel"
-    echo "   - cmake, openssl-dev, libx11-dev, libxtst-dev, libxi-dev"
-    echo "   - qt5-base-dev, nlohmann-json-dev"
-    echo "   - nodejs, npm"
+    error_msg "Unsupported package manager. Please install dependencies manually:"
+    echo -e "   ${RED}•${NC} build-essential/base-devel"
+    echo -e "   ${RED}•${NC} cmake, openssl-dev, libx11-dev, libxtst-dev, libxi-dev"
+    echo -e "   ${RED}•${NC} qt5-base-dev, nlohmann-json-dev"
+    echo -e "   ${RED}•${NC} nodejs, npm"
     exit 1
 fi
 
@@ -419,32 +531,62 @@ echo "   • C++ service: $INSTALL_DIR/core/build/phantom_vault_service"
 echo "   • Native addon: $INSTALL_DIR/ui/native/build/Release/phantom_vault_addon.node"
 echo "✅ Permissions set correctly"
 
+# Calculate installation time
+END_TIME=$(date +%s)
+INSTALL_TIME=$((END_TIME - START_TIME))
+MINUTES=$((INSTALL_TIME / 60))
+SECONDS=$((INSTALL_TIME % 60))
+
 echo ""
-echo "🎉 Installation Complete!"
-echo "========================="
+echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║                                                                              ║${NC}"
+echo -e "${GREEN}║                    🎉 ${WHITE}Installation Complete!${GREEN}                         ║${NC}"
+echo -e "${GREEN}║                                                                              ║${NC}"
+echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo "PhantomVault has been successfully installed!"
+show_progress $TOTAL_STEPS $TOTAL_STEPS
 echo ""
-echo "📱 How to use:"
-echo "   • Open 'PhantomVault' from Applications menu"
-echo "   • Or run 'phantomvault' in terminal"
-echo "   • Use Ctrl+Alt+V for quick folder lock/unlock"
-echo "   • Use Ctrl+Alt+R for recovery key access"
 echo ""
-echo "📁 Installation locations:"
-echo "   • Application: $INSTALL_DIR"
-echo "   • Desktop entry: $DESKTOP_FILE"
-echo "   • Vault storage: $VAULT_STORAGE"
-echo "   • Service: $SERVICE_FILE"
+echo -e "${BOLD}${WHITE}🚀 PhantomVault v1.1.0 Successfully Installed!${NC}"
 echo ""
-echo "🔧 Service status:"
-systemctl --user status phantom-vault.service --no-pager -l || true
+echo -e "${GREEN}⏱️  Installation completed in: ${WHITE}${MINUTES}m ${SECONDS}s${NC}"
 echo ""
-echo "🚀 Ready to secure your folders!"
+echo -e "${CYAN}🎯 Revolutionary Features Now Available:${NC}"
+echo -e "  ${GREEN}✨${NC} Invisible keyboard sequence detection"
+echo -e "  ${GREEN}🔐${NC} Military-grade AES-256-GCM encryption"
+echo -e "  ${GREEN}⚡${NC} Global hotkey system (Ctrl+Alt+V)"
+echo -e "  ${GREEN}🖥️${NC} Desktop application with system tray"
+echo -e "  ${GREEN}🛡️${NC} Auto-start background service"
 echo ""
-echo "💡 First time setup:"
-echo "   1. Open PhantomVault from Applications"
-echo "   2. Create your master password"
-echo "   3. Add folders to protect"
-echo "   4. Use Ctrl+Alt+V to lock/unlock anytime"
+echo -e "${BOLD}${YELLOW}📱 How to Use PhantomVault:${NC}"
+echo -e "  ${WHITE}1.${NC} Open ${CYAN}'PhantomVault'${NC} from Applications menu"
+echo -e "  ${WHITE}2.${NC} Or run ${CYAN}'phantomvault'${NC} in terminal"
+echo -e "  ${WHITE}3.${NC} Press ${YELLOW}Ctrl+Alt+V${NC} anywhere on your system"
+echo -e "  ${WHITE}4.${NC} Type your password mixed with other text:"
+echo -e "     ${DIM}• ${CYAN}hello T1234 world${NC} ${DIM}→ Temporary unlock${NC}"
+echo -e "     ${DIM}• ${CYAN}abc P1234 def${NC} ${DIM}→ Permanent unlock${NC}"
+echo -e "     ${DIM}• ${CYAN}test 1234 end${NC} ${DIM}→ Default temporary${NC}"
+echo ""
+echo -e "${BOLD}${BLUE}📁 Installation Details:${NC}"
+echo -e "  ${DIM}Application:${NC} $INSTALL_DIR"
+echo -e "  ${DIM}Desktop Entry:${NC} $DESKTOP_FILE"
+echo -e "  ${DIM}Vault Storage:${NC} $VAULT_STORAGE"
+echo -e "  ${DIM}System Service:${NC} $SERVICE_FILE"
+echo ""
+echo -e "${BOLD}${PURPLE}🔧 Service Status:${NC}"
+if systemctl --user is-active phantom-vault.service --quiet 2>/dev/null; then
+    echo -e "  ${GREEN}✅ Background service is running${NC}"
+else
+    echo -e "  ${YELLOW}⚠️  Background service status unknown${NC}"
+fi
+echo ""
+echo -e "${BOLD}${GREEN}🎊 Ready to Experience Invisible Security!${NC}"
+echo ""
+echo -e "${WHITE}💡 Quick Start Guide:${NC}"
+echo -e "  ${CYAN}1.${NC} Launch PhantomVault from Applications menu"
+echo -e "  ${CYAN}2.${NC} Create your master password and recovery key"
+echo -e "  ${CYAN}3.${NC} Add folders you want to protect"
+echo -e "  ${CYAN}4.${NC} Press ${YELLOW}Ctrl+Alt+V${NC} and type your password anywhere!"
+echo ""
+echo -e "${DIM}🔗 For support and updates: https://github.com/ishaq2321/phantomvault${NC}"
 echo ""
