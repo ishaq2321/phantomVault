@@ -164,25 +164,51 @@ echo "✅ C++ service built successfully"
 echo "🔧 Building Electron UI..."
 cd ../../ui
 
-# Install all dependencies including dev dependencies
+# Fix ownership for npm operations (since we're running as root)
+chown -R "$ACTUAL_USER:$ACTUAL_USER" .
+
+# Install all dependencies including dev dependencies as the actual user
 echo "📦 Installing UI dependencies..."
-npm install
+sudo -u "$ACTUAL_USER" npm install
 
 # Install missing dev dependencies that are needed for the launcher
 echo "📦 Installing additional dev dependencies..."
-npm install --save-dev concurrently wait-on
+sudo -u "$ACTUAL_USER" npm install --save-dev concurrently wait-on typescript
 
-# Build the UI
+# Build the UI as the actual user
 echo "🏗️  Building UI with TypeScript and Vite..."
-npm run build
+sudo -u "$ACTUAL_USER" npm run build
+
+# Verify the build was successful
+if [ ! -f "dist/index.html" ]; then
+    echo "❌ UI build failed - dist/index.html not found"
+    echo "Attempting to rebuild..."
+    sudo -u "$ACTUAL_USER" npm run build
+    if [ ! -f "dist/index.html" ]; then
+        echo "❌ UI build failed after retry"
+        exit 1
+    fi
+fi
 
 echo "✅ Electron UI built successfully"
 
 # Build native addon (now that C++ core is built and available)
 echo "🔧 Building native addon..."
 cd native
-npm install
-npm run build
+
+# Fix ownership for native addon build
+chown -R "$ACTUAL_USER:$ACTUAL_USER" .
+
+# Install and build native addon as the actual user
+sudo -u "$ACTUAL_USER" npm install
+sudo -u "$ACTUAL_USER" npm run build
+
+# Verify native addon was built
+if [ ! -f "build/Release/phantom_vault_addon.node" ]; then
+    echo "❌ Native addon build failed"
+    exit 1
+fi
+
 cd ..
 echo "✅ Native addon built successfully"
 
@@ -274,11 +300,26 @@ else
     echo "❌ UI build not found at $INSTALL_DIR/ui/dist/index.html"
     echo "Available files in UI directory:"
     ls -la "$INSTALL_DIR/ui/" || echo "UI directory not found"
-    exit 1
+    echo ""
+    echo "🔧 Attempting to rebuild UI..."
+    if command -v npm > /dev/null; then
+        npm run build
+        if [ -f "$INSTALL_DIR/ui/dist/index.html" ]; then
+            echo "✅ UI rebuilt successfully, starting application..."
+            npx electron electron/main.js
+        else
+            echo "❌ UI rebuild failed"
+            exit 1
+        fi
+    else
+        echo "❌ npm not found, cannot rebuild UI"
+        exit 1
+    fi
 fi
 EOF
 
 chmod +x "$INSTALL_DIR/phantomvault-launcher.sh"
+chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/phantomvault-launcher.sh"
 
 # Create command-line launcher
 cat > "$BIN_LINK" << EOF
@@ -335,6 +376,40 @@ mkdir -p "$VAULT_STORAGE/$ACTUAL_USER"
 chown -R "$ACTUAL_USER:$ACTUAL_USER" "$VAULT_STORAGE"
 
 echo "✅ Vault storage created: $VAULT_STORAGE"
+
+echo ""
+echo "🔧 Step 8: Setting correct permissions..."
+echo "========================================"
+
+# Ensure the actual user owns the installation directory contents that they need to access
+chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/ui"
+chown "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/phantomvault-launcher.sh"
+
+# Ensure the service binary is executable
+chmod +x "$INSTALL_DIR/core/build/phantom_vault_service"
+
+# Verify critical files exist
+echo "🔍 Verifying installation..."
+if [ ! -f "$INSTALL_DIR/ui/dist/index.html" ]; then
+    echo "❌ Critical file missing: $INSTALL_DIR/ui/dist/index.html"
+    echo "Installation may be incomplete"
+    exit 1
+fi
+
+if [ ! -f "$INSTALL_DIR/core/build/phantom_vault_service" ]; then
+    echo "❌ Critical file missing: $INSTALL_DIR/core/build/phantom_vault_service"
+    echo "Installation may be incomplete"
+    exit 1
+fi
+
+if [ ! -f "$INSTALL_DIR/ui/native/build/Release/phantom_vault_addon.node" ]; then
+    echo "❌ Critical file missing: $INSTALL_DIR/ui/native/build/Release/phantom_vault_addon.node"
+    echo "Installation may be incomplete"
+    exit 1
+fi
+
+echo "✅ All critical files verified"
+echo "✅ Permissions set correctly"
 
 echo ""
 echo "🎉 Installation Complete!"
