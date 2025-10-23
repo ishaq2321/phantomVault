@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.2.1-brightgreen.svg)](https://github.com/ishaq2321/phantomvault/releases/latest)
 [![Release](https://img.shields.io/badge/release-ready-success.svg)]()
 
 ## 🚀 Overview
@@ -414,7 +414,8 @@ openssl version
 
 ### 📈 Version History
 
-- **v1.2.0** - New GUI with enhanced VaultManager and modern React components (current)
+- **v1.2.1** - Fixed build issues and OpenSSL deprecation warnings (current)
+- **v1.2.0** - New GUI with enhanced VaultManager and modern React components
 - **v1.1.1** - Beautiful installer with colors and enhanced debugging
 - **v1.1.0** - Revolutionary keyboard sequence detection system
 - **v1.0.4** - Fixed TypeScript build configuration issues

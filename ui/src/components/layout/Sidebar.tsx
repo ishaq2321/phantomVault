@@ -92,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!collapsed && (
             <div className=\"logo-text\">
               <h1>PhantomVault</h1>
-              <span className=\"version\">v1.2.0</span>
+              <span className=\"version\">v1.2.1</span>
             </div>
           )}
         </div>
