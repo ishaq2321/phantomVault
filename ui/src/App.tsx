@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dashboard } from '../components/dashboard/Dashboard';
+import { VaultDashboard } from '../components/dashboard/VaultDashboard';
 import { SetupWizard } from '../components/setup-wizard/SetupWizard';
 import { PasswordRecovery } from '../components/recovery/PasswordRecovery';
 import { InputDialog } from '../components/common/InputDialog';
@@ -637,7 +637,7 @@ export const App: React.FC = () => {
       )}
       
       {state.currentView === 'dashboard' && (
-        <Dashboard
+        <VaultDashboard
           folders={state.vaults}
           onLock={handleFolderLock}
           onUnlock={handleFolderUnlock}
