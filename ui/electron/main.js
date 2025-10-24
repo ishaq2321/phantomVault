@@ -53,8 +53,8 @@ try {
 let VaultProfileManager = null;
 let VaultFolderManager = null;
 try {
-  const profileModule = require('../src/services/VaultProfileManager');
-  const folderModule = require('../src/services/VaultFolderManager');
+  const profileModule = require('./VaultProfileManager');
+  const folderModule = require('./VaultFolderManager');
   VaultProfileManager = profileModule.VaultProfileManager;
   VaultFolderManager = folderModule.VaultFolderManager;
 } catch (error) {
@@ -298,14 +298,7 @@ function createOverlayWindow(overlayData) {
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
 
-  // Load production build or development server
-  const isDev = process.env.NODE_ENV === 'development';
-  if (isDev) {
-    overlayWindow.loadURL('http://127.0.0.1:5173');
-  } else {
-    // Production: load from dist directory
-    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  overlayWindow.loadURL('http://127.0.0.1:5173');
 
   overlayWindow.webContents.once('did-finish-load', () => {
     // Send overlay data to the React app
@@ -342,23 +335,12 @@ function createWindow() {
     },
   });
 
-  // Load production build or development server
-  const isDev = process.env.NODE_ENV === 'development';
-  if (isDev) {
-    mainWindow.loadURL('http://127.0.0.1:5173');
-  } else {
-    // Production: load from dist directory
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  mainWindow.loadURL('http://127.0.0.1:5173');
   
   // Show window when ready to prevent white flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    
-    // Only open dev tools in development
-    if (process.env.NODE_ENV === 'development') {
-      mainWindow.webContents.openDevTools();
-    }
+    mainWindow.webContents.openDevTools();
     
     // Create system tray after window is shown (required on some Linux systems)
     createTray();
@@ -376,78 +358,54 @@ function createWindow() {
         console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         console.log(`🔓 [FLOW-4] UNLOCK/RE-LOCK HOTKEY PRESSED (Ctrl+Alt+V)`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`🔍 [DEBUG] Checking C++ service connection...`);
         
-        // Check if C++ service is running and connected
-        try {
-          // Try to communicate with C++ service via IPC
-          const serviceStatus = await ipcRenderer.invoke('check-service-status');
-          console.log(`🔍 [DEBUG] Service status:`, serviceStatus);
-          
-          if (serviceStatus && serviceStatus.running) {
-            console.log(`✅ [DEBUG] C++ service is running - triggering sequence detection`);
+        // Check if there are temporarily unlocked folders
+        let hasTemporary = false;
+        let temporaryCount = 0;
+        if (profileManager) {
+          const activeProfile = await profileManager.getActiveProfile();
+          if (activeProfile && folderManager) {
+            const temporaryFolders = folderManager.getTemporaryUnlockedFolders(activeProfile.id);
+            hasTemporary = temporaryFolders && temporaryFolders.length > 0;
+            temporaryCount = temporaryFolders ? temporaryFolders.length : 0;
             
-            // Send IPC message to C++ service to start sequence detection
-            const sequenceResult = await ipcRenderer.invoke('trigger-sequence-detection');
-            console.log(`🔍 [DEBUG] Sequence detection result:`, sequenceResult);
-            
-            if (sequenceResult && sequenceResult.success) {
-              console.log(`🎯 [DEBUG] Sequence detection started successfully`);
-              console.log(`   → Type your password anywhere on the system`);
-              console.log(`   → T+password (temporary), P+password (permanent)`);
+            if (hasTemporary) {
+              console.log(`🔍 Detected ${temporaryCount} temporarily unlocked folder(s)`);
+              console.log(`   → Will show RE-LOCK mode (password only, no T/P)`);
             } else {
-              console.log(`❌ [DEBUG] Failed to start sequence detection:`, sequenceResult?.error);
-              console.log(`🔄 [DEBUG] Falling back to GUI password dialog...`);
-              
-              // Fallback to password dialog
-              const password = await window.electronAPI.showPasswordDialog({
-                title: 'PhantomVault - Sequence Detection Failed',
-                placeholder: 'Enter T+password or P+password...'
-              });
-              
-              if (password) {
-                console.log(`🔍 [DEBUG] Password received from dialog, sending to service...`);
-                // Send password to service via IPC
-                const unlockResult = await ipcRenderer.invoke('process-password-input', password);
-                console.log(`🔍 [DEBUG] Unlock result:`, unlockResult);
-              }
-            }
-          } else {
-            console.log(`❌ [DEBUG] C++ service not running - using GUI fallback only`);
-            console.log(`🔄 [DEBUG] Starting GUI password dialog...`);
-            
-            // Fallback to password dialog
-            const password = await window.electronAPI.showPasswordDialog({
-              title: 'PhantomVault - Service Offline',
-              placeholder: 'Enter T+password or P+password...'
-            });
-            
-            if (password) {
-              console.log(`🔍 [DEBUG] Password received, attempting direct unlock...`);
-              // Process password directly if possible
+              console.log(`🔍 No temporary folders detected`);
+              console.log(`   → Will show UNLOCK mode (T/P + password)`);
             }
           }
-        } catch (error) {
-          console.error(`❌ [DEBUG] Error communicating with service:`, error);
-          console.log(`🔄 [DEBUG] Using emergency GUI fallback...`);
         }
         
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+        // Create transparent overlay window on top of everything
+        console.log('   Creating transparent overlay window...');
+        createOverlayWindow({
+          isRecoveryMode: false,
+          isRelockMode: hasTemporary,
+          temporaryCount
+        });
+        console.log(`   → Waiting for ${hasTemporary ? 'password' : 'password+T/P'} input...\n`);
       });
       
       hotkeyManager.onRecovery(() => {
         console.log('🔑 Recovery hotkey triggered');
-        console.log('🚫 ELECTRON OVERLAY DISABLED - Using C++ service terminal input only');
-        console.log('   → The C++ service will handle recovery key input in terminal');
         
-        // DO NOT CREATE OVERLAY WINDOW - let C++ service handle everything
+        // Create transparent overlay window on top of everything
+        console.log('   Creating transparent overlay window for recovery...');
+        createOverlayWindow({
+          isRecoveryMode: true,
+          isRelockMode: false,
+          temporaryCount: 0
+        });
+        console.log('   → Recovery overlay active');
       });
       
       hotkeyManager.registerHotkeys();
     } else {
-      console.log('⚠️ HotkeyManager not available - C++ service should handle hotkeys');
-      console.log('🚫 Skipping Electron hotkey registration to avoid conflicts');
-      // DO NOT register fallback hotkeys - let C++ service handle everything
+      console.log('⚠️ Using fallback hotkey registration');
+      registerGlobalHotkey(currentHotkey);
     }
     
     // Initialize AutoLockManager
@@ -585,270 +543,11 @@ function setupIpcHandlers() {
     return true;
   });
 
-  // Password input fallback (when sequence detection fails)
-  ipcMain.handle('show-password-dialog', async (event, options = {}) => {
-    const { title = 'PhantomVault', placeholder = 'Enter password...', mode = 'unlock' } = options;
-    
-    console.log(`🔐 [FALLBACK] Showing password dialog for ${mode}`);
-    
-    // Create a small, focused password dialog
-    const passwordWindow = new BrowserWindow({
-      width: 400,
-      height: 200,
-      modal: true,
-      parent: mainWindow,
-      show: false,
-      resizable: false,
-      minimizable: false,
-      maximizable: false,
-      alwaysOnTop: true,
-      frame: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        preload: path.join(__dirname, 'preload.js'),
-      },
-    });
-
-    // Create simple HTML for password input
-    const passwordHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body {
-            margin: 0;
-            padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #2d3748;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            height: 160px;
-          }
-          .container {
-            text-align: center;
-          }
-          h3 {
-            margin: 0 0 15px 0;
-            font-size: 14px;
-            color: #a0aec0;
-          }
-          input {
-            width: 300px;
-            padding: 10px;
-            border: 1px solid #4a5568;
-            border-radius: 4px;
-            background: #1a202c;
-            color: white;
-            font-size: 14px;
-            text-align: center;
-          }
-          input:focus {
-            outline: none;
-            border-color: #63b3ed;
-          }
-          .hint {
-            margin-top: 10px;
-            font-size: 11px;
-            color: #718096;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h3>${title}</h3>
-          <input type="password" id="passwordInput" placeholder="${placeholder}" autofocus>
-          <div class="hint">T+password (temporary) • P+password (permanent) • ESC to cancel</div>
-        </div>
-        <script>
-          const input = document.getElementById('passwordInput');
-          
-          input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-              window.electronAPI.sendPasswordResult(input.value);
-            } else if (e.key === 'Escape') {
-              window.electronAPI.sendPasswordResult(null);
-            }
-          });
-          
-          // Auto-focus
-          setTimeout(() => input.focus(), 100);
-          
-          // Auto-close after 30 seconds
-          setTimeout(() => {
-            window.electronAPI.sendPasswordResult(null);
-          }, 30000);
-        </script>
-      </body>
-      </html>
-    `;
-
-    passwordWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(passwordHtml));
-    
-    return new Promise((resolve) => {
-      // Handle password result
-      ipcMain.once('password-result', (event, password) => {
-        passwordWindow.close();
-        resolve(password);
-      });
-      
-      passwordWindow.once('closed', () => {
-        resolve(null);
-      });
-      
-      passwordWindow.show();
-      passwordWindow.focus();
-    });
-  });
-
   // Close overlay window
   ipcMain.handle('close-overlay-window', async () => {
     console.log('🚪 Closing overlay window');
     closeOverlayWindow();
     return { success: true };
-  });
-
-  // Handle password result from dialog
-  ipcMain.handle('send-password-result', async (event, password) => {
-    ipcMain.emit('password-result', event, password);
-    return true;
-  });
-
-  // Check C++ service status
-  ipcMain.handle('check-service-status', async () => {
-    try {
-      // Check if the C++ service process is running
-      const { exec } = require('child_process');
-      const util = require('util');
-      const execAsync = util.promisify(exec);
-      
-      const { stdout } = await execAsync('pgrep -f phantom_vault_service');
-      const running = stdout.trim().length > 0;
-      
-      console.log(`🔍 [DEBUG] Service status check: ${running ? 'RUNNING' : 'NOT RUNNING'}`);
-      
-      return {
-        running: running,
-        pid: running ? stdout.trim().split('\n')[0] : null,
-        timestamp: Date.now()
-      };
-    } catch (error) {
-      console.log(`🔍 [DEBUG] Service status check failed: ${error.message}`);
-      return {
-        running: false,
-        error: error.message,
-        timestamp: Date.now()
-      };
-    }
-  });
-
-  // Trigger sequence detection in C++ service
-  ipcMain.handle('trigger-sequence-detection', async () => {
-    try {
-      console.log(`🔍 [DEBUG] Attempting to trigger sequence detection in C++ service...`);
-      
-      // For now, we'll simulate the trigger since we need to implement IPC communication
-      // In a full implementation, this would send a message to the C++ service
-      
-      // Check if we have any vault managers available
-      if (folderManager && profileManager) {
-        const activeProfile = await profileManager.getActiveProfile();
-        console.log(`🔍 [DEBUG] Active profile:`, activeProfile);
-        
-        if (activeProfile) {
-          console.log(`🔍 [DEBUG] Profile found, sequence detection should be possible`);
-          return {
-            success: true,
-            message: 'Sequence detection triggered (simulated)',
-            profileId: activeProfile.id,
-            timeout: 10
-          };
-        } else {
-          console.log(`🔍 [DEBUG] No active profile found`);
-          return {
-            success: false,
-            error: 'No active profile found - please set up PhantomVault first'
-          };
-        }
-      } else {
-        console.log(`🔍 [DEBUG] Vault managers not available`);
-        return {
-          success: false,
-          error: 'Vault managers not initialized'
-        };
-      }
-    } catch (error) {
-      console.error(`❌ [DEBUG] Error triggering sequence detection:`, error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  });
-
-  // Process password input from GUI
-  ipcMain.handle('process-password-input', async (event, password) => {
-    try {
-      console.log(`🔍 [DEBUG] Processing password input from GUI...`);
-      console.log(`🔍 [DEBUG] Password length: ${password ? password.length : 0}`);
-      
-      if (!password || password.trim().length === 0) {
-        return {
-          success: false,
-          error: 'Empty password provided'
-        };
-      }
-      
-      // Use the existing folder unlock logic
-      if (folderManager && profileManager) {
-        const activeProfile = await profileManager.getActiveProfile();
-        
-        if (activeProfile) {
-          console.log(`🔍 [DEBUG] Attempting to unlock folders with provided password...`);
-          
-          // Determine mode from password prefix
-          let mode = 'temporary';
-          let actualPassword = password;
-          
-          if (password.toLowerCase().startsWith('t')) {
-            mode = 'temporary';
-            actualPassword = password.substring(1);
-            console.log(`🔍 [DEBUG] Detected temporary mode, password: ${actualPassword}`);
-          } else if (password.toLowerCase().startsWith('p')) {
-            mode = 'permanent';
-            actualPassword = password.substring(1);
-            console.log(`🔍 [DEBUG] Detected permanent mode, password: ${actualPassword}`);
-          }
-          
-          const result = await folderManager.unlockAll(activeProfile.id, actualPassword, mode);
-          console.log(`🔍 [DEBUG] Unlock result:`, result);
-          
-          return {
-            success: result && result.success > 0,
-            result: result,
-            mode: mode
-          };
-        } else {
-          return {
-            success: false,
-            error: 'No active profile found'
-          };
-        }
-      } else {
-        return {
-          success: false,
-          error: 'Vault managers not available'
-        };
-      }
-    } catch (error) {
-      console.error(`❌ [DEBUG] Error processing password input:`, error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
   });
   
   // Hide folder (Linux: prepend dot to make it hidden)

@@ -21,7 +21,9 @@ interface DashboardProps {
   onRefresh?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ folders, onUnlock, onDelete, onRefresh }) => {
+type DialogStep = 'name' | 'password' | null;
+
+export const Dashboard: React.FC<DashboardProps> = ({ folders, onLock, onUnlock, onDelete, onRefresh }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [masterKeyDialog, setMasterKeyDialog] = useState<{
     show: boolean;
@@ -106,7 +108,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ folders, onUnlock, onDelet
       console.log('🔒 Auto-locking folder with master password...');
       const lockResponse = await window.phantomVault.folder.lockWithPassword(
         profileResponse.profile.id,
-        folderId || '',
+        folderId,
         masterPassword
       );
       
@@ -120,7 +122,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ folders, onUnlock, onDelet
         console.error('❌ Failed to lock folder, removing from vault...');
         await window.phantomVault.folder.remove(
           profileResponse.profile.id,
-          folderId || ''
+          folderId
         );
         throw new Error(lockResponse.error || 'Failed to encrypt folder');
       }

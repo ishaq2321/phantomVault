@@ -69,7 +69,7 @@ fi
 
 # Start Electron GUI
 if command -v npm &> /dev/null; then
-    npm run electron:dev
+    npm run electron:prod
 else
     echo "❌ npm not found. Please install Node.js"
     exit 1

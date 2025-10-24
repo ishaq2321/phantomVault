@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { VaultProfileManager } from './VaultProfileManager';
-// import type { NativeOperationResult } from '../types/electron';
+import type { NativeOperationResult } from '../types/electron';
 
 export interface FolderVault {
   id: string;
@@ -235,7 +235,7 @@ export class VaultFolderManager {
         throw new Error('No active profile');
       }
       
-      // let password: string;
+      let password: string;
       
       if (folder.usesMasterPassword) {
         // Use master password (need to get it from profile manager)

@@ -5,14 +5,20 @@
  * Provides automatic refresh, status change detection, and event notifications
  */
 
+/// <reference lib="dom" />
+
 import {
   VaultInfo,
   VaultStatus,
   IPCMessageType,
   LogEntry,
   LogLevel,
-  AppError
+  AppError,
+  PhantomVaultAPI
 } from '../types';
+
+// Declare window for TypeScript in this service context
+declare const window: Window & typeof globalThis;
 
 export interface VaultStatusChange {
   vaultId: string;
@@ -63,7 +69,7 @@ export class VaultStatusMonitor {
       retryDelay: 2000, // 2 seconds
       ...config,
     };
-    
+
     this.callbacks = callbacks;
   }
 
@@ -129,7 +135,7 @@ export class VaultStatusMonitor {
    */
   public updateConfig(newConfig: Partial<StatusMonitorConfig>): void {
     const wasMonitoring = this.isMonitoring;
-    
+
     if (wasMonitoring) {
       this.stop();
     }
@@ -189,9 +195,14 @@ export class VaultStatusMonitor {
    */
   private async refreshVaultStatus(): Promise<VaultInfo[]> {
     try {
+      // Ensure we're in browser context with phantomVault API
+      if (typeof window === 'undefined' || !window.phantomVault) {
+        throw new Error('PhantomVault API not available');
+      }
+
       // Get active profile first
       const profileResponse = await window.phantomVault.profile.getActive();
-      
+
       if (!profileResponse.success || !profileResponse.profile) {
         throw new Error('No active profile found');
       }
@@ -241,7 +252,7 @@ export class VaultStatusMonitor {
       return vaults;
     } catch (error) {
       console.error('Failed to refresh vault status:', error);
-      
+
       this.retryCount++;
       this.setConnectionStatus(false);
 
@@ -260,7 +271,7 @@ export class VaultStatusMonitor {
       // Retry if under max retries
       if (this.retryCount <= this.config.maxRetries) {
         console.log(`Retrying vault status refresh in ${this.config.retryDelay}ms (attempt ${this.retryCount}/${this.config.maxRetries})`);
-        
+
         setTimeout(() => {
           if (this.isMonitoring) {
             this.refreshVaultStatus();
@@ -279,7 +290,7 @@ export class VaultStatusMonitor {
     if (folder.is_locked === undefined) {
       return 'error';
     }
-    
+
     return folder.is_locked ? 'unmounted' : 'mounted';
   }
 
@@ -293,7 +304,7 @@ export class VaultStatusMonitor {
 
     for (const vault of currentVaults) {
       const previousVault = this.lastKnownVaults.get(vault.id);
-      
+
       if (previousVault && previousVault.status !== vault.status) {
         const statusChange: VaultStatusChange = {
           vaultId: vault.id,
@@ -318,10 +329,10 @@ export class VaultStatusMonitor {
     // Check for removed vaults
     for (const [vaultId, previousVault] of this.lastKnownVaults) {
       const currentVault = currentVaults.find(v => v.id === vaultId);
-      
+
       if (!currentVault) {
         console.log(`Vault removed: ${previousVault.name}`);
-        
+
         // Could emit a vault removed event here if needed
       }
     }
@@ -332,7 +343,7 @@ export class VaultStatusMonitor {
    */
   private updateLastKnownVaults(vaults: VaultInfo[]): void {
     this.lastKnownVaults.clear();
-    
+
     for (const vault of vaults) {
       this.lastKnownVaults.set(vault.id, { ...vault });
     }
@@ -344,7 +355,7 @@ export class VaultStatusMonitor {
   private setConnectionStatus(connected: boolean): void {
     if (this.isConnected !== connected) {
       this.isConnected = connected;
-      
+
       if (this.callbacks.onConnectionChange) {
         this.callbacks.onConnectionChange(connected);
       }
@@ -379,12 +390,12 @@ export class VaultStatusMonitor {
   private setupEventListeners(): void {
     // In a real implementation, this would set up IPC event listeners
     // for vault status changes from the main process
-    
+
     // Example:
     // window.phantomVault.onVaultStatusChanged?.((data) => {
     //   this.handleVaultStatusEvent(data);
     // });
-    
+
     console.log('IPC event listeners set up (placeholder)');
   }
 
@@ -401,7 +412,7 @@ export class VaultStatusMonitor {
    */
   private handleVaultStatusEvent(data: any): void {
     console.log('Received vault status event:', data);
-    
+
     // Trigger immediate refresh to get updated status
     if (this.isMonitoring) {
       this.refreshVaultStatus();
@@ -432,7 +443,7 @@ export function getGlobalVaultStatusMonitor(): VaultStatusMonitor {
   if (!globalMonitorInstance) {
     globalMonitorInstance = new VaultStatusMonitor();
   }
-  
+
   return globalMonitorInstance;
 }
 
@@ -443,6 +454,6 @@ export function setGlobalVaultStatusMonitor(monitor: VaultStatusMonitor): void {
   if (globalMonitorInstance) {
     globalMonitorInstance.stop();
   }
-  
+
   globalMonitorInstance = monitor;
 }
