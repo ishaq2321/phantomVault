@@ -6,6 +6,9 @@ const util = require('util');
 const execAsync = util.promisify(exec);
 const crypto = require('crypto');
 
+// Check if running in development or production
+const isDev = process.env.NODE_ENV === 'development';
+
 // ============================================================================
 // PRIORITY 2 SECURITY: Security hardening
 // ============================================================================
@@ -53,8 +56,8 @@ try {
 let VaultProfileManager = null;
 let VaultFolderManager = null;
 try {
-  const profileModule = require('./VaultProfileManager');
-  const folderModule = require('./VaultFolderManager');
+  const profileModule = require('../src/services/VaultProfileManager');
+  const folderModule = require('../src/services/VaultFolderManager');
   VaultProfileManager = profileModule.VaultProfileManager;
   VaultFolderManager = folderModule.VaultFolderManager;
 } catch (error) {
@@ -298,7 +301,11 @@ function createOverlayWindow(overlayData) {
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
 
-  overlayWindow.loadURL('http://127.0.0.1:5173');
+  if (isDev) {
+    overlayWindow.loadURL('http://127.0.0.1:5173');
+  } else {
+    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
 
   overlayWindow.webContents.once('did-finish-load', () => {
     // Send overlay data to the React app
@@ -335,7 +342,11 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL('http://127.0.0.1:5173');
+  if (isDev) {
+    mainWindow.loadURL('http://127.0.0.1:5173');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
   
   // Show window when ready to prevent white flash
   mainWindow.once('ready-to-show', () => {
@@ -471,6 +482,7 @@ function createWindow() {
 }
 
 function setupIpcHandlers() {
+  console.log('🎯 setupIpcHandlers() called');
   // Initialize addon on first IPC call
   let addonInitialized = false;
   const ensureInitialized = () => {
@@ -957,26 +969,44 @@ function setupIpcHandlers() {
     }
   }
   
+  // Helper function to serialize profile objects for IPC (convert Buffers to strings)
+  const serializeProfile = (profile) => {
+    if (!profile) return null;
+    return {
+      id: profile.id,
+      name: profile.name,
+      createdAt: profile.createdAt,
+      isActive: profile.isActive,
+      // Don't send sensitive data like hashes over IPC
+      hasPassword: !!profile.passwordHash,
+      hasRecoveryKey: !!profile.recoveryKeyHash
+    };
+  };
+
   // Profile Manager handlers
+  console.log('🔧 Registering profile IPC handlers...');
   ipcMain.handle('profile:get-active', async () => {
     if (!profileManager) return { success: false, error: 'Profile manager not available' };
     try {
       const profile = profileManager.getActiveProfile();
-      return { success: true, profile };
+      return { success: true, profile: serializeProfile(profile) };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
   
   ipcMain.handle('profile:get-all', async () => {
+    console.log('📞 profile:get-all handler called');
     if (!profileManager) return { success: false, error: 'Profile manager not available' };
     try {
       const profiles = profileManager.getAllProfiles();
-      return { success: true, profiles };
+      const serializedProfiles = profiles.map(serializeProfile);
+      return { success: true, profiles: serializedProfiles };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
+  console.log('✅ Profile handlers registered (get-active, get-all)');
 
   ipcMain.handle('profile:create', async (event, name, masterPassword, recoveryKey) => {
     if (!profileManager) return { success: false, error: 'Profile manager not available' };
@@ -984,7 +1014,7 @@ function setupIpcHandlers() {
       const profile = profileManager.createProfile(name, masterPassword, recoveryKey);
       // Cache the master password with automatic timeout
       cachePasswordWithTimeout(masterPassword);
-      return { success: true, profile };
+      return { success: true, profile: serializeProfile(profile) };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -1324,8 +1354,8 @@ function setupIpcHandlers() {
 
 app.whenReady().then(() => {
   console.log('PhantomVault starting');
+  setupIpcHandlers();    // Setup handlers BEFORE creating window
   createWindow();
-  setupIpcHandlers();
 });
 
 app.on('window-all-closed', () => {

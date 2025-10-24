@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Dashboard } from '../components/dashboard/Dashboard';
+import { VaultDashboard } from '../components/dashboard/VaultDashboard';
 import { SetupWizard } from '../components/setup-wizard/SetupWizard';
 import { PasswordRecovery } from '../components/recovery/PasswordRecovery';
 import { InputDialog } from '../components/common/InputDialog';
 import { InvisibleOverlay, PasswordInput } from '../components/unlock-overlay/InvisibleOverlay';
+import { Providers } from './contexts';
 
 type AppView = 'setup' | 'dashboard' | 'recovery';
 
@@ -637,17 +638,36 @@ export const App: React.FC = () => {
       )}
       
       {state.currentView === 'dashboard' && (
-        <Dashboard
-          folders={state.vaults}
-          onLock={handleFolderLock}
-          onUnlock={handleFolderUnlock}
-          onDelete={handleFolderDelete}
-          onRefresh={refreshVaults}
-        />
+        <Providers>
+          <VaultDashboard
+            vaults={state.vaults.map(v => ({
+              id: v.id,
+              name: v.name,
+              path: v.path,
+              status: v.isLocked ? 'locked' : 'unlocked',
+              size: v.size,
+              lastAccess: v.lastModified.toISOString(),
+              isEncrypted: v.isSecure,
+              metadata: {}
+            }))}
+            onVaultAction={(action: string, vaultId: string) => {
+              if (action === 'lock') handleFolderLock(vaultId);
+              else if (action === 'unlock') handleFolderUnlock(vaultId);
+              else if (action === 'delete') handleFolderDelete(vaultId);
+            }}
+            refreshInterval={5000}
+            loading={state.isLoading}
+          />
+        </Providers>
       )}
       
       {state.currentView === 'recovery' && (
-        <PasswordRecovery />
+        <PasswordRecovery 
+          vaultId=""
+          questions={[]}
+          onRecoverySuccess={() => setState(prev => ({ ...prev, currentView: 'dashboard' }))}
+          onRecoveryCancel={() => setState(prev => ({ ...prev, currentView: 'dashboard' }))}
+        />
       )}
 
       {/* Invisible Unlock Overlay - Triggered by global hotkey */}

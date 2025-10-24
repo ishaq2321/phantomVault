@@ -15,8 +15,3 @@ export { EmptyState } from './EmptyState';
 export { VaultStatusAnimation } from './VaultStatusAnimation';
 export { VaultMetadata, MetadataTooltip } from './VaultMetadata';
 export { VaultDetailsModal } from './VaultDetailsModal';
-
-// Legacy components (for backward compatibility)
-export { Dashboard } from './Dashboard';
-export { StatusOverview } from './StatusOverview';
-export { FolderGrid } from './FolderGrid';
