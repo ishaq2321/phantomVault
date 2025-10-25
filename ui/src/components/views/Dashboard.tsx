@@ -124,19 +124,6 @@ export const Dashboard: React.FC = () => {
               >
                 ℹ️ Vault Info
               </button>
-              <button 
-                className="action-button danger"
-                onClick={handleClearAllVaults}
-                title="Delete all vaults (cleanup)"
-                disabled={vaultStats.total === 0}
-                style={{ 
-                  background: 'var(--color-error)', 
-                  borderColor: 'var(--color-error)',
-                  color: 'white'
-                }}
-              >
-                🗑️ Clear All
-              </button>
             </div>
           </div>
         </div>
