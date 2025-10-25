@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggle,
   className = '',
 }) => {
-  const { state: vaultState } = useVault();
+  const { state: vaultState, actions: vaultActions } = useVault();
   const [memoryUsage, setMemoryUsage] = useState(0);
   const [systemStatus, setSystemStatus] = useState<'Active' | 'Idle' | 'Busy'>('Active');
 
@@ -112,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const total = vaultState.vaults.length;
     const mounted = vaultState.vaults.filter(v => v.status === 'mounted').length;
     const errors = vaultState.vaults.filter(v => v.status === 'error').length;
-    
+
     return { total, mounted, errors };
   };
 
@@ -131,8 +131,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
         </div>
-        
-        <button 
+
+        <button
           onClick={onToggle}
           className="sidebar-toggle"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -158,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className="nav-shortcut">{item.shortcut}</span>
                   </>
                 )}
-                
+
                 {/* Badge for activity count */}
                 {item.id === 'vaults' && vaultSummary.errors > 0 && (
                   <span className="nav-badge error">{vaultSummary.errors}</span>
@@ -181,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="stat-label">Total Vaults</span>
               </div>
             </div>
-            
+
             <div className="stat-item">
               <span className="stat-icon">🟢</span>
               <div className="stat-content">
@@ -189,7 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="stat-label">Mounted</span>
               </div>
             </div>
-            
+
             {vaultSummary.errors > 0 && (
               <div className="stat-item error">
                 <span className="stat-icon">❌</span>
@@ -208,16 +208,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="sidebar-actions">
           <h3 className="actions-title">Quick Actions</h3>
           <div className="action-list">
-            <button 
+            <button
               className="action-item primary"
-              onClick={() => onViewChange('vaults')}
+              onClick={async () => {
+                const vaultName = prompt('Enter vault name:');
+                if (!vaultName || !vaultName.trim()) {
+                  return;
+                }
+
+                const vaultPath = prompt('Enter vault path (folder to encrypt):');
+                if (!vaultPath || !vaultPath.trim()) {
+                  return;
+                }
+
+                try {
+                  const result = await vaultActions.createVault({
+                    name: vaultName.trim(),
+                    path: vaultPath.trim(),
+                    password: '', // Will be handled by the system
+                  });
+
+                  if (result.success) {
+                    alert(`✅ Vault "${vaultName}" created successfully!`);
+                    onViewChange('vaults'); // Switch to vaults view to see the new vault
+                  } else {
+                    alert(`❌ Failed to create vault: ${result.error || result.message}`);
+                  }
+                } catch (error) {
+                  alert(`❌ Error creating vault: ${error}`);
+                }
+              }}
               title="Create a new vault"
             >
               <span className="action-icon">➕</span>
               <span className="action-text">New Vault</span>
             </button>
-            
-            <button 
+
+            <button
               className="action-item secondary"
               onClick={() => onViewChange('activity')}
               title="View recent activity"
@@ -245,9 +272,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
         )}
-        
+
         <div className="footer-actions">
-          <button 
+          <button
             className="footer-button"
             title="Help & Support"
             onClick={() => {

@@ -2,130 +2,202 @@
  * Vaults View Component
  */
 
-import React, { useState, useEffect } from 'react';
-
-interface Vault {
-  id: string;
-  name: string;
-  path: string;
-  isLocked: boolean;
-  size: string;
-  lastModified: string;
-}
+import React from 'react';
+import { useVault } from '../../contexts';
+import './Vaults.css';
 
 export const Vaults: React.FC = () => {
-  const [vaults, setVaults] = useState<Vault[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { state: vaultState, actions: vaultActions } = useVault();
 
-  useEffect(() => {
-    // Load real vaults from the service
-    // For now, start with empty array - will be populated by real vault data
-    setVaults([]);
-    setLoading(false);
-  }, []);
+  // Handle creating a new vault
+  const handleCreateVault = async () => {
+    const vaultName = prompt('Enter vault name:');
+    if (!vaultName || !vaultName.trim()) {
+      return;
+    }
 
-  if (loading) {
+    const vaultPath = prompt('Enter folder path to encrypt:');
+    if (!vaultPath || !vaultPath.trim()) {
+      return;
+    }
+
+    try {
+      const result = await vaultActions.createVault({
+        name: vaultName.trim(),
+        path: vaultPath.trim(),
+        password: '', // Will be handled by the system
+      });
+
+      if (result.success) {
+        alert(`✅ Vault "${vaultName}" created successfully!`);
+      } else {
+        alert(`❌ Failed to create vault: ${result.error || result.message}`);
+      }
+    } catch (error) {
+      alert(`❌ Error creating vault: ${error}`);
+    }
+  };
+
+  // Handle locking/unlocking a vault
+  const handleToggleVault = async (vaultId: string, currentStatus: string) => {
+    const vault = vaultState.vaults.find(v => v.id === vaultId);
+    if (!vault) return;
+
+    const isLocked = currentStatus === 'unmounted';
+    const action = isLocked ? 'unlock' : 'lock';
+    
+    try {
+      if (isLocked) {
+        // Unlock vault - in real implementation this would call unlock API
+        alert(`🔓 Unlocking vault "${vault.name}"...\n\nNote: In real implementation, this would prompt for password and unlock the encrypted folder.`);
+      } else {
+        // Lock vault - in real implementation this would call lock API
+        const confirmed = confirm(`🔒 Lock vault "${vault.name}"?\n\nThis will encrypt and hide the folder.`);
+        if (confirmed) {
+          alert(`🔒 Locking vault "${vault.name}"...\n\nNote: In real implementation, this would encrypt and hide the folder.`);
+        }
+      }
+      
+      // Reload vaults to get updated status
+      await vaultActions.loadVaults();
+    } catch (error) {
+      alert(`❌ Error ${action}ing vault: ${error}`);
+    }
+  };
+
+  // Handle deleting a vault
+  const handleDeleteVault = async (vaultId: string) => {
+    const vault = vaultState.vaults.find(v => v.id === vaultId);
+    if (!vault) return;
+
+    const confirmed = confirm(`⚠️ Delete vault "${vault.name}"?\n\nThis will permanently remove the vault configuration.\nThe original folder will remain but will no longer be encrypted.\n\nThis action cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      const result = await vaultActions.deleteVault(vaultId);
+      if (result.success) {
+        alert(`✅ Vault "${vault.name}" deleted successfully!`);
+      } else {
+        alert(`❌ Failed to delete vault: ${result.error || result.message}`);
+      }
+    } catch (error) {
+      alert(`❌ Error deleting vault: ${error}`);
+    }
+  };
+
+  // Format file size
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return 'Unknown';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Format date
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  if (vaultState.loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h1>🗂️ Vault Management</h1>
-        <p>Loading vaults...</p>
+      <div className="vaults-container">
+        <h1 className="vaults-title">🗂️ Vault Management</h1>
+        <p className="loading-text">Loading vaults...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1>🗂️ Vault Management</h1>
-        <button style={{
-          padding: '0.75rem 1.5rem',
-          backgroundColor: 'var(--color-primary)',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer'
-        }}>
+    <div className="vaults-container">
+      <div className="vaults-header">
+        <div className="header-info">
+          <h1 className="vaults-title">🗂️ Vault Management</h1>
+          <p className="vaults-subtitle">Manage your encrypted folders securely</p>
+        </div>
+        <button 
+          className="add-vault-button"
+          onClick={handleCreateVault}
+          title="Create a new encrypted vault"
+        >
           ➕ Add New Vault
         </button>
       </div>
 
-      <div style={{ 
-        display: 'grid', 
-        gap: '1rem',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))'
-      }}>
-        {vaults.map(vault => (
-          <div key={vault.id} style={{
-            padding: '1.5rem',
-            border: '1px solid var(--color-border)',
-            borderRadius: '8px',
-            backgroundColor: 'var(--color-bg-elevated)',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-              <div>
-                <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--color-text-primary)' }}>
-                  {vault.name}
-                </h3>
-                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                  {vault.path}
-                </p>
-              </div>
-              <span style={{
-                padding: '0.25rem 0.75rem',
-                borderRadius: '12px',
-                fontSize: '0.75rem',
-                fontWeight: '500',
-                backgroundColor: vault.isLocked ? 'rgba(244, 67, 54, 0.1)' : 'rgba(76, 175, 80, 0.1)',
-                color: vault.isLocked ? 'var(--color-error)' : 'var(--color-success)'
-              }}>
-                {vault.isLocked ? '🔒 Locked' : '🔓 Unlocked'}
-              </span>
-            </div>
-            
-            <div style={{ marginBottom: '1rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-              <p style={{ margin: '0.25rem 0' }}>Size: {vault.size}</p>
-              <p style={{ margin: '0.25rem 0' }}>Modified: {vault.lastModified}</p>
-            </div>
+      {vaultState.error && (
+        <div className="error-message">
+          ❌ {vaultState.error.message}
+        </div>
+      )}
 
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: vault.isLocked ? 'var(--color-success)' : 'var(--color-warning)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.875rem'
-              }}>
-                {vault.isLocked ? '🔓 Unlock' : '🔒 Lock'}
-              </button>
-              <button style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: 'transparent',
-                color: 'var(--color-text-secondary)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.875rem'
-              }}>
-                ⚙️ Settings
-              </button>
-              <button style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: 'transparent',
-                color: 'var(--color-error)',
-                border: '1px solid var(--color-error)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.875rem'
-              }}>
-                🗑️ Delete
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      {vaultState.vaults.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">🗂️</div>
+          <h3>No Vaults Found</h3>
+          <p>Create your first encrypted vault to get started.</p>
+          <button 
+            className="create-first-vault-button"
+            onClick={handleCreateVault}
+          >
+            ➕ Create Your First Vault
+          </button>
+        </div>
+      ) : (
+        <div className="vaults-grid">
+          {vaultState.vaults.map(vault => {
+            const isLocked = vault.status === 'unmounted';
+            return (
+              <div key={vault.id} className="vault-card">
+                <div className="vault-header">
+                  <div className="vault-info">
+                    <h3 className="vault-name">{vault.name}</h3>
+                    <p className="vault-path" title={vault.path}>{vault.path}</p>
+                  </div>
+                  <span className={`vault-status ${isLocked ? 'locked' : 'unlocked'}`}>
+                    {isLocked ? '🔒 Locked' : '🔓 Unlocked'}
+                  </span>
+                </div>
+                
+                <div className="vault-details">
+                  <p className="vault-detail">
+                    <span className="detail-label">Size:</span> {formatSize(vault.size)}
+                  </p>
+                  <p className="vault-detail">
+                    <span className="detail-label">Last Access:</span> {formatDate(vault.lastAccess)}
+                  </p>
+                  <p className="vault-detail">
+                    <span className="detail-label">Profile:</span> {vault.profile.name}
+                  </p>
+                </div>
+
+                <div className="vault-actions">
+                  <button 
+                    className={`action-button ${isLocked ? 'unlock' : 'lock'}`}
+                    onClick={() => handleToggleVault(vault.id, vault.status)}
+                    title={isLocked ? 'Unlock this vault' : 'Lock this vault'}
+                  >
+                    {isLocked ? '🔓 Unlock' : '🔒 Lock'}
+                  </button>
+                  <button 
+                    className="action-button settings"
+                    onClick={() => alert(`⚙️ Vault Settings for "${vault.name}"\n\nPath: ${vault.path}\nStatus: ${vault.status}\nProfile: ${vault.profile.name}\n\nNote: Settings panel would open here in full implementation.`)}
+                    title="Vault settings"
+                  >
+                    ⚙️ Settings
+                  </button>
+                  <button 
+                    className="action-button delete"
+                    onClick={() => handleDeleteVault(vault.id)}
+                    title="Delete this vault"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

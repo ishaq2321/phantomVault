@@ -12,29 +12,38 @@ import './Dashboard.css';
 export const Dashboard: React.FC = () => {
   const { state: vaultState, actions: vaultActions } = useVault();
 
-  // Handle add vault
-  const handleAddVault = () => {
-    // In a real implementation, this would open a vault creation modal
-    const vaultName = prompt('Enter vault name:');
-    if (vaultName && vaultName.trim()) {
-      // This would normally call the vault creation API
-      alert(`Creating vault: ${vaultName}\n\nNote: This is a demo. In the real app, this would create an encrypted vault.`);
-    }
-  };
 
-  // Handle unlock all vaults
-  const handleUnlockAll = () => {
-    if (vaultState.vaults.length === 0) {
-      alert('No vaults to unlock. Create a vault first.');
+
+  // Handle add vault
+  const handleAddVault = async () => {
+    const vaultName = prompt('Enter vault name:');
+    if (!vaultName || !vaultName.trim()) {
       return;
     }
 
-    const password = prompt('Enter master password to unlock all vaults:');
-    if (password) {
-      // This would normally unlock all vaults
-      alert(`Unlocking ${vaultState.vaults.length} vault(s)...\n\nNote: This is a demo. In the real app, this would unlock all encrypted vaults.`);
+    const vaultPath = prompt('Enter vault path (folder to encrypt):');
+    if (!vaultPath || !vaultPath.trim()) {
+      return;
+    }
+
+    try {
+      const result = await vaultActions.createVault({
+        name: vaultName.trim(),
+        path: vaultPath.trim(),
+        password: '', // Will be handled by the system
+      });
+
+      if (result.success) {
+        alert(`✅ Vault "${vaultName}" created successfully!`);
+      } else {
+        alert(`❌ Failed to create vault: ${result.error || result.message}`);
+      }
+    } catch (error) {
+      alert(`❌ Error creating vault: ${error}`);
     }
   };
+
+
 
   // Get real vault statistics
   const getVaultStats = () => {
@@ -110,11 +119,23 @@ export const Dashboard: React.FC = () => {
               </button>
               <button 
                 className="action-button secondary"
-                onClick={handleUnlockAll}
-                title="Unlock all vaults with master password"
-                disabled={vaultStats.total === 0}
+                onClick={() => alert('💡 Tip: Use the sidebar to navigate to Vaults for individual vault management.\n\n🔐 For security, vaults must be managed individually.')}
+                title="Vault management info"
               >
-                🔓 Unlock All
+                ℹ️ Vault Info
+              </button>
+              <button 
+                className="action-button danger"
+                onClick={handleClearAllVaults}
+                title="Delete all vaults (cleanup)"
+                disabled={vaultStats.total === 0}
+                style={{ 
+                  background: 'var(--color-error)', 
+                  borderColor: 'var(--color-error)',
+                  color: 'white'
+                }}
+              >
+                🗑️ Clear All
               </button>
             </div>
           </div>
