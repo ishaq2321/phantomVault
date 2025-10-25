@@ -10,7 +10,6 @@ import { AppProvider } from './contexts/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { MainContent } from './components/layout/MainContent';
-import { StatusBar } from './components/layout/StatusBar';
 import { NotificationContainer } from './components/common/NotificationContainer';
 import { useServiceConnection } from './hooks/useServiceConnection';
 import './App.css';
@@ -135,13 +134,6 @@ export const App: React.FC = () => {
               <MainContent
                 currentView={appState.currentView}
                 className="main-content"
-              />
-
-              {/* Status Bar */}
-              <StatusBar
-                currentView={appState.currentView}
-                serviceStatus={connectionState}
-                className="status-bar\"
               />
             </div>
           </div>
