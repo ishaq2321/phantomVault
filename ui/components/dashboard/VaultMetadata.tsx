@@ -6,7 +6,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { VaultInfo } from '../../types';
-import './VaultMetadata.css';
 
 interface VaultMetadataProps {
   vault: VaultInfo;

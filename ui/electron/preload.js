@@ -181,6 +181,13 @@ contextBridge.exposeInMainWorld('phantomVault', {
     ipcRenderer.on('suspicious-activity', (event, data) => callback(data));
     return () => ipcRenderer.removeListener('suspicious-activity', callback);
   },
+
+  // Service Management APIs
+  service: {
+    restart: () => ipcRenderer.invoke('service:restart'),
+    reconnect: () => ipcRenderer.invoke('service:reconnect'),
+    getStatus: () => ipcRenderer.invoke('service:status'),
+  },
 });
 
 // Log that preload is ready

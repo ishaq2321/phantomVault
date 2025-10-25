@@ -382,6 +382,13 @@ export interface PhantomVaultAPI {
   // PhantomVault 2.0 Phase 3 - File System Watcher
   fsWatcher: FSWatcherAPI;
   
+  // Service Management
+  service: {
+    restart: () => Promise<{ success: boolean; message?: string; error?: string }>;
+    reconnect: () => Promise<{ success: boolean; message?: string; error?: string }>;
+    getStatus: () => Promise<{ success: boolean; status?: any; error?: string }>;
+  };
+  
   // Window management
   minimizeToTray: () => void;
   showWindow: () => void;

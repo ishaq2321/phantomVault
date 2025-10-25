@@ -20,7 +20,6 @@ import { VaultStatusIndicator } from './VaultStatusIndicator';
 import { QuickActions } from './QuickActions';
 import { EmptyState } from './EmptyState';
 import { VaultDetailsModal } from './VaultDetailsModal';
-import './VaultDashboard.css';
 
 /**
  * Main vault dashboard component
@@ -28,7 +27,6 @@ import './VaultDashboard.css';
 export const VaultDashboard: React.FC<VaultDashboardProps> = ({
   vaults: externalVaults,
   onVaultAction,
-  onCreateVault,
   refreshInterval = 5000,
   loading: externalLoading = false,
 }) => {
@@ -291,7 +289,6 @@ export const VaultDashboard: React.FC<VaultDashboardProps> = ({
             selectedCount={selectedVaults.size}
             onBulkAction={handleBulkAction}
             onRefresh={handleManualRefresh}
-            onCreateVault={onCreateVault}
             loading={isLoading}
           />
         </div>
@@ -391,7 +388,7 @@ export const VaultDashboard: React.FC<VaultDashboardProps> = ({
               </button>
             </div>
           ) : (
-            <EmptyState onCreateVault={onCreateVault || (() => console.log('No onCreateVault handler provided'))} />
+            <EmptyState onCreateVault={() => appActions.setActiveView('vaults')} />
           )
         ) : (
           <div className={`vault-${viewMode}`}>

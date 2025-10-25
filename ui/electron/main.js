@@ -436,12 +436,20 @@ function createWindow() {
     console.error('   Description:', errorDescription);
   });
   
-  // Register hotkeys when window is ready
+  // Register hotkeys when window is ready (prevent multiple registrations)
+  let hotkeyRegistered = false;
   mainWindow.webContents.on('did-finish-load', () => {
+    if (hotkeyRegistered) {
+      console.log('⚠️ Hotkeys already registered, skipping...');
+      return;
+    }
+    
     // Use HotkeyManager if available, otherwise fallback to simple hotkey
     if (HotkeyManager) {
       console.log('✅ Using HotkeyManager');
-      hotkeyManager = HotkeyManager.getInstance();
+      if (!hotkeyManager) {
+        hotkeyManager = HotkeyManager.getInstance();
+      }
       
       // Set callbacks
       hotkeyManager.onUnlock(async () => {
@@ -492,10 +500,19 @@ function createWindow() {
         console.log('   → Recovery overlay active');
       });
       
-      hotkeyManager.registerHotkeys();
+      const result = hotkeyManager.registerHotkeys();
+      if (result) {
+        hotkeyRegistered = true;
+        console.log('✅ HotkeyManager hotkeys registered successfully');
+      } else {
+        console.error('❌ HotkeyManager hotkey registration failed');
+      }
     } else {
       console.log('⚠️ Using fallback hotkey registration');
-      registerGlobalHotkey(currentHotkey);
+      const success = registerGlobalHotkey(currentHotkey);
+      if (success) {
+        hotkeyRegistered = true;
+      }
     }
     
     // Initialize AutoLockManager
@@ -1550,6 +1567,72 @@ function setupIpcHandlers() {
       console.error('❌ [REMOVE] Failed:', error.message);
       return { success: false, error: error.message };
     }
+  });
+
+  // ==================== SERVICE MANAGEMENT IPC HANDLERS ====================
+  
+  // Service restart handler
+  ipcMain.handle('service:restart', async () => {
+    try {
+      console.log('🔄 [SERVICE] Restart requested');
+      
+      // Stop current services
+      if (hotkeyManager) {
+        hotkeyManager.unregisterHotkeys();
+      }
+      if (autoLockManager) {
+        autoLockManager.stopMonitoring();
+      }
+      if (fsWatcher) {
+        fsWatcher.stopWatching();
+      }
+      
+      // Wait a moment
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Restart services
+      if (hotkeyManager) {
+        hotkeyManager.registerHotkeys();
+      }
+      if (autoLockManager) {
+        autoLockManager.startMonitoring();
+      }
+      if (fsWatcher) {
+        const os = require('os');
+        const username = os.userInfo().username;
+        const storagePath = path.join(os.homedir(), '.phantom_vault_storage', username);
+        if (fs.existsSync(storagePath)) {
+          fsWatcher.startWatching(storagePath);
+        }
+      }
+      
+      console.log('✅ [SERVICE] Restart completed');
+      return { success: true, message: 'Service restarted successfully' };
+    } catch (error) {
+      console.error('❌ [SERVICE] Restart failed:', error.message);
+      return { success: false, error: error.message };
+    }
+  });
+  
+  // Service status handler
+  ipcMain.handle('service:status', async () => {
+    try {
+      const status = {
+        hotkeyManager: hotkeyManager ? hotkeyManager.areHotkeysRegistered() : false,
+        autoLockManager: autoLockManager ? true : false, // Assume running if exists
+        fsWatcher: fsWatcher ? true : false, // Assume running if exists
+        cppAddon: vault ? true : false,
+      };
+      
+      return { success: true, status };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+  
+  // Service reconnect handler (alias for restart)
+  ipcMain.handle('service:reconnect', async () => {
+    return ipcMain.handle('service:restart');
   });
 }
 

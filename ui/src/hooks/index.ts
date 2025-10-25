@@ -7,16 +7,50 @@
 // ==================== HOOK EXPORTS ====================
 
 export { useVaultOperations } from './useVaultOperations';
+export { useIPCCommunication } from './useIPCCommunication';
+export { useActivityMonitor } from './useActivityMonitor';
 export { useServiceConnection } from './useServiceConnection';
+export { 
+  useVaultValidation, 
+  useFieldValidation, 
+  usePasswordValidation 
+} from './useVaultValidation';
 export { 
   useVaultStatusMonitor, 
   useVaultMonitor, 
   useVaultStatusAnimations 
 } from './useVaultStatusMonitor';
+// Temporarily commented out due to build issues
+// export { 
+//   useKeyboardSequences, 
+//   useVaultKeyboardSequences, 
+//   useSequenceValidation 
+// } from './useKeyboardSequences';
+
+// ==================== COMBINED HOOKS ====================
+
+/**
+ * Combined hook that provides all vault-related functionality
+ * Useful for components that need multiple vault operations
+ */
+export const useVaultManagement = () => {
+  const vaultOps = useVaultOperations();
+  const ipc = useIPCCommunication();
+  const activity = useActivityMonitor();
+  
+  return {
+    vaultOperations: vaultOps,
+    ipcCommunication: ipc,
+    activityMonitor: activity,
+  };
+};
 
 // ==================== UTILITY HOOKS ====================
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useActivityMonitor } from './useActivityMonitor';
+import { useIPCCommunication } from './useIPCCommunication';
+import { useVaultOperations } from './useVaultOperations';
 
 /**
  * Hook for debouncing values
@@ -224,4 +258,6 @@ export const useKeyboardShortcut = (
 
 export type {
   UseVaultOperations,
+  UseIPCCommunication,
+  UseActivityMonitor,
 } from '../types';

@@ -1,0 +1,599 @@
+/**
+ * Vault Creation Wizard Styles
+ * 
+ * CSS styles for the vault creation wizard and related components
+ */
+
+/* ==================== WIZARD CONTAINER ==================== */
+
+.vault-creation-wizard {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 90vh;
+  width: 100%;
+  max-width: 800px;
+  background-color: #2D3250;
+  border-radius: 16px;
+  border: 1px solid #424769;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #F6F6F6;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ==================== WIZARD HEADER ==================== */
+
+.wizard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2rem;
+  background-color: #1B1F3B;
+  border-bottom: 1px solid #424769;
+}
+
+.wizard-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #F6F6F6;
+}
+
+.wizard-close {
+  background: none;
+  border: none;
+  color: #B4B4B4;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.wizard-close:hover:not(:disabled) {
+  background-color: #424769;
+  color: #F6F6F6;
+}
+
+.wizard-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==================== PROGRESS INDICATOR ==================== */
+
+.wizard-progress {
+  padding: 1.5rem 2rem;
+  background-color: #1B1F3B;
+  border-bottom: 1px solid #424769;
+}
+
+.progress-steps {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.progress-step:hover {
+  background-color: rgba(112, 119, 161, 0.1);
+}
+
+.progress-step.completed {
+  color: #4CAF50;
+}
+
+.progress-step.active {
+  color: #7077A1;
+  background-color: rgba(112, 119, 161, 0.1);
+}
+
+.progress-step.pending {
+  color: #B4B4B4;
+}
+
+.progress-step.optional .step-title::after {
+  content: ' (Optional)';
+  font-size: 0.75rem;
+  color: #B4B4B4;
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background-color: #424769;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.progress-step.completed .step-number {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.progress-step.active .step-number {
+  background-color: #7077A1;
+  color: white;
+}
+
+.step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.step-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-description {
+  font-size: 0.75rem;
+  color: #B4B4B4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progress-bar {
+  height: 4px;
+  background-color: #424769;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #7077A1;
+  transition: width 0.3s ease;
+}
+
+/* ==================== WIZARD CONTENT ==================== */
+
+.wizard-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ==================== FORM ELEMENTS ==================== */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #F6F6F6;
+}
+
+.form-input,
+.form-select {
+  padding: 0.75rem 1rem;
+  background-color: #1B1F3B;
+  border: 1px solid #424769;
+  border-radius: 8px;
+  color: #F6F6F6;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: #7077A1;
+  box-shadow: 0 0 0 3px rgba(112, 119, 161, 0.1);
+}
+
+.form-input.error,
+.form-select.error {
+  border-color: #F44336;
+}
+
+.form-help {
+  font-size: 0.75rem;
+  color: #B4B4B4;
+  line-height: 1.4;
+}
+
+.error-message {
+  font-size: 0.75rem;
+  color: #F44336;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.checkbox-label:hover {
+  background-color: rgba(112, 119, 161, 0.1);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+}
+
+.checkbox-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #F6F6F6;
+}
+
+/* ==================== INFO BOXES ==================== */
+
+.info-box,
+.warning-box {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid;
+}
+
+.info-box {
+  background-color: rgba(33, 150, 243, 0.1);
+  border-color: #2196F3;
+}
+
+.warning-box {
+  background-color: rgba(255, 152, 0, 0.1);
+  border-color: #FF9800;
+}
+
+.info-icon,
+.warning-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.info-content,
+.warning-content {
+  flex: 1;
+}
+
+.info-content h4,
+.warning-content h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #F6F6F6;
+}
+
+.info-content p,
+.warning-content p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #B4B4B4;
+  line-height: 1.4;
+}
+
+.info-content ul {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1rem;
+  font-size: 0.75rem;
+  color: #B4B4B4;
+  line-height: 1.4;
+}
+
+/* ==================== REVIEW STEP ==================== */
+
+.review-step h3 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #F6F6F6;
+  text-align: center;
+}
+
+.review-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.review-section {
+  background-color: #1B1F3B;
+  border: 1px solid #424769;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.review-section h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #7077A1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #424769;
+  padding-bottom: 0.5rem;
+}
+
+.review-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #424769;
+}
+
+.review-item:last-child {
+  border-bottom: none;
+}
+
+.review-label {
+  font-size: 0.75rem;
+  color: #B4B4B4;
+  font-weight: 500;
+}
+
+.review-value {
+  font-size: 0.875rem;
+  color: #F6F6F6;
+  font-weight: 500;
+  text-align: right;
+  max-width: 60%;
+  word-break: break-word;
+}
+
+/* ==================== NAVIGATION ==================== */
+
+.wizard-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+  background-color: #1B1F3B;
+  border-top: 1px solid #424769;
+}
+
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-button-primary {
+  background-color: #7077A1;
+  color: #F6F6F6;
+}
+
+.nav-button-primary:hover:not(:disabled) {
+  background-color: #5a6085;
+  transform: translateY(-1px);
+}
+
+.nav-button-secondary {
+  background-color: #424769;
+  color: #F6F6F6;
+}
+
+.nav-button-secondary:hover:not(:disabled) {
+  background-color: #525a7a;
+}
+
+.nav-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #B4B4B4;
+}
+
+.optional-badge {
+  background-color: #FF9800;
+  color: white;
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+@media (max-width: 768px) {
+  .vault-creation-wizard {
+    max-width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .wizard-header,
+  .wizard-progress,
+  .wizard-content,
+  .wizard-navigation {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .wizard-title {
+    font-size: 1.5rem;
+  }
+  
+  .progress-steps {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .progress-step {
+    padding: 0.75rem;
+  }
+  
+  .step-info {
+    flex: 1;
+  }
+  
+  .step-title,
+  .step-description {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+  
+  .wizard-navigation {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .nav-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .review-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .review-value {
+    text-align: left;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .wizard-content {
+    padding: 1rem;
+  }
+  
+  .wizard-step {
+    gap: 1rem;
+  }
+  
+  .progress-steps {
+    display: none; /* Hide detailed steps on very small screens */
+  }
+  
+  .form-input,
+  .form-select {
+    padding: 0.625rem 0.75rem;
+  }
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+
+.wizard-step:focus-within {
+  outline: 2px solid #7077A1;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.progress-step:focus {
+  outline: 2px solid #7077A1;
+  outline-offset: 2px;
+}
+
+.nav-button:focus {
+  outline: 2px solid #7077A1;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .vault-creation-wizard {
+    border-color: #FFFFFF;
+  }
+  
+  .form-input,
+  .form-select {
+    border-color: #FFFFFF;
+  }
+  
+  .form-input:focus,
+  .form-select:focus {
+    border-color: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .nav-button:hover,
+  .progress-step,
+  .form-input,
+  .form-select,
+  .progress-fill {
+    transition: none;
+  }
+  
+  .nav-button-primary:hover:not(:disabled) {
+    transform: none;
+  }
+  
+  .loading-spinner {
+    animation: none;
+  }
+}
