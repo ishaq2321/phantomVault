@@ -44,24 +44,46 @@ export const Vaults: React.FC = () => {
     if (!vault) return;
 
     const isLocked = currentStatus === 'unmounted';
-    const action = isLocked ? 'unlock' : 'lock';
     
     try {
       if (isLocked) {
-        // Unlock vault - in real implementation this would call unlock API
-        alert(`🔓 Unlocking vault "${vault.name}"...\n\nNote: In real implementation, this would prompt for password and unlock the encrypted folder.`);
+        // Unlock vault - prompt for password
+        const password = prompt(`🔓 Enter password to unlock vault "${vault.name}":`);
+        if (!password) return;
+
+        const result = await window.phantomVault.folder.unlock(
+          vault.profile.id,
+          vaultId,
+          password,
+          'temporary' // Default to temporary unlock
+        );
+
+        if (result.success) {
+          alert(`✅ Vault "${vault.name}" unlocked successfully!`);
+        } else {
+          alert(`❌ Failed to unlock vault: ${result.error || 'Invalid password'}`);
+        }
       } else {
-        // Lock vault - in real implementation this would call lock API
+        // Lock vault - confirm action
         const confirmed = confirm(`🔒 Lock vault "${vault.name}"?\n\nThis will encrypt and hide the folder.`);
-        if (confirmed) {
-          alert(`🔒 Locking vault "${vault.name}"...\n\nNote: In real implementation, this would encrypt and hide the folder.`);
+        if (!confirmed) return;
+
+        const result = await window.phantomVault.folder.lock(
+          vault.profile.id,
+          vaultId
+        );
+
+        if (result.success) {
+          alert(`✅ Vault "${vault.name}" locked successfully!`);
+        } else {
+          alert(`❌ Failed to lock vault: ${result.error || 'Unknown error'}`);
         }
       }
       
       // Reload vaults to get updated status
       await vaultActions.loadVaults();
     } catch (error) {
-      alert(`❌ Error ${action}ing vault: ${error}`);
+      alert(`❌ Error ${isLocked ? 'unlock' : 'lock'}ing vault: ${error}`);
     }
   };
 

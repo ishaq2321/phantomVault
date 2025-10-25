@@ -16,22 +16,33 @@ export const Dashboard: React.FC = () => {
 
   // Handle add vault
   const handleAddVault = async () => {
+    console.log('🔍 Add Vault button clicked');
+    
     const vaultName = prompt('Enter vault name:');
+    console.log('📝 Vault name entered:', vaultName);
+    
     if (!vaultName || !vaultName.trim()) {
+      console.log('❌ No vault name provided');
       return;
     }
 
     const vaultPath = prompt('Enter vault path (folder to encrypt):');
+    console.log('📁 Vault path entered:', vaultPath);
+    
     if (!vaultPath || !vaultPath.trim()) {
+      console.log('❌ No vault path provided');
       return;
     }
 
     try {
+      console.log('🚀 Calling vaultActions.createVault...');
       const result = await vaultActions.createVault({
         name: vaultName.trim(),
         path: vaultPath.trim(),
         password: '', // Will be handled by the system
       });
+
+      console.log('📊 Create vault result:', result);
 
       if (result.success) {
         alert(`✅ Vault "${vaultName}" created successfully!`);
@@ -39,6 +50,7 @@ export const Dashboard: React.FC = () => {
         alert(`❌ Failed to create vault: ${result.error || result.message}`);
       }
     } catch (error) {
+      console.error('💥 Error creating vault:', error);
       alert(`❌ Error creating vault: ${error}`);
     }
   };
