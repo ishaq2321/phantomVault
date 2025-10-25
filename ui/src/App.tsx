@@ -12,7 +12,6 @@ import { Header } from './components/layout/Header';
 import { MainContent } from './components/layout/MainContent';
 import { StatusBar } from './components/layout/StatusBar';
 import { NotificationContainer } from './components/common/NotificationContainer';
-import { SimpleServiceStatus } from '../components/common/SimpleServiceStatus';
 import { useServiceConnection } from './hooks/useServiceConnection';
 import './App.css';
 
@@ -108,12 +107,6 @@ export const App: React.FC = () => {
     <AppProvider>
       <VaultProvider>
         <div className={`app ${appState.theme} ${appState.isFullscreen ? 'fullscreen' : ''}`}>
-          {/* Service Status Monitor */}
-          <SimpleServiceStatus 
-            className="service-status"
-            showDetails={false}
-          />
-
           {/* Main Layout */}
           <div className="app-layout">
             {/* Sidebar */}

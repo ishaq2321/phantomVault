@@ -128,9 +128,6 @@ export const Header: React.FC<HeaderProps> = ({
             className={`status-dot ${serviceConnected ? 'connected' : 'disconnected'}`}
             title={serviceConnected ? 'Service connected' : 'Service disconnected'}
           />
-          <span className="status-text">
-            {serviceConnected ? 'Connected' : 'Disconnected'}
-          </span>
         </div>
 
         {/* Current Time */}

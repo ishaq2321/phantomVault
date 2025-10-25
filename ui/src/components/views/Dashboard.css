@@ -53,6 +53,8 @@
 
 .card-content {
   color: var(--color-text-secondary);
+  overflow: hidden;
+  position: relative;
 }
 
 .card-content p {
