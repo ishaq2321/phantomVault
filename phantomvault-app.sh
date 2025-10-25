@@ -67,8 +67,17 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Start Electron GUI
+# Ensure dist folder exists
+if [ ! -d "dist" ]; then
+    echo "⚠️  Building UI..."
+    npm run build
+fi
+
+# Start Electron GUI in production mode
 if command -v npm &> /dev/null; then
+    # Set production mode explicitly
+    export NODE_ENV=production
+    echo "🚀 Starting Electron in production mode..."
     npm run electron:prod
 else
     echo "❌ npm not found. Please install Node.js"
