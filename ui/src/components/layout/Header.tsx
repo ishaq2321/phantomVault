@@ -236,7 +236,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="menu-item"
                     onClick={() => {
                       setShowUserMenu(false);
-                      alert('Help & Support\n\nHotkeys:\n• Ctrl+Alt+V: Unlock vault\n• Ctrl+Alt+R: Recovery mode\n• Ctrl+B: Toggle sidebar\n\nFor more help: https://github.com/ishaq2321/phantomVault');
+                      alert('Help & Support\n\nHotkeys:\n• Ctrl+Alt+V: Unlock vault (invisible sequence detection)\n• Ctrl+Alt+R: Recovery mode\n• Ctrl+B: Toggle sidebar\n\nPassword Format:\n• T+password: Temporary unlock (e.g., T1234)\n• P+password: Permanent unlock (e.g., P1234)\n• password: Default temporary (e.g., 1234)\n\nFor more help: https://github.com/ishaq2321/phantomVault');
                     }}
                   >
                     <span className="menu-icon">❓</span>

@@ -157,13 +157,11 @@ contextBridge.exposeInMainWorld('phantomVault', {
     return () => ipcRenderer.removeListener('show-settings', callback);
   },
   
-  // PhantomVault 2.0 - Invisible Overlay Events
+  // PhantomVault 2.0 - Invisible Overlay Events (DISABLED for invisible operation)
   onShowUnlockOverlay: (callback) => {
-    ipcRenderer.on('show-unlock-overlay', (event, data) => {
-      console.log('🔔 PRELOAD: Received show-unlock-overlay event', data);
-      callback(data);
-    });
-    return () => ipcRenderer.removeListener('show-unlock-overlay', callback);
+    console.log('⚠️  PRELOAD: Overlay events disabled - C++ service handles invisibly');
+    // Return empty cleanup function for compatibility
+    return () => {};
   },
   
   // PhantomVault 2.0 Phase 3 - Auto-Lock Events

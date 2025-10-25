@@ -141,39 +141,15 @@ try {
   console.error('   Falling back to mock mode');
 }
 
-// Register global hotkey
+// DISABLED: Fallback hotkey registration - C++ service handles hotkeys invisibly
 function registerGlobalHotkey(hotkey) {
-  try {
-    // Unregister all previous hotkeys
-    globalShortcut.unregisterAll();
-    
-    // Register new hotkey
-    const success = globalShortcut.register(hotkey, () => {
-      console.log(`🔑 Global hotkey pressed: ${hotkey}`);
-      
-      // Show unlock prompt
-      if (mainWindow) {
-        mainWindow.webContents.send('show-unlock-prompt');
-        
-        // Focus and show window
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
-        mainWindow.show();
-      }
-    });
-    
-    if (success) {
-      console.log(`✅ Global hotkey registered: ${hotkey}`);
-      currentHotkey = hotkey;
-      return true;
-    } else {
-      console.error(`❌ Failed to register hotkey: ${hotkey}`);
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ Error registering hotkey:', error);
-    return false;
-  }
+  console.log(`⚠️  [FALLBACK] Hotkey registration disabled: ${hotkey}`);
+  console.log(`   → C++ service handles all hotkeys for invisible operation`);
+  console.log(`   → This prevents visible windows from opening accidentally`);
+  
+  // DO NOT register Electron hotkeys when C++ service is running
+  // This prevents the dangerous behavior of opening main window
+  return false; // Always return false to indicate Electron hotkeys are disabled
 }
 
 // Create system tray
@@ -204,15 +180,12 @@ function createTray() {
     {
       label: 'Unlock Folders (Ctrl+Alt+V)',
       click: () => {
-        if (!mainWindow) createWindow();
-        setTimeout(() => {
-          if (mainWindow) {
-            mainWindow.webContents.send('show-unlock-overlay', { isRecoveryMode: false });
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.show();
-            mainWindow.focus();
-          }
-        }, 100);
+        console.log('🔑 [TRAY] Unlock requested - C++ service handles invisibly');
+        console.log('   → Press Ctrl+Alt+V anywhere for invisible sequence detection');
+        console.log('   → Format: T+password (temporary) or P+password (permanent)');
+        
+        // DO NOT open overlay or main window - maintain invisible operation
+        // User should use the actual Ctrl+Alt+V hotkey for invisible operation
       }
     },
     { type: 'separator' },
@@ -259,76 +232,24 @@ function createTray() {
   console.log('✅ System tray created');
 }
 
-// Create invisible overlay window for capturing password input globally
-let overlayWindow = null;
+// DISABLED: Overlay window creation removed for invisible operation
+// The C++ service handles all password input invisibly without creating windows
+
+let overlayWindow = null; // Keep variable for compatibility
 
 function createOverlayWindow(overlayData) {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    // Window already exists, just send new data
-    overlayWindow.webContents.send('show-unlock-overlay', overlayData);
-    overlayWindow.show();
-    overlayWindow.focus();
-    return;
-  }
-
-  const { screen } = require('electron');
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
-
-  overlayWindow = new BrowserWindow({
-    width,
-    height,
-    x: 0,
-    y: 0,
-    transparent: true,
-    frame: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    resizable: false,
-    movable: false,
-    minimizable: false,
-    maximizable: false,
-    closable: true,
-    focusable: true,
-    show: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-    },
-  });
-
-  overlayWindow.setIgnoreMouseEvents(false); // We need to capture keystrokes
-  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-
-  // Load from built files in production, dev server in development
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (isDev) {
-    overlayWindow.loadURL('http://127.0.0.1:5173');
-  } else {
-    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
-
-  overlayWindow.webContents.once('did-finish-load', () => {
-    // Send overlay data to the React app
-    overlayWindow.webContents.send('show-unlock-overlay', overlayData);
-    overlayWindow.show();
-    overlayWindow.focus();
-    console.log('   → Overlay window created and shown');
-  });
-
-  // Close overlay window when done
-  overlayWindow.on('closed', () => {
-    overlayWindow = null;
-  });
+  console.log('⚠️  [OVERLAY] Window creation disabled - C++ service handles invisibly');
+  console.log('   → No visible windows created to maintain invisible operation');
+  console.log('   → Sequence detection handled by native C++ service');
+  
+  // DO NOT create overlay window - this defeats the invisible operation
+  return;
 }
 
 function closeOverlayWindow() {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.close();
-    overlayWindow = null;
-  }
+  console.log('⚠️  [OVERLAY] Close requested - no overlay windows to close');
+  // No overlay windows exist in invisible mode
+  return;
 }
 
 function createWindow() {
@@ -451,68 +372,42 @@ function createWindow() {
         hotkeyManager = HotkeyManager.getInstance();
       }
       
-      // Set callbacks
+      // Set callbacks - DISABLED: Let C++ service handle hotkeys invisibly
       hotkeyManager.onUnlock(async () => {
         console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`🔓 [FLOW-4] UNLOCK/RE-LOCK HOTKEY PRESSED (Ctrl+Alt+V)`);
+        console.log(`🔓 [ELECTRON] HOTKEY DETECTED - DELEGATING TO C++ SERVICE`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         
-        // Check if there are temporarily unlocked folders
-        let hasTemporary = false;
-        let temporaryCount = 0;
-        if (profileManager) {
-          const activeProfile = await profileManager.getActiveProfile();
-          if (activeProfile && folderManager) {
-            const temporaryFolders = folderManager.getTemporaryUnlockedFolders(activeProfile.id);
-            hasTemporary = temporaryFolders && temporaryFolders.length > 0;
-            temporaryCount = temporaryFolders ? temporaryFolders.length : 0;
-            
-            if (hasTemporary) {
-              console.log(`🔍 Detected ${temporaryCount} temporarily unlocked folder(s)`);
-              console.log(`   → Will show RE-LOCK mode (password only, no T/P)`);
-            } else {
-              console.log(`🔍 No temporary folders detected`);
-              console.log(`   → Will show UNLOCK mode (T/P + password)`);
-            }
-          }
-        }
+        console.log(`⚠️  [ELECTRON] Hotkey handled by C++ service for invisible operation`);
+        console.log(`   → C++ service will use sequence detection (no visible windows)`);
+        console.log(`   → Format: T+password (temporary) or P+password (permanent)`);
+        console.log(`   → No Electron overlay will be created to maintain invisibility`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
         
-        // Create transparent overlay window on top of everything
-        console.log('   Creating transparent overlay window...');
-        createOverlayWindow({
-          isRecoveryMode: false,
-          isRelockMode: hasTemporary,
-          temporaryCount
-        });
-        console.log(`   → Waiting for ${hasTemporary ? 'password' : 'password+T/P'} input...\n`);
+        // DO NOT create overlay window - let C++ service handle invisibly
+        // createOverlayWindow() calls removed to maintain invisible operation
       });
       
       hotkeyManager.onRecovery(() => {
-        console.log('🔑 Recovery hotkey triggered');
+        console.log('🔑 [ELECTRON] Recovery hotkey detected - delegating to C++ service');
+        console.log('   → C++ service will handle recovery invisibly');
+        console.log('   → No Electron overlay created to maintain invisibility');
         
-        // Create transparent overlay window on top of everything
-        console.log('   Creating transparent overlay window for recovery...');
-        createOverlayWindow({
-          isRecoveryMode: true,
-          isRelockMode: false,
-          temporaryCount: 0
-        });
-        console.log('   → Recovery overlay active');
+        // DO NOT create overlay window - let C++ service handle invisibly
       });
       
-      const result = hotkeyManager.registerHotkeys();
-      if (result) {
-        hotkeyRegistered = true;
-        console.log('✅ HotkeyManager hotkeys registered successfully');
-      } else {
-        console.error('❌ HotkeyManager hotkey registration failed');
-      }
+      // DISABLED: Let C++ service handle hotkeys for invisible operation
+      console.log('⚠️  HotkeyManager registration disabled - C++ service handles hotkeys');
+      console.log('   → This prevents Electron from interfering with invisible sequence detection');
+      console.log('   → All hotkeys managed by native C++ service for security');
+      hotkeyRegistered = true; // Mark as registered to prevent fallback attempts
+      
+      // const result = hotkeyManager.registerHotkeys(); // DISABLED
     } else {
-      console.log('⚠️ Using fallback hotkey registration');
-      const success = registerGlobalHotkey(currentHotkey);
-      if (success) {
-        hotkeyRegistered = true;
-      }
+      console.log('⚠️ HotkeyManager not available - C++ service will handle hotkeys');
+      console.log('   → Electron hotkey registration disabled for invisible operation');
+      console.log('   → All hotkeys handled by native C++ service');
+      hotkeyRegistered = true; // Mark as registered to prevent further attempts
     }
     
     // Initialize AutoLockManager
@@ -650,11 +545,10 @@ function setupIpcHandlers() {
     return true;
   });
 
-  // Close overlay window
+  // Close overlay window - DISABLED for invisible operation
   ipcMain.handle('close-overlay-window', async () => {
-    console.log('🚪 Closing overlay window');
-    closeOverlayWindow();
-    return { success: true };
+    console.log('🚪 [IPC] Close overlay requested - no overlay in invisible mode');
+    return { success: true, message: 'No overlay windows in invisible mode' };
   });
   
   // Hide folder (Linux: prepend dot to make it hidden)

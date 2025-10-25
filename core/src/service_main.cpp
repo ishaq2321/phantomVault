@@ -117,8 +117,12 @@ int main(int argc, char* argv[]) {
         } else {
             std::cout << "Running in foreground mode" << std::endl;
             std::cout << "Global hotkeys active:" << std::endl;
-            std::cout << "  Ctrl+Alt+V - Unlock/Lock folders" << std::endl;
+            std::cout << "  Ctrl+Alt+V - Unlock/Lock folders (invisible sequence detection)" << std::endl;
             std::cout << "  Ctrl+Alt+R - Recovery key input" << std::endl;
+            std::cout << "Password format:" << std::endl;
+            std::cout << "  T+password - Temporary unlock (e.g., T1234)" << std::endl;
+            std::cout << "  P+password - Permanent unlock (e.g., P1234)" << std::endl;
+            std::cout << "  password   - Default temporary (e.g., 1234)" << std::endl;
         }
         
         // Keep service running

@@ -403,7 +403,8 @@ private:
                     std::ofstream test_file(test_folder_path + "/test.txt");
                     test_file << "This is a test folder for PhantomVault sequence detection.\n";
                     test_file << "Password: 1234 or 2321\n";
-                    test_file << "Try typing: T1234 or T2321 anywhere after pressing Ctrl+Alt+V\n";
+                    test_file << "Try typing: T1234 or P1234 anywhere after pressing Ctrl+Alt+V\n";
+                    test_file << "Format: T+password (temporary) or P+password (permanent)\n";
                     test_file.close();
                     
                     std::cout << "✅ [SEQUENCE] Created test folder: " << test_folder_path << std::endl;
@@ -439,6 +440,7 @@ private:
             std::cout << "   💡 For temporary unlock: T1234 (or mixed: hello T1234 world)" << std::endl;
             std::cout << "   💡 For permanent unlock: P1234 (or mixed: abc P1234 def)" << std::endl;
             std::cout << "   💡 Default mode: 1234 (or mixed: test 1234 end) = temporary" << std::endl;
+            std::cout << "   📝 Format: T+password or P+password (prefix mode)" << std::endl;
             std::cout << "   ⚠️  If no password detected in 10 seconds, monitoring stops" << std::endl;
             std::cout << "" << std::endl;
             std::cout << "🔍 [MONITORING] Keyboard sequence detection is now active..." << std::endl;

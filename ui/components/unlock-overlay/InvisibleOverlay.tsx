@@ -63,12 +63,12 @@ export const InvisibleOverlay: React.FC<InvisibleOverlayProps> = ({
         console.log(`   (No T/P suffix needed in re-lock mode)`);
       } else {
         console.log('✨ InvisibleOverlay: Ready to accept input!');
-        console.log(`   Format: password+T (temporary) or password+P (permanent)`);
+        console.log(`   Format: T+password (temporary) or P+password (permanent)`);
       }
     }, 300);
 
-    // Parse password input to extract mode (T/P SUFFIX)
-    // UNIFIED ARCHITECTURE: password + T/P at the END (e.g., "mypasswordT" or "mypasswordP")
+    // Parse password input to extract mode (T/P PREFIX)
+    // UNIFIED ARCHITECTURE: T/P + password at the START (e.g., "T1234" or "P1234")
     const parsePasswordInput = (input: string): PasswordInput => {
       // In re-lock mode, skip T/P parsing - just use the password as-is
       if (isRelockMode) {
@@ -80,25 +80,25 @@ export const InvisibleOverlay: React.FC<InvisibleOverlayProps> = ({
         };
       }
 
-      // Normal unlock mode: parse T/P SUFFIX (last character)
-      const lastChar = input.charAt(input.length - 1).toUpperCase();
+      // Normal unlock mode: parse T/P PREFIX (first character)
+      const firstChar = input.charAt(0).toUpperCase();
       
-      if (lastChar === 'T') {
+      if (firstChar === 'T' && input.length > 1) {
         return {
-          password: input.slice(0, -1), // Remove the 'T' suffix
+          password: input.slice(1), // Remove the 'T' prefix
           mode: 'temporary',
           isRecoveryKey: isRecoveryMode,
           isRelock: false,
         };
-      } else if (lastChar === 'P') {
+      } else if (firstChar === 'P' && input.length > 1) {
         return {
-          password: input.slice(0, -1), // Remove the 'P' suffix
+          password: input.slice(1), // Remove the 'P' prefix
           mode: 'permanent',
           isRecoveryKey: isRecoveryMode,
           isRelock: false,
         };
       } else {
-        // No T/P suffix - default to temporary mode
+        // No T/P prefix - default to temporary mode
         return {
           password: input,
           mode: 'temporary',
@@ -230,7 +230,7 @@ export const InvisibleOverlay: React.FC<InvisibleOverlayProps> = ({
                 : 'Unlock Mode'}
           </p>
           {isRelockMode && <p>⚠️ No T/P suffix needed - password only</p>}
-          {!isRelockMode && <p>💡 Add T or P suffix: passwordT / passwordP</p>}
+          {!isRelockMode && <p>💡 Add T or P prefix: T+password / P+password</p>}
           <p>Press ESC to cancel • Enter to submit</p>
           <p>Auto-close in 10 seconds</p>
         </div>

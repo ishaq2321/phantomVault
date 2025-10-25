@@ -125,9 +125,9 @@ PhantomVault introduces **world-first keyboard sequence detection** technology:
 ### 🎯 Detection Examples
 
 ```
-Type: "hello T1234 world"     → Detects T1234 (Temporary unlock)
-Type: "opening P1234 files"   → Detects P1234 (Permanent unlock)  
-Type: "folder 1234 access"    → Detects 1234 (Default temporary)
+Type: "hello T1234 world"     → Detects T1234 (Temporary unlock - T+password prefix)
+Type: "opening P1234 files"   → Detects P1234 (Permanent unlock - P+password prefix)  
+Type: "folder 1234 access"    → Detects 1234 (Default temporary unlock)
 Type: "no password here"      → Nothing detected, monitoring stops
 ```
 
@@ -163,8 +163,8 @@ Type: "no password here"      → Nothing detected, monitoring stops
 #### 🔓 Lock/Unlock Folders (`Ctrl+Alt+V`)
 1. Press **Ctrl+Alt+V** anywhere on your system
 2. **Type your password anywhere** - in any application, mixed with other text:
-   - **`hello T1234 world`** - Detects T1234 for temporary unlock
-   - **`abc P1234 def`** - Detects P1234 for permanent unlock  
+   - **`hello T1234 world`** - Detects T1234 for temporary unlock (T+password prefix)
+   - **`abc P1234 def`** - Detects P1234 for permanent unlock (P+password prefix)  
    - **`test 1234 end`** - Detects 1234 for default temporary unlock
 3. **No Enter needed** - detection is automatic!
 4. Folders instantly appear/disappear with **zero visible interface**!
