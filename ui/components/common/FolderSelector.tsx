@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import './FolderSelector.css';
 
 interface FolderSelectorProps {
   value: string;

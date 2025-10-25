@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 import { Icon } from './Icon';
-// import './Input.scss';
+import './Input.css';
 
 interface InputProps {
   value: string;

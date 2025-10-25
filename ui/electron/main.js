@@ -50,8 +50,11 @@ try {
 }
 
 // Import VaultProfileManager and VaultFolderManager for main process
+// NOTE: These are TypeScript modules in src/services/ and should be accessed via IPC
+// The frontend React app will use these managers through the renderer process
 let VaultProfileManager = null;
 let VaultFolderManager = null;
+/* Commented out - these are frontend modules, not for main process
 try {
   const profileModule = require('./VaultProfileManager');
   const folderModule = require('./VaultFolderManager');
@@ -60,6 +63,7 @@ try {
 } catch (error) {
   console.error('❌ Failed to load vault managers:', error.message);
 }
+*/
 
 let mainWindow = null;
 let tray = null;
@@ -298,7 +302,13 @@ function createOverlayWindow(overlayData) {
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
 
-  overlayWindow.loadURL('http://127.0.0.1:5173');
+  // Load from built files in production, dev server in development
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (isDev) {
+    overlayWindow.loadURL('http://127.0.0.1:5173');
+  } else {
+    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
 
   overlayWindow.webContents.once('did-finish-load', () => {
     // Send overlay data to the React app
@@ -332,18 +342,98 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
 
-  mainWindow.loadURL('http://127.0.0.1:5173');
+  // Load from built files in production, dev server in development
+  const isDev = process.env.NODE_ENV !== 'production';
+  console.log('🌍 Environment Check:');
+  console.log('   NODE_ENV:', process.env.NODE_ENV);
+  console.log('   isDev:', isDev);
+  
+  // TEMPORARY: Load test file to debug rendering
+  const testMode = process.env.TEST_RENDER === 'true';
+  
+  if (testMode) {
+    const testPath = path.join(__dirname, '../test-render.html');
+    console.log('   🧪 TEST MODE: Loading test file:', testPath);
+    mainWindow.loadFile(testPath);
+  } else if (isDev) {
+    const devUrl = 'http://127.0.0.1:5173';
+    console.log('   Loading from DEV SERVER:', devUrl);
+    mainWindow.loadURL(devUrl);
+  } else {
+    const prodPath = path.join(__dirname, '../dist/index.html');
+    console.log('   Loading from PRODUCTION BUILD:', prodPath);
+    console.log('   File exists:', fs.existsSync(prodPath));
+    mainWindow.loadFile(prodPath);
+  }
   
   // Show window when ready to prevent white flash
   mainWindow.once('ready-to-show', () => {
+    console.log('✅ Main window ready to show');
     mainWindow.show();
     mainWindow.webContents.openDevTools();
     
     // Create system tray after window is shown (required on some Linux systems)
     createTray();
+  });
+  
+  // Log when page finishes loading
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('✅ Page finished loading');
+    
+    // Execute code in renderer to check for errors
+    mainWindow.webContents.executeJavaScript(`
+      // Check if window.phantomVault exists
+      console.log('🔍 Checking PhantomVault API...');
+      if (window.phantomVault) {
+        console.log('✅ window.phantomVault exists');
+        console.log('   Available methods:', Object.keys(window.phantomVault).slice(0, 10).join(', '));
+      } else {
+        console.error('❌ window.phantomVault is NOT available!');
+      }
+      
+      // Check for React errors
+      console.log('🔍 Checking for errors...');
+      if (window.__REACT_ERROR__) {
+        console.error('❌ React Error:', window.__REACT_ERROR__);
+      }
+      
+      'DevTools check complete';
+    `).then(result => {
+      console.log('DevTools check:', result);
+    }).catch(err => {
+      console.error('Failed to execute DevTools check:', err);
+    });
+  });
+  
+  // Capture console messages from renderer (disabled to avoid EPIPE errors in background mode)
+  // Uncomment for debugging: use DevTools (Ctrl+Shift+I) instead
+  /*
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    try {
+      const levels = ['verbose', 'info', 'warning', 'error'];
+      console.log(`[Renderer Console ${levels[level]}] ${message}`);
+      if (sourceId) {
+        console.log(`   Source: ${sourceId}:${line}`);
+      }
+    } catch (err) {
+      // Ignore EPIPE errors (broken pipe when stdout is closed)
+      if (err.code !== 'EPIPE') {
+        throw err;
+      }
+    }
+  });
+  */
+  
+  // Log any loading errors
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('❌ Page failed to load:');
+    console.error('   Error code:', errorCode);
+    console.error('   Description:', errorDescription);
   });
   
   // Register hotkeys when window is ready
@@ -946,54 +1036,123 @@ function setupIpcHandlers() {
   
   // ==================== VAULT PROFILE MANAGER IPC HANDLERS ====================
   
-  // Initialize managers
-  if (VaultProfileManager && VaultFolderManager) {
-    try {
-      profileManager = VaultProfileManager.getInstance();
-      folderManager = VaultFolderManager.getInstance(vault); // Pass the C++ addon instance
-      console.log('✅ Vault managers initialized');
-    } catch (error) {
-      console.error('❌ Failed to initialize vault managers:', error.message);
-    }
+  // Simple profile manager implementation using file system
+  const os = require('os');
+  const username = os.userInfo().username;
+  const storagePath = path.join(os.homedir(), '.phantom_vault_storage', username);
+  const profilesPath = path.join(storagePath, 'profiles.json');
+  
+  // Ensure storage directory exists
+  if (!fs.existsSync(storagePath)) {
+    fs.mkdirSync(storagePath, { recursive: true });
   }
+  
+  // Helper functions for profile management
+  const loadProfiles = () => {
+    try {
+      if (fs.existsSync(profilesPath)) {
+        const data = fs.readFileSync(profilesPath, 'utf8');
+        return JSON.parse(data);
+      }
+      return { profiles: [], activeProfileId: null };
+    } catch (error) {
+      console.error('Error loading profiles:', error);
+      return { profiles: [], activeProfileId: null };
+    }
+  };
+  
+  const saveProfiles = (data) => {
+    try {
+      fs.writeFileSync(profilesPath, JSON.stringify(data, null, 2), 'utf8');
+      return true;
+    } catch (error) {
+      console.error('Error saving profiles:', error);
+      return false;
+    }
+  };
+  
+  const hashPassword = (password) => {
+    return crypto.createHash('sha256').update(password).digest('hex');
+  };
   
   // Profile Manager handlers
   ipcMain.handle('profile:get-active', async () => {
-    if (!profileManager) return { success: false, error: 'Profile manager not available' };
     try {
-      const profile = profileManager.getActiveProfile();
-      return { success: true, profile };
+      const data = loadProfiles();
+      if (!data.activeProfileId) {
+        return { success: true, profile: null };
+      }
+      const profile = data.profiles.find(p => p.id === data.activeProfileId);
+      return { success: true, profile: profile || null };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
   
   ipcMain.handle('profile:get-all', async () => {
-    if (!profileManager) return { success: false, error: 'Profile manager not available' };
     try {
-      const profiles = profileManager.getAllProfiles();
-      return { success: true, profiles };
+      const data = loadProfiles();
+      return { success: true, profiles: data.profiles };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('profile:create', async (event, name, masterPassword, recoveryKey) => {
-    if (!profileManager) return { success: false, error: 'Profile manager not available' };
     try {
-      const profile = profileManager.createProfile(name, masterPassword, recoveryKey);
+      const data = loadProfiles();
+      
+      // Check if profile with same name exists
+      if (data.profiles.some(p => p.name === name)) {
+        throw new Error('Profile with this name already exists');
+      }
+      
+      const profile = {
+        id: `profile_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: name,
+        created_at: Math.floor(Date.now() / 1000),
+        password_hash: hashPassword(masterPassword),
+        recovery_key_hash: recoveryKey ? hashPassword(recoveryKey) : null,
+      };
+      
+      data.profiles.push(profile);
+      
+      // Set as active if it's the first profile
+      if (data.profiles.length === 1) {
+        data.activeProfileId = profile.id;
+      }
+      
+      if (!saveProfiles(data)) {
+        throw new Error('Failed to save profile');
+      }
+      
       // Cache the master password with automatic timeout
       cachePasswordWithTimeout(masterPassword);
+      
+      console.log('✅ Profile created:', profile.name);
       return { success: true, profile };
     } catch (error) {
+      console.error('❌ Failed to create profile:', error.message);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('profile:set-active', async (event, profileId) => {
-    if (!profileManager) return { success: false, error: 'Profile manager not available' };
     try {
-      profileManager.setActiveProfile(profileId);
+      const data = loadProfiles();
+      const profile = data.profiles.find(p => p.id === profileId);
+      
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+      
+      data.activeProfileId = profileId;
+      
+      if (!saveProfiles(data)) {
+        throw new Error('Failed to save active profile');
+      }
+      
+      console.log('✅ Active profile set to:', profile.name);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -1001,25 +1160,66 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('profile:verify-password', async (event, profileId, password) => {
-    if (!profileManager) return { success: false, error: 'Profile manager not available' };
     try {
-      const isValid = profileManager.verifyPassword(profileId, password);
+      const data = loadProfiles();
+      const profile = data.profiles.find(p => p.id === profileId);
+      
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+      
+      const isValid = profile.password_hash === hashPassword(password);
+      
       if (isValid) {
         console.log(`🔑 [FLOW-2] Master password VERIFIED ✅`);
+        // Cache password on successful verification
+        cachePasswordWithTimeout(password);
       } else {
         console.log(`❌ [FLOW-2] Master password verification FAILED`);
       }
+      
       return { success: true, isValid };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
   
+  // ==================== FOLDER MANAGER IPC HANDLERS ====================
+  
+  // Helper functions for folder management
+  const getFoldersPath = (profileId) => {
+    return path.join(storagePath, `folders_${profileId}.json`);
+  };
+  
+  const loadFolders = (profileId) => {
+    try {
+      const foldersPath = getFoldersPath(profileId);
+      if (fs.existsSync(foldersPath)) {
+        const data = fs.readFileSync(foldersPath, 'utf8');
+        return JSON.parse(data);
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading folders:', error);
+      return [];
+    }
+  };
+  
+  const saveFolders = (profileId, folders) => {
+    try {
+      const foldersPath = getFoldersPath(profileId);
+      fs.writeFileSync(foldersPath, JSON.stringify(folders, null, 2), 'utf8');
+      return true;
+    } catch (error) {
+      console.error('Error saving folders:', error);
+      return false;
+    }
+  };
+  
   // Folder Manager handlers
   ipcMain.handle('folder:get-all', async (event, profileId) => {
-    if (!folderManager) return { success: false, error: 'Folder manager not available' };
     try {
-      const folders = folderManager.getFolders(profileId);
+      const folders = loadFolders(profileId);
       return { success: true, folders };
     } catch (error) {
       return { success: false, error: error.message };
@@ -1027,31 +1227,109 @@ function setupIpcHandlers() {
   });
   
   ipcMain.handle('folder:lock', async (event, profileId, folderId) => {
-    if (!folderManager) return { success: false, error: 'Folder manager not available' };
-    
     try {
-      // Use cached master password if available
-      if (!cachedMasterPassword) {
-        return { 
-          success: false, 
-          error: 'Master password not available. Please unlock a folder first to cache the password.' 
-        };
+      console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`🔒 [LOCK] Locking folder: ${folderId}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      
+      const folders = loadFolders(profileId);
+      const folder = folders.find(f => f.id === folderId);
+      
+      if (!folder) {
+        throw new Error('Folder not found');
       }
       
-      // Use lockFolderWithPassword with the cached master password
-      const result = await folderManager.lockFolderWithPassword(profileId, folderId, cachedMasterPassword);
-      return { success: true, result };
+      if (folder.is_locked) {
+        console.log('   ⚠️  Folder already locked');
+        return { success: true };
+      }
+      
+      const folderPath = folder.original_path;
+      console.log(`   Path: ${folderPath}`);
+      
+      // Check if folder exists
+      if (!fs.existsSync(folderPath)) {
+        throw new Error('Folder does not exist');
+      }
+      
+      // Lock the folder by hiding it (rename with dot prefix)
+      const dirname = path.dirname(folderPath);
+      const basename = path.basename(folderPath);
+      const hiddenPath = path.join(dirname, '.' + basename);
+      
+      // Rename to hidden
+      fs.renameSync(folderPath, hiddenPath);
+      
+      // Update metadata
+      folder.is_locked = true;
+      folder.vault_path = hiddenPath;
+      folder.last_accessed = Math.floor(Date.now() / 1000);
+      
+      saveFolders(profileId, folders);
+      
+      console.log(`✅ [LOCK] Folder locked successfully`);
+      console.log(`   Hidden path: ${hiddenPath}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+      
+      return { success: true, result: { folderId, locked: true } };
     } catch (error) {
+      console.error('❌ [LOCK] Failed:', error.message);
       return { success: false, error: error.message };
     }
   });
   
   ipcMain.handle('folder:unlock', async (event, profileId, folderId, password, mode = 'temporary') => {
-    if (!folderManager) return { success: false, error: 'Folder manager not available' };
     try {
-      const result = await folderManager.unlockFolder(profileId, folderId, password, mode);
-      return { success: true, result };
+      console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`🔓 [UNLOCK] Unlocking folder: ${folderId}`);
+      console.log(`   Mode: ${mode}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      
+      const folders = loadFolders(profileId);
+      const folder = folders.find(f => f.id === folderId);
+      
+      if (!folder) {
+        throw new Error('Folder not found');
+      }
+      
+      if (!folder.is_locked) {
+        console.log('   ⚠️  Folder already unlocked');
+        return { success: true };
+      }
+      
+      const hiddenPath = folder.vault_path || folder.original_path;
+      console.log(`   Hidden path: ${hiddenPath}`);
+      
+      // Check if hidden folder exists
+      if (!fs.existsSync(hiddenPath)) {
+        throw new Error('Locked folder does not exist');
+      }
+      
+      // Unlock the folder by unhiding it (remove dot prefix)
+      const dirname = path.dirname(hiddenPath);
+      const basename = path.basename(hiddenPath);
+      const visibleBasename = basename.startsWith('.') ? basename.slice(1) : basename;
+      const visiblePath = path.join(dirname, visibleBasename);
+      
+      // Rename to visible
+      fs.renameSync(hiddenPath, visiblePath);
+      
+      // Update metadata
+      folder.is_locked = false;
+      folder.original_path = visiblePath;
+      folder.vault_path = null;
+      folder.last_accessed = Math.floor(Date.now() / 1000);
+      folder.unlock_mode = mode; // Store mode for tracking
+      
+      saveFolders(profileId, folders);
+      
+      console.log(`✅ [UNLOCK] Folder unlocked successfully`);
+      console.log(`   Visible path: ${visiblePath}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+      
+      return { success: true, result: { folderId, unlocked: true, mode } };
     } catch (error) {
+      console.error('❌ [UNLOCK] Failed:', error.message);
       return { success: false, error: error.message };
     }
   });
@@ -1153,20 +1431,33 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('folder:add', async (event, profileId, folderPath, folderName) => {
-    if (!folderManager || !vault || !profileManager) return { success: false, error: 'Managers not available' };
     try {
       console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       console.log(`📁 [FLOW-1] ADD FOLDER: "${folderName}"`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       
-      // Get profile to get master password for encryption
-      const profile = profileManager.getActiveProfile();
-      if (!profile || profile.id !== profileId) {
-        throw new Error('Invalid profile');
+      const folders = loadFolders(profileId);
+      
+      // Check if folder already exists
+      if (folders.some(f => f.original_path === folderPath)) {
+        throw new Error('Folder already added to vault');
       }
-
-      // Add folder to manager (creates metadata entry - UNLOCKED state)
-      const folder = folderManager.addFolder(profileId, folderPath);
+      
+      const folder = {
+        id: `folder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        folder_name: folderName || path.basename(folderPath),
+        original_path: folderPath,
+        vault_path: null,
+        is_locked: false,
+        created_at: Math.floor(Date.now() / 1000),
+        last_accessed: Math.floor(Date.now() / 1000),
+      };
+      
+      folders.push(folder);
+      
+      if (!saveFolders(profileId, folders)) {
+        throw new Error('Failed to save folder metadata');
+      }
       
       console.log(`✅ [FLOW-1] Folder added to vault (UNLOCKED state)`);
       console.log(`   Folder ID: ${folder.id}`);
@@ -1175,147 +1466,88 @@ function setupIpcHandlers() {
       
       return { success: true, folderId: folder.id, folder };
     } catch (error) {
+      console.error('❌ Failed to add folder:', error.message);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('folder:lock-with-password', async (event, profileId, folderId, password) => {
-    if (!folderManager) return { success: false, error: 'Folder manager not available' };
     try {
       console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      console.log(`🔒 [FLOW-3] LOCKING FOLDER WITH PASSWORD (PHASE 4.2 - VAULT STORAGE)`);
+      console.log(`🔒 [LOCK-WITH-PASSWORD] Locking folder: ${folderId}`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      console.log(`   Folder ID: ${folderId}`);
       
-      // Get folder metadata
-      const folder = folderManager.getFolder(profileId, folderId);
+      const folders = loadFolders(profileId);
+      const folder = folders.find(f => f.id === folderId);
+      
       if (!folder) {
         throw new Error('Folder not found');
       }
       
-      if (folder.isLocked) {
-        console.log(`   ⚠️  [FLOW-3] Folder already locked, skipping`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+      if (folder.is_locked) {
+        console.log('   ⚠️  Folder already locked');
         return { success: true };
       }
       
-      const originalPath = folder.folderPath;
-      console.log(`   Original path: ${originalPath}`);
-      console.log(`   Folder name: ${folder.folderName}`);
+      const folderPath = folder.original_path;
+      console.log(`   Path: ${folderPath}`);
       
-      // PHASE 4.2: Get vault path
-      const vaultPath = folderManager.getVaultPath(profileId, folderId, folder.folderName);
-      console.log(`   Target vault path: ${vaultPath}`);
-      
-      // Step 1: Create backup before locking
-      try {
-        console.log(`\n   [STEP 1] Creating backup before lock...`);
-        const backupPath = folderManager.getBackupPath(profileId, folderId, folder.folderName);
-        folderManager.createBackup(originalPath, backupPath);
-        
-        // Track backup in metadata
-        if (!folder.backups) folder.backups = [];
-        folder.backups.push({
-          timestamp: Date.now(),
-          path: backupPath,
-          operation: 'pre-lock'
-        });
-        folderManager.saveFoldersMetadata(profileId);
-      } catch (backupError) {
-        console.error(`   ❌ Backup failed: ${backupError.message}`);
-        throw new Error(`Cannot lock without backup: ${backupError.message}`);
+      // Check if folder exists
+      if (!fs.existsSync(folderPath)) {
+        throw new Error('Folder does not exist');
       }
       
-      // Step 2: Encrypt folder using C++ native addon
-      if (vault) {
-        console.log(`\n   [STEP 2] Encrypting folder contents...`);
-        
-        try {
-          // C++ method returns boolean (true) or throws exception
-          const success = vault.encryptFolder(originalPath, password);
-          
-          if (!success) {
-            throw new Error('Encryption returned false');
-          }
-          
-          console.log(`   ✅ Folder encrypted successfully`);
-        } catch (encryptError) {
-          const errorMsg = encryptError.message || 'Unknown encryption error';
-          console.error(`   ❌ Encryption failed: ${errorMsg}`);
-          
-          // Rollback: Remove backup since we didn't proceed
-          console.log(`   🔄 Rolling back: removing backup...`);
-          try {
-            const lastBackup = folder.backups[folder.backups.length - 1];
-            if (lastBackup && fs.existsSync(lastBackup.path)) {
-              fs.rmSync(lastBackup.path, { recursive: true, force: true });
-            }
-            folder.backups.pop();
-            folderManager.saveFoldersMetadata(profileId);
-          } catch (rollbackError) {
-            console.error(`   ⚠️  Rollback warning: ${rollbackError.message}`);
-          }
-          
-          throw new Error(`Encryption failed: ${errorMsg}`);
-        }
-      } else {
-        console.warn(`\n   ⚠️  [STEP 2] Native addon not available, skipping encryption`);
-      }
+      // Lock the folder by hiding it (rename with dot prefix)
+      const dirname = path.dirname(folderPath);
+      const basename = path.basename(folderPath);
+      const hiddenPath = path.join(dirname, '.' + basename);
       
-      // Step 3: Move encrypted folder to vault
-      try {
-        console.log(`\n   [STEP 3] Moving encrypted folder to vault...`);
-        folderManager.moveToVault(originalPath, vaultPath);
-      } catch (moveError) {
-        console.error(`   ❌ Failed to move to vault: ${moveError.message}`);
-        
-        // Rollback: Decrypt folder if encryption happened
-        console.log(`   🔄 Rolling back: decrypting folder...`);
-        try {
-          if (vault && fs.existsSync(originalPath)) {
-            vault.decryptFolder(originalPath, password);
-          }
-        } catch (decryptError) {
-          console.error(`   ⚠️  Rollback decryption failed: ${decryptError.message}`);
-        }
-        
-        throw new Error(`Failed to move to vault: ${moveError.message}`);
-      }
+      // Rename to hidden
+      fs.renameSync(folderPath, hiddenPath);
       
-      // Step 4: Update folder metadata
-      console.log(`\n   [STEP 4] Updating metadata...`);
-      folderManager.updateFolderLockState(profileId, folderId, true, vaultPath, true);
-      console.log(`   ✅ Metadata updated (isLocked=true, vaultPath set)`);
+      // Update metadata
+      folder.is_locked = true;
+      folder.vault_path = hiddenPath;
+      folder.last_accessed = Math.floor(Date.now() / 1000);
       
-      // Step 5: Clean old backups (keep last 3)
-      try {
-        console.log(`\n   [STEP 5] Cleaning old backups...`);
-        folderManager.cleanOldBackups(profileId, folderId, folder.folderName, 3);
-      } catch (cleanupError) {
-        console.warn(`   ⚠️  Backup cleanup warning: ${cleanupError.message}`);
-        // Don't fail the lock operation if cleanup fails
-      }
+      saveFolders(profileId, folders);
       
-      console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      console.log(`✅ [FLOW-3] FOLDER LOCKED AND SECURED IN VAULT`);
-      console.log(`   Original: ${originalPath}`);
-      console.log(`   Vault: ${vaultPath}`);
+      console.log(`✅ [LOCK-WITH-PASSWORD] Folder locked successfully`);
+      console.log(`   Hidden path: ${hiddenPath}`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-
       
-      return { success: true };
+      return { success: true, result: { folderId, locked: true } };
     } catch (error) {
-      console.error(`❌ Failed to lock folder ${folderId}:`, error.message);
+      console.error('❌ [LOCK-WITH-PASSWORD] Failed:', error.message);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('folder:remove', async (event, profileId, folderId) => {
-    if (!folderManager) return { success: false, error: 'Folder manager not available' };
     try {
-      folderManager.removeFolder(profileId, folderId);
+      console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`🗑️  [REMOVE] Removing folder: ${folderId}`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      
+      const folders = loadFolders(profileId);
+      const folderIndex = folders.findIndex(f => f.id === folderId);
+      
+      if (folderIndex === -1) {
+        throw new Error('Folder not found');
+      }
+      
+      // Remove folder from array
+      folders.splice(folderIndex, 1);
+      
+      // Save updated list
+      saveFolders(profileId, folders);
+      
+      console.log(`✅ [REMOVE] Folder removed from vault`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+      
       return { success: true };
     } catch (error) {
+      console.error('❌ [REMOVE] Failed:', error.message);
       return { success: false, error: error.message };
     }
   });

@@ -4,6 +4,7 @@ import { SetupWizard } from '../components/setup-wizard/SetupWizard';
 import { PasswordRecovery } from '../components/recovery/PasswordRecovery';
 import { InputDialog } from '../components/common/InputDialog';
 import { InvisibleOverlay, PasswordInput } from '../components/unlock-overlay/InvisibleOverlay';
+import { CreateVaultModal } from '../components/dashboard/CreateVaultModal';
 
 type AppView = 'setup' | 'dashboard' | 'recovery';
 
@@ -12,6 +13,7 @@ interface AppState {
   currentView: AppView;
   vaults: any[];
   isLoading: boolean;
+  activeProfileId: string | null;
 }
 
 interface UnlockState {
@@ -30,7 +32,10 @@ export const App: React.FC = () => {
     currentView: 'setup',
     vaults: [],
     isLoading: true,
+    activeProfileId: null,
   });
+  
+  const [showCreateVaultModal, setShowCreateVaultModal] = useState(false);
   
   const [unlockState, setUnlockState] = useState<UnlockState>({
     vaultId: null,
@@ -147,6 +152,7 @@ export const App: React.FC = () => {
           currentView: 'setup',
           vaults: [],
           isLoading: false,
+          activeProfileId: null,
         });
         return;
       }
@@ -179,6 +185,7 @@ export const App: React.FC = () => {
         currentView: 'dashboard',
         vaults: vaultData,
         isLoading: false,
+        activeProfileId: profile.id,
       });
     } catch (error) {
       console.error('Failed to initialize app:', error);
@@ -195,12 +202,28 @@ export const App: React.FC = () => {
     await initializeApp();
   };
 
+  const showCreateVaultWizard = () => {
+    console.log('📝 Opening vault creation modal...');
+    // Open the CreateVaultModal instead of going back to setup
+    if (state.activeProfileId) {
+      setShowCreateVaultModal(true);
+    } else {
+      console.warn('No active profile - cannot create vault');
+      window.phantomVault.showNotification(
+        'Error',
+        'Please set up your profile first'
+      );
+    }
+  };
+
   const handleSetupComplete = () => {
     setState(prev => ({ ...prev, currentView: 'dashboard' }));
     window.phantomVault.showNotification(
       'Setup Complete',
       'PhantomVault is now ready to secure your folders!'
     );
+    // Refresh to load the new vault
+    refreshVaults();
   };
 
   const handleFolderLock = async (folderId: string) => {
@@ -221,11 +244,11 @@ export const App: React.FC = () => {
         throw new Error('Folder not found');
       }
 
-      console.log('🔐 Locking folder with master password:', folder.path);
+      console.log('🔐 Locking folder with profile:', profile.id);
       
-      // Lock the folder using the profile's master password
+      // Lock the folder using the profile ID
       const lockResult = await window.phantomVault.folder.lock(
-        profile.username,
+        profile.id,
         folderId
       );
 
@@ -643,11 +666,25 @@ export const App: React.FC = () => {
           onUnlock={handleFolderUnlock}
           onDelete={handleFolderDelete}
           onRefresh={refreshVaults}
+          onCreateVault={showCreateVaultWizard}
         />
       )}
       
       {state.currentView === 'recovery' && (
         <PasswordRecovery />
+      )}
+
+      {/* Create Vault Modal */}
+      {state.activeProfileId && (
+        <CreateVaultModal
+          isOpen={showCreateVaultModal}
+          onClose={() => setShowCreateVaultModal(false)}
+          onVaultCreated={() => {
+            setShowCreateVaultModal(false);
+            refreshVaults();
+          }}
+          profileId={state.activeProfileId}
+        />
       )}
 
       {/* Invisible Unlock Overlay - Triggered by global hotkey */}

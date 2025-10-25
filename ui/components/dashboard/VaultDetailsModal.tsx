@@ -9,6 +9,7 @@ import { VaultInfo, VaultAction } from '../../types';
 import { VaultMetadata } from './VaultMetadata';
 import { VaultStatusAnimation } from './VaultStatusAnimation';
 import { useVaultStatusAnimations } from '../../src/hooks';
+import './VaultDetailsModal.css';
 
 interface VaultDetailsModalProps {
   vault: VaultInfo;

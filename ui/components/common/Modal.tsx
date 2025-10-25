@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Icon } from './Icon';
 import { Button } from './Button';
-// import './Modal.scss';
+import './Modal.css';
 
 interface ModalProps {
   isOpen: boolean;

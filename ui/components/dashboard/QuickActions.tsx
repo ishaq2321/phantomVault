@@ -11,6 +11,7 @@ interface QuickActionsProps {
   selectedCount: number;
   onBulkAction: (action: VaultAction) => void;
   onRefresh: () => void;
+  onCreateVault?: () => void;
   loading?: boolean;
 }
 
@@ -21,6 +22,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   selectedCount,
   onBulkAction,
   onRefresh,
+  onCreateVault,
   loading = false,
 }) => {
   return (
@@ -55,7 +57,10 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
       {/* Standard Actions */}
       <div className="standard-actions">
         <button
-          onClick={onRefresh}
+          onClick={() => {
+            console.log('🔄 Refresh button clicked!');
+            onRefresh();
+          }}
           disabled={loading}
           className="action-button action-refresh"
           title="Refresh vault list"
@@ -66,9 +71,12 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         
         <button
           onClick={() => {
-            // This would typically open the vault creation wizard
-            // For now, we'll just log it
-            console.log('Create new vault clicked');
+            console.log('➕ New Vault button clicked!');
+            if (onCreateVault) {
+              onCreateVault();
+            } else {
+              alert('New Vault button clicked! This feature needs to be connected to the create vault dialog.');
+            }
           }}
           disabled={loading}
           className="action-button action-create"

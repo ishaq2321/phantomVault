@@ -1,6 +1,6 @@
 import React from 'react';
 import { Icon } from './Icon';
-// import './Button.scss';
+import './Button.css';
 
 interface ButtonProps {
   children: React.ReactNode;

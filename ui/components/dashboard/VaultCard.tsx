@@ -14,6 +14,7 @@ import {
 import { PasswordPromptModal } from '../common/PasswordPromptModal';
 import { VaultStatusAnimation } from './VaultStatusAnimation';
 import { VaultMetadata, MetadataTooltip } from './VaultMetadata';
+import './VaultCard.css';
 import { useVaultStatusAnimations } from '../../src/hooks';
 
 interface VaultCardProps {
@@ -166,11 +167,10 @@ export const VaultCard: React.FC<VaultCardProps> = ({
         break;
     }
 
-    // Always show view details, edit and delete actions (when not loading)
+    // Always show view details and delete actions (when not loading)
     if (!['loading', 'encrypting', 'decrypting'].includes(vault.status)) {
       actions.push(
         { action: 'view' as VaultAction, label: 'Details', icon: '👁️', variant: 'secondary' as const },
-        { action: 'edit' as VaultAction, label: 'Edit', icon: '✏️', variant: 'secondary' as const },
         { action: 'delete' as VaultAction, label: 'Delete', icon: '🗑️', variant: 'danger' as const }
       );
     }
