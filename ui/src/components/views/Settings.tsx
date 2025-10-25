@@ -3,12 +3,12 @@
  */
 
 import React from 'react';
+import { Settings as AdvancedSettings } from '../../../components/settings/Settings';
 
 export const Settings: React.FC = () => {
   return (
-    <div style={{ padding: '2rem' }}>
-      <h1>⚙️ Settings</h1>
-      <p>Settings interface coming soon...</p>
+    <div style={{ padding: '1rem', height: '100%' }}>
+      <AdvancedSettings />
     </div>
   );
 };

@@ -6,76 +6,72 @@
 
 import React from 'react';
 import { TestRestart } from './TestRestart';
+import './Dashboard.css';
 
 export const Dashboard: React.FC = () => {
   return (
-    <div style={{ padding: '2rem' }}>
-      <h1>🔐 PhantomVault Dashboard</h1>
-      <p>Advanced dashboard is loading...</p>
+    <div className="dashboard">
+      <h1 className="dashboard-title">🔐 PhantomVault Dashboard</h1>
+      <p className="dashboard-subtitle">Secure folder management with invisible encryption</p>
       
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-        gap: '1rem',
-        marginTop: '2rem'
-      }}>
-        <div style={{ 
-          padding: '1rem', 
-          border: '1px solid #ddd', 
-          borderRadius: '8px',
-          background: '#f9f9f9'
-        }}>
-          <h3>📊 Vault Statistics</h3>
-          <p>Total Vaults: 0</p>
-          <p>Locked: 0</p>
-          <p>Unlocked: 0</p>
+      <div className="dashboard-grid">
+        <div className="dashboard-card">
+          <h3 className="card-title">
+            📊 Vault Statistics
+          </h3>
+          <div className="card-content">
+            <p><strong>Total Vaults:</strong> 0</p>
+            <p><strong>Locked:</strong> 0</p>
+            <p><strong>Unlocked:</strong> 0</p>
+          </div>
         </div>
         
-        <div style={{ 
-          padding: '1rem', 
-          border: '1px solid #ddd', 
-          borderRadius: '8px',
-          background: '#f9f9f9'
-        }}>
-          <h3>🔧 Service Status</h3>
-          <p>C++ Service: Connected</p>
-          <p>Encryption: Active</p>
-          <p>Hotkeys: Registered</p>
+        <div className="dashboard-card">
+          <h3 className="card-title">
+            🔧 Service Status
+          </h3>
+          <div className="card-content">
+            <p>
+              <span className="status-indicator connected">
+                <span className="status-dot"></span>
+                C++ Service: Connected
+              </span>
+            </p>
+            <p>
+              <span className="status-indicator active">
+                <span className="status-dot"></span>
+                Encryption: Active
+              </span>
+            </p>
+            <p>
+              <span className="status-indicator active">
+                <span className="status-dot"></span>
+                Hotkeys: Registered
+              </span>
+            </p>
+          </div>
         </div>
         
-        <div style={{ 
-          padding: '1rem', 
-          border: '1px solid #ddd', 
-          borderRadius: '8px',
-          background: '#f9f9f9'
-        }}>
-          <h3>⚡ Quick Actions</h3>
-          <button style={{ 
-            padding: '0.5rem 1rem', 
-            margin: '0.25rem',
-            border: '1px solid #007bff',
-            background: '#007bff',
-            color: 'white',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}>
-            Add Vault
-          </button>
-          <button style={{ 
-            padding: '0.5rem 1rem', 
-            margin: '0.25rem',
-            border: '1px solid #28a745',
-            background: '#28a745',
-            color: 'white',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}>
-            Unlock All
-          </button>
+        <div className="dashboard-card">
+          <h3 className="card-title">
+            ⚡ Quick Actions
+          </h3>
+          <div className="card-content">
+            <div className="quick-actions">
+              <button className="action-button">
+                ➕ Add Vault
+              </button>
+              <button className="action-button secondary">
+                🔓 Unlock All
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       
-      <TestRestart />
+      <div className="test-section">
+        <TestRestart />
+      </div>
     </div>
   );
 };

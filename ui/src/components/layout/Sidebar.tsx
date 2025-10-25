@@ -100,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={onToggle}
-          className="sidebar-toggle\"
+          className="sidebar-toggle"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? '▶' : '◀'}

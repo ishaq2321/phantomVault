@@ -89,8 +89,8 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="header-left">
         <button 
           onClick={onSidebarToggle}
-          className="sidebar-toggle-button\"
-          title="Toggle sidebar (Ctrl+B)\"
+          className="sidebar-toggle-button"
+          title="Toggle sidebar (Ctrl+B)"
         >
           ☰
         </button>
@@ -109,12 +109,12 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Search Bar (for future implementation) */}
         <div className="search-container">
           <input
-            type="text\"
-            placeholder="Search vaults, logs, settings...\"
-            className="search-input\"
+            type="text"
+            placeholder="Search vaults, logs, settings..."
+            className="search-input"
             disabled
           />
-          <button className="search-button\" disabled>
+          <button className="search-button" disabled>
             🔍
           </button>
         </div>
@@ -144,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Theme Toggle */}
           <button
             onClick={handleThemeToggle}
-            className="control-button\"
+            className="control-button"
             title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
           >
             {theme === 'light' ? '🌙' : '☀️'}
