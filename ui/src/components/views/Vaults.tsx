@@ -18,36 +18,10 @@ export const Vaults: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate loading vaults
-    setTimeout(() => {
-      setVaults([
-        {
-          id: '1',
-          name: 'Personal Documents',
-          path: '/home/user/Documents/Personal',
-          isLocked: true,
-          size: '2.3 GB',
-          lastModified: '2 hours ago'
-        },
-        {
-          id: '2', 
-          name: 'Work Projects',
-          path: '/home/user/Work/Projects',
-          isLocked: false,
-          size: '1.8 GB',
-          lastModified: '1 day ago'
-        },
-        {
-          id: '3',
-          name: 'Photos Archive',
-          path: '/home/user/Pictures/Archive',
-          isLocked: true,
-          size: '5.2 GB',
-          lastModified: '3 days ago'
-        }
-      ]);
-      setLoading(false);
-    }, 1000);
+    // Load real vaults from the service
+    // For now, start with empty array - will be populated by real vault data
+    setVaults([]);
+    setLoading(false);
   }, []);
 
   if (loading) {

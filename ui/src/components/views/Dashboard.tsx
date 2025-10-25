@@ -31,24 +31,29 @@ export const Dashboard: React.FC = () => {
             🔧 Service Status
           </h3>
           <div className="card-content">
-            <p>
-              <span className="status-indicator connected">
-                <span className="status-dot"></span>
-                C++ Service: Connected
-              </span>
-            </p>
-            <p>
-              <span className="status-indicator active">
-                <span className="status-dot"></span>
-                Encryption: Active
-              </span>
-            </p>
-            <p>
-              <span className="status-indicator active">
-                <span className="status-dot"></span>
-                Hotkeys: Registered
-              </span>
-            </p>
+            <div className="service-status-list">
+              <div className="service-status-item">
+                <span className="service-label">C++ Service:</span>
+                <span className="status-indicator connected">
+                  <span className="status-dot"></span>
+                  Connected
+                </span>
+              </div>
+              <div className="service-status-item">
+                <span className="service-label">Encryption:</span>
+                <span className="status-indicator active">
+                  <span className="status-dot"></span>
+                  Active
+                </span>
+              </div>
+              <div className="service-status-item">
+                <span className="service-label">Hotkeys:</span>
+                <span className="status-indicator active">
+                  <span className="status-dot"></span>
+                  Registered
+                </span>
+              </div>
+            </div>
           </div>
         </div>
         

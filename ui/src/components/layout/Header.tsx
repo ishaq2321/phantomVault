@@ -153,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Fullscreen Toggle */}
           <button
             onClick={onFullscreenToggle}
-            className="control-button\"
+            className="control-button"
             title={`${isFullscreen ? 'Exit' : 'Enter'} fullscreen (Ctrl+F)`}
           >
             {isFullscreen ? '🗗' : '🗖'}
@@ -161,8 +161,8 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Notifications */}
           <button
-            className="control-button\"
-            title="Notifications\"
+            className="control-button"
+            title="Notifications"
             onClick={() => {
               // In a real implementation, this would show notifications
               console.log('Opening notifications...');
@@ -175,8 +175,8 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="user-menu-container">
             <button
               onClick={handleUserMenuToggle}
-              className="user-menu-button\"
-              title="User menu\"
+              className="user-menu-button"
+              title="User menu"
             >
               <div className="user-avatar">
                 <span className="avatar-icon">👤</span>
@@ -215,7 +215,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="menu-text">Preferences</span>
                   </button>
                   
-                  <div className="menu-separator\" />
+                  <div className="menu-separator" />
                   
                   <button className="menu-item">
                     <span className="menu-icon">❓</span>
@@ -227,7 +227,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="menu-text">About</span>
                   </button>
                   
-                  <div className="menu-separator\" />
+                  <div className="menu-separator" />
                   
                   <button className="menu-item danger">
                     <span className="menu-icon">🚪</span>
@@ -243,7 +243,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Click outside to close user menu */}
       {showUserMenu && (
         <div 
-          className="menu-overlay\"
+          className="menu-overlay"
           onClick={() => setShowUserMenu(false)}
         />
       )}

@@ -113,12 +113,35 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
+/* Service Status Layout */
+.service-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.service-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm);
+  background: var(--color-bg-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--color-border-light);
+}
+
+.service-label {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
 /* Status indicators */
 .status-indicator {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: 2px 6px;
+  padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: 12px;
   font-size: var(--font-size-xs);
   font-weight: 500;
@@ -135,8 +158,9 @@
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: currentColor;
+  margin-right: var(--spacing-xs);
 }

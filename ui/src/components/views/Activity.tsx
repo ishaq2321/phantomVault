@@ -17,38 +17,9 @@ export const Activity: React.FC = () => {
   const [filter, setFilter] = useState<string>('all');
 
   useEffect(() => {
-    // Simulate activity data
-    const sampleActivities: ActivityEntry[] = [
-      {
-        id: '1',
-        timestamp: new Date().toLocaleString(),
-        type: 'service_start',
-        message: 'PhantomVault service started',
-        details: 'Background service initialized successfully'
-      },
-      {
-        id: '2',
-        timestamp: new Date(Date.now() - 300000).toLocaleString(),
-        type: 'hotkey_press',
-        message: 'Global hotkey activated',
-        details: 'Ctrl+Alt+V pressed - sequence detection started'
-      },
-      {
-        id: '3',
-        timestamp: new Date(Date.now() - 600000).toLocaleString(),
-        type: 'vault_unlock',
-        message: 'Vault unlocked: Personal Documents',
-        details: 'Temporary unlock mode activated'
-      },
-      {
-        id: '4',
-        timestamp: new Date(Date.now() - 900000).toLocaleString(),
-        type: 'vault_lock',
-        message: 'Vault locked: Work Projects',
-        details: 'Folder encrypted and hidden'
-      }
-    ];
-    setActivities(sampleActivities);
+    // Load real activity data here
+    // For now, start with empty array - will be populated by real service
+    setActivities([]);
   }, []);
 
   const getTypeIcon = (type: string) => {
@@ -129,7 +100,7 @@ export const Activity: React.FC = () => {
         }}>
           <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--color-text-primary)' }}>📈 Total Events</h3>
           <p style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-            {activities.length}
+            0
           </p>
         </div>
         
@@ -142,7 +113,7 @@ export const Activity: React.FC = () => {
         }}>
           <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--color-text-primary)' }}>🔓 Unlocks Today</h3>
           <p style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: 'var(--color-success)' }}>
-            {activities.filter(a => a.type === 'vault_unlock').length}
+            0
           </p>
         </div>
         
@@ -155,7 +126,7 @@ export const Activity: React.FC = () => {
         }}>
           <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--color-text-primary)' }}>⌨️ Hotkey Presses</h3>
           <p style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: 'var(--color-info)' }}>
-            {activities.filter(a => a.type === 'hotkey_press').length}
+            0
           </p>
         </div>
       </div>

@@ -173,23 +173,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {!collapsed && (
         <div className="sidebar-actions">
           <h3 className="actions-title">Quick Actions</h3>
-          <div className="action-buttons">
+          <div className="action-list">
             <button 
-              className="action-button primary\"
+              className="action-item primary"
               onClick={() => onViewChange('vaults')}
-              title="Create a new vault\"
+              title="Create a new vault"
             >
               <span className="action-icon">➕</span>
-              <span className="action-label">New Vault</span>
+              <span className="action-text">New Vault</span>
             </button>
             
             <button 
-              className="action-button secondary\"
+              className="action-item secondary"
               onClick={() => onViewChange('activity')}
-              title="View recent activity\"
+              title="View recent activity"
             >
               <span className="action-icon">📊</span>
-              <span className="action-label">View Activity</span>
+              <span className="action-text">View Activity</span>
             </button>
           </div>
         </div>
@@ -214,8 +214,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         
         <div className="footer-actions">
           <button 
-            className="footer-button\"
-            title="Help & Support\"
+            className="footer-button"
+            title="Help & Support"
             onClick={() => {
               // In a real implementation, this would open help
               console.log('Opening help...');
