@@ -43,12 +43,9 @@ check_root() {
     fi
 }
 
-# Check system requirements
-check_requirements() {
-    log_info "Checking system requirements..."
-    
-    # Check for required packages
-    local missing_packages=()
+# Install system dependencies automatically
+install_dependencies() {
+    log_info "Installing system dependencies..."
     
     # Check for systemd
     if ! command -v systemctl &> /dev/null; then
@@ -56,33 +53,104 @@ check_requirements() {
         exit 1
     fi
     
-    # Check for required libraries
-    local required_libs=("libssl" "libcrypto" "libx11" "libxtst")
-    for lib in "${required_libs[@]}"; do
-        if ! ldconfig -p | grep -q "$lib"; then
-            missing_packages+=("$lib")
-        fi
-    done
-    
-    if [[ ${#missing_packages[@]} -gt 0 ]]; then
-        log_warning "Missing required libraries: ${missing_packages[*]}"
-        log_info "Please install them using your package manager"
+    # Detect package manager and install dependencies
+    if command -v apt-get &> /dev/null; then
+        log_info "Detected Debian/Ubuntu system - installing dependencies..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq
+        apt-get install -y -qq \
+            libssl3 libssl-dev \
+            libx11-6 libx11-dev \
+            libxtst6 libxtst-dev \
+            libgtk-3-0 \
+            libxss1 \
+            libgconf-2-4 \
+            libxrandr2 \
+            libasound2 \
+            libpangocairo-1.0-0 \
+            libatk1.0-0 \
+            libcairo-gobject2 \
+            libgdk-pixbuf2.0-0 \
+            curl \
+            wget
+        log_success "Dependencies installed successfully"
         
-        # Suggest installation commands for common distros
-        if command -v apt-get &> /dev/null; then
-            log_info "Ubuntu/Debian: sudo apt-get install libssl-dev libx11-dev libxtst-dev"
-        elif command -v yum &> /dev/null; then
-            log_info "RHEL/CentOS: sudo yum install openssl-devel libX11-devel libXtst-devel"
-        elif command -v dnf &> /dev/null; then
-            log_info "Fedora: sudo dnf install openssl-devel libX11-devel libXtst-devel"
-        fi
+    elif command -v dnf &> /dev/null; then
+        log_info "Detected Fedora system - installing dependencies..."
+        dnf install -y -q \
+            openssl openssl-devel \
+            libX11 libX11-devel \
+            libXtst libXtst-devel \
+            gtk3 \
+            libXScrnSaver \
+            GConf2 \
+            libXrandr \
+            alsa-lib \
+            curl \
+            wget
+        log_success "Dependencies installed successfully"
         
-        read -p "Continue anyway? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
+    elif command -v yum &> /dev/null; then
+        log_info "Detected RHEL/CentOS system - installing dependencies..."
+        yum install -y -q \
+            openssl openssl-devel \
+            libX11 libX11-devel \
+            libXtst libXtst-devel \
+            gtk3 \
+            libXScrnSaver \
+            GConf2 \
+            libXrandr \
+            alsa-lib \
+            curl \
+            wget
+        log_success "Dependencies installed successfully"
+        
+    elif command -v pacman &> /dev/null; then
+        log_info "Detected Arch Linux system - installing dependencies..."
+        pacman -Sy --noconfirm \
+            openssl \
+            libx11 \
+            libxtst \
+            gtk3 \
+            libxss \
+            gconf \
+            libxrandr \
+            alsa-lib \
+            curl \
+            wget
+        log_success "Dependencies installed successfully"
+        
+    elif command -v zypper &> /dev/null; then
+        log_info "Detected openSUSE system - installing dependencies..."
+        zypper install -y \
+            libopenssl3 openssl-devel \
+            libX11-6 libX11-devel \
+            libXtst6 libXtst-devel \
+            gtk3-tools \
+            libXss1 \
+            gconf2 \
+            libXrandr2 \
+            alsa \
+            curl \
+            wget
+        log_success "Dependencies installed successfully"
+        
+    else
+        log_warning "Unknown package manager - attempting to continue..."
+        log_info "If installation fails, please install these packages manually:"
+        log_info "- OpenSSL development libraries"
+        log_info "- X11 development libraries" 
+        log_info "- XTest development libraries"
+        log_info "- GTK3 libraries"
     fi
+}
+
+# Check system requirements
+check_requirements() {
+    log_info "Checking system requirements..."
+    
+    # Install dependencies automatically
+    install_dependencies
     
     log_success "System requirements check completed"
 }
@@ -99,33 +167,85 @@ create_service_user() {
     fi
 }
 
-# Install application files
+# Download and install application files
 install_files() {
-    log_info "Installing application files..."
+    log_info "Downloading and installing PhantomVault..."
     
     # Create installation directory
-    mkdir -p "$INSTALL_DIR"/{bin,lib,share,var}
+    mkdir -p "$INSTALL_DIR"/{bin,share,var,logs}
     
-    # Copy service binary
-    if [[ -f "phantomvault-service" ]]; then
-        cp phantomvault-service "$INSTALL_DIR/bin/"
+    # Download service binary
+    log_info "Downloading PhantomVault service..."
+    if curl -fsSL -o "$INSTALL_DIR/bin/phantomvault-service" \
+        "https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-service-linux"; then
         chmod +x "$INSTALL_DIR/bin/phantomvault-service"
-        log_success "Installed service binary"
+        log_success "Downloaded and installed service binary"
     else
-        log_error "Service binary not found"
+        log_error "Failed to download service binary"
         exit 1
     fi
     
-    # Copy GUI application (if available)
-    if [[ -d "gui" ]]; then
-        cp -r gui/* "$INSTALL_DIR/share/"
-        log_success "Installed GUI application"
-    fi
+    # Create GUI wrapper script
+    log_info "Creating GUI application..."
+    cat > "$INSTALL_DIR/bin/phantomvault-gui" << 'EOF'
+#!/bin/bash
+# PhantomVault GUI Launcher
+# This script starts the PhantomVault service and GUI
+
+INSTALL_DIR="/opt/phantomvault"
+SERVICE_BIN="$INSTALL_DIR/bin/phantomvault-service"
+LOG_FILE="$INSTALL_DIR/logs/phantomvault.log"
+
+# Ensure log directory exists
+mkdir -p "$INSTALL_DIR/logs"
+
+# Check if service is running
+if ! pgrep -f "phantomvault-service" > /dev/null; then
+    echo "Starting PhantomVault service..."
+    "$SERVICE_BIN" --daemon --log-level INFO >> "$LOG_FILE" 2>&1 &
+    sleep 2
+fi
+
+# Start GUI (for now, show service status)
+echo "PhantomVault is running!"
+echo "Service status:"
+if pgrep -f "phantomvault-service" > /dev/null; then
+    echo "✅ PhantomVault service is running"
+    echo "🔒 Your folders are protected"
+    echo ""
+    echo "Usage:"
+    echo "• Press Ctrl+Alt+V anywhere to access your folders"
+    echo "• Run 'phantomvault --help' for more options"
+    echo "• Check logs: tail -f $LOG_FILE"
+else
+    echo "❌ PhantomVault service is not running"
+    echo "Try running: sudo systemctl start phantomvault"
+fi
+
+# Keep window open for a moment
+sleep 5
+EOF
+    
+    chmod +x "$INSTALL_DIR/bin/phantomvault-gui"
+    
+    # Create application icon (simple text-based for now)
+    mkdir -p "$INSTALL_DIR/share/pixmaps"
+    cat > "$INSTALL_DIR/share/pixmaps/phantomvault.svg" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="8" fill="#2563eb"/>
+  <rect x="12" y="20" width="40" height="24" rx="4" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="32" cy="32" r="6" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="32" cy="32" r="2" fill="#ffffff"/>
+  <text x="32" y="52" text-anchor="middle" fill="#ffffff" font-family="Arial" font-size="8">PV</text>
+</svg>
+EOF
     
     # Set ownership and permissions
     chown -R root:root "$INSTALL_DIR"
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/var"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/var" "$INSTALL_DIR/logs"
     chmod 755 "$INSTALL_DIR/bin/phantomvault-service"
+    chmod 755 "$INSTALL_DIR/bin/phantomvault-gui"
     
     log_success "Application files installed to $INSTALL_DIR"
 }
@@ -138,26 +258,29 @@ create_systemd_service() {
 [Unit]
 Description=PhantomVault - Invisible Folder Security Service
 Documentation=https://github.com/ishaq2321/phantomVault
-After=network.target
+After=network.target graphical-session.target
 Wants=network.target
 
 [Service]
 Type=simple
-User=$SERVICE_USER
-Group=$SERVICE_USER
-ExecStart=$INSTALL_DIR/bin/phantomvault-service --daemon --log-level INFO
+User=root
+Group=root
+ExecStart=$INSTALL_DIR/bin/phantomvault-service --daemon --log-level INFO --port 9876
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=5
 StartLimitInterval=60s
 StartLimitBurst=3
 
+# Logging
+StandardOutput=append:$INSTALL_DIR/logs/phantomvault.log
+StandardError=append:$INSTALL_DIR/logs/phantomvault-error.log
+
 # Security settings
-NoNewPrivileges=true
+NoNewPrivileges=false
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/home
+ProtectSystem=false
+ProtectHome=false
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -168,11 +291,12 @@ MemoryMax=50M
 CPUQuota=10%
 
 # Environment
-Environment=PHANTOMVAULT_DATA_DIR=/home/%i/.phantomvault
+Environment=PHANTOMVAULT_DATA_DIR=/home
 Environment=PHANTOMVAULT_LOG_LEVEL=INFO
+Environment=DISPLAY=:0
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=multi-user.target graphical-session.target
 EOF
 
     # Reload systemd and enable service
@@ -193,8 +317,8 @@ Type=Application
 Name=PhantomVault
 Comment=Invisible Folder Security with Profile-Based Management
 Exec=$INSTALL_DIR/bin/phantomvault-gui
-Icon=$INSTALL_DIR/share/assets/icon.png
-Terminal=false
+Icon=$INSTALL_DIR/share/pixmaps/phantomvault.svg
+Terminal=true
 Categories=Security;Utility;FileManager;
 Keywords=security;encryption;privacy;folders;vault;
 StartupWMClass=PhantomVault
@@ -213,10 +337,50 @@ EOF
 create_cli_tool() {
     log_info "Creating command line tool..."
     
-    cat > /usr/local/bin/phantomvault << EOF
+    cat > /usr/local/bin/phantomvault << 'EOF'
 #!/bin/bash
 # PhantomVault command line interface
-exec $INSTALL_DIR/bin/phantomvault-service "\$@"
+
+INSTALL_DIR="/opt/phantomvault"
+SERVICE_BIN="$INSTALL_DIR/bin/phantomvault-service"
+
+# If no arguments, show status
+if [[ $# -eq 0 ]]; then
+    echo "PhantomVault - Invisible Folder Security"
+    echo "========================================"
+    
+    if pgrep -f "phantomvault-service" > /dev/null; then
+        echo "Status: ✅ Running"
+        echo "Memory: $(ps -o rss= -p $(pgrep -f phantomvault-service) | awk '{print $1/1024 " MB"}')"
+        echo ""
+        echo "Quick Actions:"
+        echo "• Press Ctrl+Alt+V to access folders"
+        echo "• phantomvault --help for more options"
+        echo "• phantomvault --gui to open desktop app"
+    else
+        echo "Status: ❌ Not running"
+        echo ""
+        echo "Start with: sudo systemctl start phantomvault"
+    fi
+    exit 0
+fi
+
+# Handle special arguments
+case "$1" in
+    --gui)
+        exec "$INSTALL_DIR/bin/phantomvault-gui"
+        ;;
+    --status)
+        systemctl status phantomvault
+        ;;
+    --logs)
+        journalctl -u phantomvault -f
+        ;;
+    *)
+        # Pass all other arguments to service
+        exec "$SERVICE_BIN" "$@"
+        ;;
+esac
 EOF
 
     chmod +x /usr/local/bin/phantomvault
