@@ -8,7 +8,6 @@
 #include "profile_manager.hpp"
 #include "folder_security_manager.hpp"
 #include "keyboard_sequence_detector.hpp"
-#include "platform_detection_manager.hpp"
 #include "analytics_engine.hpp"
 #include "ipc_server.hpp"
 
@@ -38,7 +37,6 @@ public:
         , profile_manager_(nullptr)
         , folder_security_manager_(nullptr)
         , keyboard_sequence_detector_(nullptr)
-        , platform_detection_manager_(nullptr)
         , analytics_engine_(nullptr)
         , ipc_server_(nullptr)
         , last_error_()
@@ -52,10 +50,16 @@ public:
         try {
             std::cout << "[ServiceManager] Initializing PhantomVault service..." << std::endl;
             
-            // Initialize platform detection first
-            platform_detection_manager_ = std::make_unique<PlatformDetectionManager>();
-            auto platform = platform_detection_manager_->detectPlatform();
-            std::cout << "[ServiceManager] Platform detected: " << static_cast<int>(platform) << std::endl;
+            // Platform detection is now handled by individual components
+            #ifdef PLATFORM_LINUX
+            std::cout << "[ServiceManager] Platform: Linux" << std::endl;
+            #elif PLATFORM_MACOS
+            std::cout << "[ServiceManager] Platform: macOS" << std::endl;
+            #elif PLATFORM_WINDOWS
+            std::cout << "[ServiceManager] Platform: Windows" << std::endl;
+            #else
+            std::cout << "[ServiceManager] Platform: Unknown" << std::endl;
+            #endif
             
             // Initialize profile manager
             profile_manager_ = std::make_unique<ProfileManager>();
@@ -185,9 +189,7 @@ public:
         return keyboard_sequence_detector_.get();
     }
 
-    PlatformDetectionManager* getPlatformDetectionManager() const {
-        return platform_detection_manager_.get();
-    }
+
 
     AnalyticsEngine* getAnalyticsEngine() const {
         return analytics_engine_.get();
@@ -202,10 +204,15 @@ public:
     }
 
     std::string getPlatformInfo() const {
-        if (platform_detection_manager_) {
-            return platform_detection_manager_->getPlatformName();
-        }
+        #ifdef PLATFORM_LINUX
+        return "Linux";
+        #elif PLATFORM_MACOS
+        return "macOS";
+        #elif PLATFORM_WINDOWS
+        return "Windows";
+        #else
         return "Unknown";
+        #endif
     }
 
     size_t getMemoryUsage() const {
@@ -249,7 +256,6 @@ private:
     std::unique_ptr<ProfileManager> profile_manager_;
     std::unique_ptr<FolderSecurityManager> folder_security_manager_;
     std::unique_ptr<KeyboardSequenceDetector> keyboard_sequence_detector_;
-    std::unique_ptr<PlatformDetectionManager> platform_detection_manager_;
     std::unique_ptr<AnalyticsEngine> analytics_engine_;
     std::unique_ptr<IPCServer> ipc_server_;
     
@@ -288,9 +294,7 @@ KeyboardSequenceDetector* ServiceManager::getKeyboardSequenceDetector() const {
     return pimpl->getKeyboardSequenceDetector();
 }
 
-PlatformDetectionManager* ServiceManager::getPlatformDetectionManager() const {
-    return pimpl->getPlatformDetectionManager();
-}
+
 
 AnalyticsEngine* ServiceManager::getAnalyticsEngine() const {
     return pimpl->getAnalyticsEngine();

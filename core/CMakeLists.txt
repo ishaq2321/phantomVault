@@ -59,7 +59,6 @@ set(CORE_SOURCES
     src/profile_manager.cpp
     src/folder_security_manager.cpp
     src/keyboard_sequence_detector.cpp
-    src/platform_detection_manager.cpp
     src/analytics_engine.cpp
     src/ipc_server.cpp
 )

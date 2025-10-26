@@ -12,7 +12,6 @@
 #include <chrono>
 
 #include "service_manager.hpp"
-#include "platform_detection_manager.hpp"
 
 using namespace phantomvault;
 
@@ -61,24 +60,15 @@ void printVersion() {
     std::cout << "Built with C++17 for maximum performance and security\n";
     std::cout << "Platform: ";
     
-    auto platform_manager = std::make_unique<PlatformDetectionManager>();
-    switch (platform_manager->detectPlatform()) {
-        case PlatformDetectionManager::Platform::LINUX_X11:
-            std::cout << "Linux (X11)\n";
-            break;
-        case PlatformDetectionManager::Platform::LINUX_WAYLAND:
-            std::cout << "Linux (Wayland)\n";
-            break;
-        case PlatformDetectionManager::Platform::MACOS:
-            std::cout << "macOS\n";
-            break;
-        case PlatformDetectionManager::Platform::WINDOWS:
-            std::cout << "Windows\n";
-            break;
-        default:
-            std::cout << "Unknown\n";
-            break;
-    }
+    #ifdef PLATFORM_LINUX
+    std::cout << "Linux\n";
+    #elif PLATFORM_MACOS
+    std::cout << "macOS\n";
+    #elif PLATFORM_WINDOWS
+    std::cout << "Windows\n";
+    #else
+    std::cout << "Unknown\n";
+    #endif
     
     std::cout << "Copyright (c) 2025 PhantomVault Team\n";
     std::cout << "Licensed under MIT License\n";

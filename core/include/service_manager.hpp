@@ -17,7 +17,6 @@ namespace phantomvault {
 class ProfileManager;
 class FolderSecurityManager;
 class KeyboardSequenceDetector;
-class PlatformDetectionManager;
 class AnalyticsEngine;
 class IPCServer;
 
@@ -44,7 +43,6 @@ public:
     ProfileManager* getProfileManager() const;
     FolderSecurityManager* getFolderSecurityManager() const;
     KeyboardSequenceDetector* getKeyboardSequenceDetector() const;
-    PlatformDetectionManager* getPlatformDetectionManager() const;
     AnalyticsEngine* getAnalyticsEngine() const;
 
     // Error handling
