@@ -42,7 +42,7 @@ PhantomVault is a professional-grade security application that makes your sensit
 
 **Linux (One Command Install)**
 ```bash
-curl -fsSL https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-linux-installer.sh | sudo bash
+wget -qO- https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-linux-installer.sh | sudo bash
 ```
 
 **macOS (One Command Install)**
