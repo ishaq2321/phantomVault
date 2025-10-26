@@ -58,6 +58,7 @@ install_dependencies() {
         log_info "Detected Debian/Ubuntu system - installing dependencies..."
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq
+        # Install base dependencies
         apt-get install -y -qq \
             libssl3 libssl-dev \
             libx11-6 libx11-dev \
@@ -73,6 +74,12 @@ install_dependencies() {
             libgdk-pixbuf2.0-0 \
             curl \
             wget
+        
+        # Install Node.js and npm if not present
+        if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+            log_info "Installing Node.js and npm..."
+            apt-get install -y -qq nodejs npm || log_warning "Failed to install nodejs/npm - GUI may not work"
+        fi
         log_success "Dependencies installed successfully"
         
     elif command -v dnf &> /dev/null; then
@@ -162,8 +169,16 @@ create_service_user() {
     if id "$SERVICE_USER" &>/dev/null; then
         log_info "User $SERVICE_USER already exists"
     else
-        useradd --system --no-create-home --shell /bin/false "$SERVICE_USER"
+        useradd --system --create-home --shell /bin/false "$SERVICE_USER"
         log_success "Created service user: $SERVICE_USER"
+    fi
+    
+    # Ensure home directory exists and has proper permissions
+    if [[ ! -d "/home/$SERVICE_USER" ]]; then
+        mkdir -p "/home/$SERVICE_USER"
+        chown "$SERVICE_USER:$SERVICE_USER" "/home/$SERVICE_USER"
+        chmod 755 "/home/$SERVICE_USER"
+        log_success "Created home directory for $SERVICE_USER"
     fi
 }
 
@@ -185,45 +200,102 @@ install_files() {
         exit 1
     fi
     
+    # Download and install GUI application
+    log_info "Downloading PhantomVault GUI..."
+    if curl -fsSL -o "/tmp/phantomvault-gui.tar.gz" \
+        "https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-gui-linux.tar.gz"; then
+        
+        # Extract GUI to installation directory
+        mkdir -p "$INSTALL_DIR/gui"
+        tar -xzf "/tmp/phantomvault-gui.tar.gz" -C "$INSTALL_DIR/gui"
+        rm "/tmp/phantomvault-gui.tar.gz"
+        
+        # Set permissions
+        chown -R root:root "$INSTALL_DIR/gui"
+        chmod -R 755 "$INSTALL_DIR/gui"
+        
+        log_success "Downloaded and installed GUI application"
+        
+        # Install Electron globally if not present
+        if ! command -v electron &> /dev/null; then
+            log_info "Installing Electron..."
+            if npm install -g electron@latest 2>/dev/null; then
+                log_success "Electron installed successfully"
+            else
+                log_warning "Failed to install Electron globally - GUI may not work"
+            fi
+        fi
+    else
+        log_warning "Failed to download GUI application - GUI will not be available"
+    fi
+    
     # Create GUI wrapper script
     log_info "Creating GUI application..."
     cat > "$INSTALL_DIR/bin/phantomvault-gui" << 'EOF'
 #!/bin/bash
 # PhantomVault GUI Launcher
-# This script starts the PhantomVault service and GUI
+# This script starts the PhantomVault GUI application
 
 INSTALL_DIR="/opt/phantomvault"
+GUI_DIR="$INSTALL_DIR/gui"
 SERVICE_BIN="$INSTALL_DIR/bin/phantomvault-service"
 LOG_FILE="$INSTALL_DIR/logs/phantomvault.log"
 
 # Ensure log directory exists
 mkdir -p "$INSTALL_DIR/logs"
 
-# Check if service is running
+# Check if service is running, start if needed
 if ! pgrep -f "phantomvault-service" > /dev/null; then
     echo "Starting PhantomVault service..."
-    "$SERVICE_BIN" --daemon --log-level INFO >> "$LOG_FILE" 2>&1 &
+    sudo systemctl start phantomvault
     sleep 2
 fi
 
-# Start GUI (for now, show service status)
-echo "PhantomVault is running!"
-echo "Service status:"
-if pgrep -f "phantomvault-service" > /dev/null; then
-    echo "✅ PhantomVault service is running"
-    echo "🔒 Your folders are protected"
-    echo ""
-    echo "Usage:"
-    echo "• Press Ctrl+Alt+V anywhere to access your folders"
-    echo "• Run 'phantomvault --help' for more options"
-    echo "• Check logs: tail -f $LOG_FILE"
+# Check if GUI is available
+if [[ -d "$GUI_DIR" && -f "$GUI_DIR/package.json" ]]; then
+    # Start the Electron GUI
+    cd "$GUI_DIR"
+    if command -v electron &> /dev/null; then
+        electron . 2>/dev/null &
+    elif command -v node &> /dev/null && [[ -f "$GUI_DIR/node_modules/.bin/electron" ]]; then
+        "$GUI_DIR/node_modules/.bin/electron" . 2>/dev/null &
+    else
+        # Fallback to status display
+        echo "PhantomVault GUI"
+        echo "================"
+        echo "Electron not found - showing status instead"
+        echo ""
+        if pgrep -f "phantomvault-service" > /dev/null; then
+            echo "✅ PhantomVault service is running"
+            echo "🔒 Your folders are protected"
+            echo ""
+            echo "Usage:"
+            echo "• Press Ctrl+Alt+V anywhere to access your folders"
+            echo "• Run 'phantomvault --help' for more options"
+            echo "• Install electron: npm install -g electron"
+        else
+            echo "❌ PhantomVault service is not running"
+            echo "Try running: sudo systemctl start phantomvault"
+        fi
+        sleep 5
+    fi
 else
-    echo "❌ PhantomVault service is not running"
-    echo "Try running: sudo systemctl start phantomvault"
+    # Fallback to status display if GUI not installed
+    echo "PhantomVault Status"
+    echo "=================="
+    if pgrep -f "phantomvault-service" > /dev/null; then
+        echo "✅ PhantomVault service is running"
+        echo "🔒 Your folders are protected"
+        echo ""
+        echo "Usage:"
+        echo "• Press Ctrl+Alt+V anywhere to access your folders"
+        echo "• Run 'phantomvault --help' for more options"
+    else
+        echo "❌ PhantomVault service is not running"
+        echo "Try running: sudo systemctl start phantomvault"
+    fi
+    sleep 5
 fi
-
-# Keep window open for a moment
-sleep 5
 EOF
     
     chmod +x "$INSTALL_DIR/bin/phantomvault-gui"
@@ -258,19 +330,21 @@ create_systemd_service() {
 [Unit]
 Description=PhantomVault - Invisible Folder Security Service
 Documentation=https://github.com/ishaq2321/phantomVault
-After=network.target graphical-session.target
+After=network.target
 Wants=network.target
 
 [Service]
-Type=simple
-User=root
-Group=root
+Type=forking
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=/home/$SERVICE_USER
+Environment=HOME=/home/$SERVICE_USER
 ExecStart=$INSTALL_DIR/bin/phantomvault-service --daemon --log-level INFO --port 9876
 ExecReload=/bin/kill -HUP \$MAINPID
-Restart=always
-RestartSec=5
-StartLimitInterval=60s
-StartLimitBurst=3
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=300s
+StartLimitBurst=5
 
 # Logging
 StandardOutput=append:$INSTALL_DIR/logs/phantomvault.log
@@ -290,13 +364,8 @@ LimitNOFILE=65536
 MemoryMax=50M
 CPUQuota=10%
 
-# Environment
-Environment=PHANTOMVAULT_DATA_DIR=/home
-Environment=PHANTOMVAULT_LOG_LEVEL=INFO
-Environment=DISPLAY=:0
-
 [Install]
-WantedBy=multi-user.target graphical-session.target
+WantedBy=multi-user.target
 EOF
 
     # Reload systemd and enable service
@@ -318,7 +387,7 @@ Name=PhantomVault
 Comment=Invisible Folder Security with Profile-Based Management
 Exec=$INSTALL_DIR/bin/phantomvault-gui
 Icon=$INSTALL_DIR/share/pixmaps/phantomvault.svg
-Terminal=true
+Terminal=false
 Categories=Security;Utility;FileManager;
 Keywords=security;encryption;privacy;folders;vault;
 StartupWMClass=PhantomVault
