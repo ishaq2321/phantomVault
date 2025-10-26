@@ -61,6 +61,8 @@ set(CORE_SOURCES
     src/keyboard_sequence_detector.cpp
     src/analytics_engine.cpp
     src/ipc_server.cpp
+    src/memory_manager.cpp
+    src/performance_monitor.cpp
 )
 
 # Platform-specific sources (will be added in later phases)

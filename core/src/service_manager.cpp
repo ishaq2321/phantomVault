@@ -10,6 +10,8 @@
 #include "keyboard_sequence_detector.hpp"
 #include "analytics_engine.hpp"
 #include "ipc_server.hpp"
+#include "performance_monitor.hpp"
+#include "memory_manager.hpp"
 
 #include <iostream>
 #include <memory>
@@ -39,6 +41,7 @@ public:
         , keyboard_sequence_detector_(nullptr)
         , analytics_engine_(nullptr)
         , ipc_server_(nullptr)
+        , performance_monitor_(nullptr)
         , last_error_()
     {}
 
@@ -108,6 +111,21 @@ public:
             
             std::cout << "[ServiceManager] IPC server initialized on port " << ipcPort << std::endl;
             
+            // Initialize performance monitor
+            performance_monitor_ = std::make_unique<PerformanceMonitor>();
+            if (!performance_monitor_->initialize()) {
+                last_error_ = "Failed to initialize performance monitor";
+                return false;
+            }
+            
+            // Set performance monitor to balanced mode with adaptive tuning
+            performance_monitor_->setPerformanceMode(PerformanceMode::BALANCED);
+            performance_monitor_->enableAdaptiveTuning(true);
+            performance_monitor_->setMemoryLimit(8192); // 8MB limit
+            performance_monitor_->setCPULimit(5.0);     // 5% CPU limit
+            
+            std::cout << "[ServiceManager] Performance monitor initialized" << std::endl;
+            
             std::cout << "[ServiceManager] All components initialized successfully" << std::endl;
             return true;
             
@@ -144,6 +162,12 @@ public:
                 return false;
             }
             
+            // Start performance monitor
+            if (!performance_monitor_->start()) {
+                last_error_ = "Failed to start performance monitor";
+                return false;
+            }
+            
             running_ = true;
             std::cout << "[ServiceManager] Service started successfully" << std::endl;
             std::cout << "[ServiceManager] Memory usage: " << getMemoryUsage() << " KB" << std::endl;
@@ -164,6 +188,10 @@ public:
         std::cout << "[ServiceManager] Stopping PhantomVault service..." << std::endl;
         
         // Stop components in reverse order
+        if (performance_monitor_) {
+            performance_monitor_->stop();
+        }
+        
         if (analytics_engine_) {
             analytics_engine_->stop();
         }
@@ -265,6 +293,7 @@ private:
     std::unique_ptr<KeyboardSequenceDetector> keyboard_sequence_detector_;
     std::unique_ptr<AnalyticsEngine> analytics_engine_;
     std::unique_ptr<IPCServer> ipc_server_;
+    std::unique_ptr<PerformanceMonitor> performance_monitor_;
     
     std::string last_error_;
 };
