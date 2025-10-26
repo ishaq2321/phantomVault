@@ -36,6 +36,19 @@ endif()
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
+# Find or fetch nlohmann/json
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+    # If not found, we'll use the header-only version
+    message(STATUS "nlohmann/json not found, using header-only version")
+    include(FetchContent)
+    FetchContent_Declare(
+        nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
 # Include directories
 include_directories(include)
 
@@ -63,6 +76,13 @@ target_link_libraries(phantomvault-service
     OpenSSL::Crypto
     Threads::Threads
 )
+
+# Link nlohmann/json
+if(nlohmann_json_FOUND)
+    target_link_libraries(phantomvault-service nlohmann_json::nlohmann_json)
+else()
+    target_link_libraries(phantomvault-service nlohmann_json)
+endif()
 
 # Platform-specific libraries
 if(PLATFORM_LINUX)
