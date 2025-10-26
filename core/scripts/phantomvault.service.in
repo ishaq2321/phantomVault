@@ -1,0 +1,13 @@
+[Unit]
+Description=PhantomVault Service - Invisible Folder Security
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=@CMAKE_INSTALL_PREFIX@/bin/phantomvault-service --daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
