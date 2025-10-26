@@ -99,6 +99,13 @@ public:
                 last_error_ = "Failed to initialize IPC server: " + ipc_server_->getLastError();
                 return false;
             }
+            
+            // Set component references for IPC server
+            ipc_server_->setProfileManager(profile_manager_.get());
+            ipc_server_->setFolderSecurityManager(folder_security_manager_.get());
+            ipc_server_->setKeyboardSequenceDetector(keyboard_sequence_detector_.get());
+            ipc_server_->setAnalyticsEngine(analytics_engine_.get());
+            
             std::cout << "[ServiceManager] IPC server initialized on port " << ipcPort << std::endl;
             
             std::cout << "[ServiceManager] All components initialized successfully" << std::endl;

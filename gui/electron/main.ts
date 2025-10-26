@@ -300,92 +300,43 @@ app.on('web-contents-created', (_, contents) => {
 /**
  * Service Communication Helper
  */
-async function sendServiceRequest(endpoint: string, data?: any): Promise<any> {
-  // For now, return mock data since we don't have HTTP communication yet
-  // This will be replaced with actual HTTP/IPC communication in Phase 7
+async function sendServiceRequest(endpoint: string, data?: any, method: string = 'GET'): Promise<any> {
+  const serviceUrl = 'http://127.0.0.1:9876';
+  const url = `${serviceUrl}/api/${endpoint}`;
   
-  console.log(`[Main] Service request: ${endpoint}`, data);
+  console.log(`[Main] HTTP ${method} request: ${url}`, data);
   
-  // Mock responses based on endpoint
-  switch (endpoint) {
-    case 'profiles/list':
-      return {
-        success: true,
-        profiles: [
-          {
-            id: 'profile1',
-            name: 'Personal',
-            createdAt: '2024-01-15',
-            lastAccess: '2024-01-20',
-            folderCount: 3,
-          },
-          {
-            id: 'profile2',
-            name: 'Work',
-            createdAt: '2024-01-10',
-            lastAccess: '2024-01-19',
-            folderCount: 5,
-          },
-        ],
-      };
+  try {
+    const options: RequestInit = {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
     
-    case 'folders/list':
-      return {
-        success: true,
-        folders: [
-          {
-            id: 'folder1',
-            name: 'Documents',
-            originalPath: '/home/user/Documents',
-            isLocked: true,
-            size: 1024 * 1024 * 50,
-            createdAt: '2024-01-15',
-          },
-          {
-            id: 'folder2',
-            name: 'Photos',
-            originalPath: '/home/user/Photos',
-            isLocked: false,
-            size: 1024 * 1024 * 200,
-            createdAt: '2024-01-16',
-          },
-        ],
-      };
+    if (data && (method === 'POST' || method === 'PUT')) {
+      options.body = JSON.stringify(data);
+    }
     
-    case 'analytics/system':
-      return {
-        success: true,
-        statistics: {
-          totalProfiles: 3,
-          totalFolders: 12,
-          totalUnlockAttempts: 45,
-          successfulUnlocks: 42,
-          failedUnlocks: 3,
-          keyboardSequenceDetections: 28,
-          securityViolations: 2,
-          totalUptime: '15d 8h 32m',
-          firstUse: '2024-01-01',
-          lastActivity: '2024-01-20 14:30',
-        },
-      };
+    const response = await fetch(url, options);
     
-    case 'platform/info':
-      return {
-        success: true,
-        platform: process.platform,
-        capabilities: {
-          supportsInvisibleLogging: true,
-          supportsHotkeys: true,
-          requiresPermissions: false,
-        },
-      };
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
     
-    default:
-      return {
-        success: true,
-        message: `Mock response for ${endpoint}`,
-        data: data,
-      };
+    const result = await response.json();
+    console.log(`[Main] HTTP response:`, result);
+    
+    return result;
+    
+  } catch (error) {
+    console.error(`[Main] HTTP request failed:`, error);
+    
+    // Return error response
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }
 
@@ -418,67 +369,67 @@ ipcMain.handle('service:restart', async () => {
 
 // Profile operations
 ipcMain.handle('ipc:createProfile', async (_, { name, masterKey }) => {
-  return await sendServiceRequest('profiles/create', { name, masterKey });
+  return await sendServiceRequest('profiles', { name, masterKey }, 'POST');
 });
 
 ipcMain.handle('ipc:getAllProfiles', async () => {
-  return await sendServiceRequest('profiles/list');
+  return await sendServiceRequest('profiles');
 });
 
 ipcMain.handle('ipc:authenticateProfile', async (_, { profileId, masterKey }) => {
-  return await sendServiceRequest('profiles/authenticate', { profileId, masterKey });
+  return await sendServiceRequest(`profiles/${profileId}/authenticate`, { masterKey }, 'POST');
 });
 
 ipcMain.handle('ipc:changeProfilePassword', async (_, { profileId, oldKey, newKey }) => {
-  return await sendServiceRequest('profiles/changePassword', { profileId, oldKey, newKey });
+  return await sendServiceRequest(`profiles/${profileId}/password`, { oldKey, newKey }, 'PUT');
 });
 
 // Folder operations
 ipcMain.handle('ipc:addFolder', async (_, { profileId, folderPath }) => {
-  return await sendServiceRequest('folders/add', { profileId, folderPath });
+  return await sendServiceRequest('folders', { profileId, folderPath }, 'POST');
 });
 
 ipcMain.handle('ipc:getProfileFolders', async (_, { profileId }) => {
-  return await sendServiceRequest('folders/list', { profileId });
+  return await sendServiceRequest(`folders?profileId=${profileId}`);
 });
 
 ipcMain.handle('ipc:unlockFolderTemporary', async (_, { profileId, folderId }) => {
-  return await sendServiceRequest('folders/unlockTemporary', { profileId, folderId });
+  return await sendServiceRequest(`folders/${folderId}/unlock`, { profileId, temporary: true }, 'POST');
 });
 
 ipcMain.handle('ipc:unlockFolderPermanent', async (_, { profileId, folderId }) => {
-  return await sendServiceRequest('folders/unlockPermanent', { profileId, folderId });
+  return await sendServiceRequest(`folders/${folderId}/unlock`, { profileId, temporary: false }, 'POST');
 });
 
 ipcMain.handle('ipc:lockTemporaryFolders', async (_, { profileId }) => {
-  return await sendServiceRequest('folders/lockTemporary', { profileId });
+  return await sendServiceRequest(`folders/lock`, { profileId, temporary: true }, 'POST');
 });
 
 // Analytics operations
 ipcMain.handle('ipc:getProfileAnalytics', async (_, { profileId, timeRange }) => {
-  return await sendServiceRequest('analytics/profile', { profileId, timeRange });
+  return await sendServiceRequest(`analytics?profileId=${profileId}&timeRange=${timeRange}`);
 });
 
 ipcMain.handle('ipc:getSystemAnalytics', async (_, { timeRange }) => {
-  return await sendServiceRequest('analytics/system', { timeRange });
+  return await sendServiceRequest(`analytics?timeRange=${timeRange}`);
 });
 
 // Recovery operations
 ipcMain.handle('ipc:recoverWithKey', async (_, { recoveryKey }) => {
-  return await sendServiceRequest('recovery/validate', { recoveryKey });
+  return await sendServiceRequest('recovery', { recoveryKey }, 'POST');
 });
 
 // Platform operations
 ipcMain.handle('ipc:getPlatformInfo', async () => {
-  return await sendServiceRequest('platform/info');
+  return await sendServiceRequest('platform');
 });
 
 ipcMain.handle('ipc:getUnlockMethods', async () => {
-  return await sendServiceRequest('platform/unlockMethods');
+  return await sendServiceRequest('platform/methods');
 });
 
 ipcMain.handle('ipc:setPreferredUnlockMethod', async (_, { method }) => {
-  return await sendServiceRequest('platform/setUnlockMethod', { method });
+  return await sendServiceRequest('platform/method', { method }, 'PUT');
 });
 
 // Dialog operations

@@ -717,6 +717,51 @@ bool FolderSecurityManager::initialize(const std::string& dataPath) {
     return pimpl->initialize(dataPath);
 }
 
+FolderOperationResult FolderSecurityManager::lockFolder(const std::string& profileId, 
+                                                       const std::string& folderPath, 
+                                                       const std::string& masterKey) {
+    return pimpl->lockFolder(profileId, folderPath, masterKey);
+}
+
+UnlockResult FolderSecurityManager::unlockFoldersTemporary(const std::string& profileId, 
+                                                          const std::string& masterKey) {
+    return pimpl->unlockFoldersTemporary(profileId, masterKey);
+}
+
+UnlockResult FolderSecurityManager::unlockFoldersPermanent(const std::string& profileId, 
+                                                          const std::string& masterKey,
+                                                          const std::vector<std::string>& folderIds) {
+    return pimpl->unlockFoldersPermanent(profileId, masterKey, folderIds);
+}
+
+bool FolderSecurityManager::lockTemporaryFolders(const std::string& profileId) {
+    return pimpl->lockTemporaryFolders(profileId);
+}
+
+std::vector<SecuredFolder> FolderSecurityManager::getProfileFolders(const std::string& profileId) {
+    return pimpl->getProfileFolders(profileId);
+}
+
+std::optional<SecuredFolder> FolderSecurityManager::getFolder(const std::string& profileId, const std::string& folderId) {
+    return pimpl->getFolder(profileId, folderId);
+}
+
+FolderOperationResult FolderSecurityManager::removeFromProfile(const std::string& profileId, const std::string& folderId) {
+    return pimpl->removeFromProfile(profileId, folderId);
+}
+
+bool FolderSecurityManager::validateFolderPath(const std::string& folderPath) {
+    return pimpl->validateFolderPath(folderPath);
+}
+
+size_t FolderSecurityManager::calculateFolderSize(const std::string& folderPath) {
+    return pimpl->calculateFolderSize(folderPath);
+}
+
+std::string FolderSecurityManager::generateFolderId() {
+    return pimpl->generateFolderId();
+}
+
 std::string FolderSecurityManager::getLastError() const {
     return pimpl->getLastError();
 }
