@@ -98,26 +98,14 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   const loadProfiles = async () => {
     try {
       setLoading(true);
-      // Simulate API call - replace with actual service call
-      const mockProfiles: Profile[] = [
-        {
-          id: 'profile1',
-          name: 'Personal',
-          createdAt: '2024-01-15',
-          lastAccess: '2024-01-20',
-          folderCount: 3,
-        },
-        {
-          id: 'profile2',
-          name: 'Work',
-          createdAt: '2024-01-10',
-          lastAccess: '2024-01-19',
-          folderCount: 5,
-        },
-      ];
-      setProfiles(mockProfiles);
+      const response = await window.phantomVault.ipc.getAllProfiles();
+      if (response.success) {
+        setProfiles(response.profiles);
+      } else {
+        setError('Failed to load profiles: ' + response.error);
+      }
     } catch (err) {
-      setError('Failed to load profiles');
+      setError('Failed to load profiles: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -126,28 +114,14 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   const loadFolders = async (profileId: string) => {
     try {
       setLoading(true);
-      // Simulate API call - replace with actual service call
-      const mockFolders: SecuredFolder[] = [
-        {
-          id: 'folder1',
-          name: 'Documents',
-          originalPath: '/home/user/Documents',
-          isLocked: true,
-          size: 1024 * 1024 * 50, // 50MB
-          createdAt: '2024-01-15',
-        },
-        {
-          id: 'folder2',
-          name: 'Photos',
-          originalPath: '/home/user/Photos',
-          isLocked: false,
-          size: 1024 * 1024 * 200, // 200MB
-          createdAt: '2024-01-16',
-        },
-      ];
-      setFolders(mockFolders);
+      const response = await window.phantomVault.ipc.getProfileFolders(profileId);
+      if (response.success) {
+        setFolders(response.folders);
+      } else {
+        setError('Failed to load folders: ' + response.error);
+      }
     } catch (err) {
-      setError('Failed to load folders');
+      setError('Failed to load folders: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -161,16 +135,18 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
 
     try {
       setLoading(true);
-      // TODO: Call actual service API
-      console.log('Creating profile:', profileName);
-      
-      setCreateProfileDialog(false);
-      setProfileName('');
-      setMasterKey('');
-      setConfirmKey('');
-      loadProfiles();
+      const response = await window.phantomVault.ipc.createProfile(profileName, masterKey);
+      if (response.success) {
+        setCreateProfileDialog(false);
+        setProfileName('');
+        setMasterKey('');
+        setConfirmKey('');
+        loadProfiles();
+      } else {
+        setError('Failed to create profile: ' + response.error);
+      }
     } catch (err) {
-      setError('Failed to create profile');
+      setError('Failed to create profile: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -182,21 +158,24 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   };
 
   const handleAuthSubmit = async () => {
-    if (!authKey) {
+    if (!authKey || !selectedProfile) {
       setError('Please enter master key');
       return;
     }
 
     try {
       setLoading(true);
-      // TODO: Call actual authentication API
-      console.log('Authenticating profile:', selectedProfile?.name);
-      
-      setAuthDialog(false);
-      setAuthKey('');
-      // Profile is now authenticated and folders will load
+      const response = await window.phantomVault.ipc.authenticateProfile(selectedProfile.id, authKey);
+      if (response.success) {
+        setAuthDialog(false);
+        setAuthKey('');
+        // Profile is now authenticated and folders will load
+        loadFolders(selectedProfile.id);
+      } else {
+        setError('Authentication failed: ' + response.error);
+      }
     } catch (err) {
-      setError('Authentication failed');
+      setError('Authentication failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }

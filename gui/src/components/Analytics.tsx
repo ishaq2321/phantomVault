@@ -86,19 +86,17 @@ const Analytics: React.FC = () => {
     try {
       setLoading(true);
       
-      // Mock data - replace with actual service calls
-      const mockStatistics: UsageStatistics = {
-        totalProfiles: 3,
-        totalFolders: 12,
-        totalUnlockAttempts: 45,
-        successfulUnlocks: 42,
-        failedUnlocks: 3,
-        keyboardSequenceDetections: 28,
-        securityViolations: 2,
-        totalUptime: '15d 8h 32m',
-        firstUse: '2024-01-01',
-        lastActivity: '2024-01-20 14:30',
-      };
+      // Load analytics data from service
+      const response = await window.phantomVault.ipc.getSystemAnalytics(timeRange);
+      if (response.success) {
+        setStatistics(response.statistics);
+      } else {
+        setError('Failed to load analytics: ' + response.error);
+        return;
+      }
+      
+      // Mock data for events and activity (will be replaced with actual service calls)
+      const mockStatistics: UsageStatistics = response.statistics;
 
       const mockEvents: SecurityEvent[] = [
         {

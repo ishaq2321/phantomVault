@@ -11,7 +11,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { existsSync } from 'fs';
 
 // Development mode detection
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = !app.isPackaged;
 const isPackaged = app.isPackaged;
 
 // Service process reference
@@ -77,7 +77,10 @@ function startService(): Promise<boolean> {
       let servicePath: string;
       
       if (isDev) {
-        servicePath = join(__dirname, '../../core/build/bin/phantomvault-service');
+        // In development, use absolute path to the service
+        const projectRoot = join(__dirname, '../..');
+        servicePath = join(projectRoot, 'core/build/bin/phantomvault-service');
+        console.log('[Main] Development service path:', servicePath);
       } else {
         servicePath = join(process.resourcesPath, 'bin/phantomvault-service');
       }
@@ -295,20 +298,111 @@ app.on('web-contents-created', (_, contents) => {
 });
 
 /**
+ * Service Communication Helper
+ */
+async function sendServiceRequest(endpoint: string, data?: any): Promise<any> {
+  // For now, return mock data since we don't have HTTP communication yet
+  // This will be replaced with actual HTTP/IPC communication in Phase 7
+  
+  console.log(`[Main] Service request: ${endpoint}`, data);
+  
+  // Mock responses based on endpoint
+  switch (endpoint) {
+    case 'profiles/list':
+      return {
+        success: true,
+        profiles: [
+          {
+            id: 'profile1',
+            name: 'Personal',
+            createdAt: '2024-01-15',
+            lastAccess: '2024-01-20',
+            folderCount: 3,
+          },
+          {
+            id: 'profile2',
+            name: 'Work',
+            createdAt: '2024-01-10',
+            lastAccess: '2024-01-19',
+            folderCount: 5,
+          },
+        ],
+      };
+    
+    case 'folders/list':
+      return {
+        success: true,
+        folders: [
+          {
+            id: 'folder1',
+            name: 'Documents',
+            originalPath: '/home/user/Documents',
+            isLocked: true,
+            size: 1024 * 1024 * 50,
+            createdAt: '2024-01-15',
+          },
+          {
+            id: 'folder2',
+            name: 'Photos',
+            originalPath: '/home/user/Photos',
+            isLocked: false,
+            size: 1024 * 1024 * 200,
+            createdAt: '2024-01-16',
+          },
+        ],
+      };
+    
+    case 'analytics/system':
+      return {
+        success: true,
+        statistics: {
+          totalProfiles: 3,
+          totalFolders: 12,
+          totalUnlockAttempts: 45,
+          successfulUnlocks: 42,
+          failedUnlocks: 3,
+          keyboardSequenceDetections: 28,
+          securityViolations: 2,
+          totalUptime: '15d 8h 32m',
+          firstUse: '2024-01-01',
+          lastActivity: '2024-01-20 14:30',
+        },
+      };
+    
+    case 'platform/info':
+      return {
+        success: true,
+        platform: process.platform,
+        capabilities: {
+          supportsInvisibleLogging: true,
+          supportsHotkeys: true,
+          requiresPermissions: false,
+        },
+      };
+    
+    default:
+      return {
+        success: true,
+        message: `Mock response for ${endpoint}`,
+        data: data,
+      };
+  }
+}
+
+/**
  * IPC Handlers
  */
 
-// Get app version
+// App information
 ipcMain.handle('app:getVersion', () => {
   return app.getVersion();
 });
 
-// Get admin status
 ipcMain.handle('app:isAdmin', () => {
   return checkAdminPrivileges();
 });
 
-// Get service status
+// Service management
 ipcMain.handle('service:getStatus', () => {
   return {
     running: serviceProcess !== null,
@@ -316,26 +410,88 @@ ipcMain.handle('service:getStatus', () => {
   };
 });
 
-// Restart service
 ipcMain.handle('service:restart', async () => {
   stopService();
   await new Promise(resolve => setTimeout(resolve, 1000));
   return await startService();
 });
 
-// Show message box
+// Profile operations
+ipcMain.handle('ipc:createProfile', async (_, { name, masterKey }) => {
+  return await sendServiceRequest('profiles/create', { name, masterKey });
+});
+
+ipcMain.handle('ipc:getAllProfiles', async () => {
+  return await sendServiceRequest('profiles/list');
+});
+
+ipcMain.handle('ipc:authenticateProfile', async (_, { profileId, masterKey }) => {
+  return await sendServiceRequest('profiles/authenticate', { profileId, masterKey });
+});
+
+ipcMain.handle('ipc:changeProfilePassword', async (_, { profileId, oldKey, newKey }) => {
+  return await sendServiceRequest('profiles/changePassword', { profileId, oldKey, newKey });
+});
+
+// Folder operations
+ipcMain.handle('ipc:addFolder', async (_, { profileId, folderPath }) => {
+  return await sendServiceRequest('folders/add', { profileId, folderPath });
+});
+
+ipcMain.handle('ipc:getProfileFolders', async (_, { profileId }) => {
+  return await sendServiceRequest('folders/list', { profileId });
+});
+
+ipcMain.handle('ipc:unlockFolderTemporary', async (_, { profileId, folderId }) => {
+  return await sendServiceRequest('folders/unlockTemporary', { profileId, folderId });
+});
+
+ipcMain.handle('ipc:unlockFolderPermanent', async (_, { profileId, folderId }) => {
+  return await sendServiceRequest('folders/unlockPermanent', { profileId, folderId });
+});
+
+ipcMain.handle('ipc:lockTemporaryFolders', async (_, { profileId }) => {
+  return await sendServiceRequest('folders/lockTemporary', { profileId });
+});
+
+// Analytics operations
+ipcMain.handle('ipc:getProfileAnalytics', async (_, { profileId, timeRange }) => {
+  return await sendServiceRequest('analytics/profile', { profileId, timeRange });
+});
+
+ipcMain.handle('ipc:getSystemAnalytics', async (_, { timeRange }) => {
+  return await sendServiceRequest('analytics/system', { timeRange });
+});
+
+// Recovery operations
+ipcMain.handle('ipc:recoverWithKey', async (_, { recoveryKey }) => {
+  return await sendServiceRequest('recovery/validate', { recoveryKey });
+});
+
+// Platform operations
+ipcMain.handle('ipc:getPlatformInfo', async () => {
+  return await sendServiceRequest('platform/info');
+});
+
+ipcMain.handle('ipc:getUnlockMethods', async () => {
+  return await sendServiceRequest('platform/unlockMethods');
+});
+
+ipcMain.handle('ipc:setPreferredUnlockMethod', async (_, { method }) => {
+  return await sendServiceRequest('platform/setUnlockMethod', { method });
+});
+
+// Dialog operations
 ipcMain.handle('dialog:showMessage', async (_, options) => {
   const result = await dialog.showMessageBox(mainWindow!, options);
   return result;
 });
 
-// Show open dialog
 ipcMain.handle('dialog:showOpenDialog', async (_, options) => {
   const result = await dialog.showOpenDialog(mainWindow!, options);
   return result;
 });
 
-// Show save dialog
 ipcMain.handle('dialog:showSaveDialog', async (_, options) => {
   const result = await dialog.showSaveDialog(mainWindow!, options);
   return result;
