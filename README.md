@@ -40,23 +40,28 @@ PhantomVault is a professional-grade security application that makes your sensit
 
 ### Installation
 
-**Linux (Ubuntu/Debian)**
+**Linux (One Command Install)**
 ```bash
-wget https://github.com/ishaq2321/phantomVault/releases/latest/phantomvault_1.0.0_amd64.deb
-sudo dpkg -i phantomvault_1.0.0_amd64.deb
-phantomvault
+curl -fsSL https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-linux-installer.sh | sudo bash
 ```
 
-**macOS**
+**macOS (One Command Install)**
 ```bash
-# Download PhantomVault.dmg from releases
-# Drag to Applications and launch
+curl -fsSL https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-macos-installer.sh | bash
 ```
 
 **Windows**
+```powershell
+# Download and run as Administrator:
+# https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-windows-installer.exe
+```
+
+**Manual Installation**
 ```bash
-# Download PhantomVault-Setup.exe from releases
-# Run as Administrator and follow wizard
+# Download installer for your platform
+wget https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-linux-installer.sh
+chmod +x phantomvault-linux-installer.sh
+sudo ./phantomvault-linux-installer.sh
 ```
 
 ### First Use
@@ -206,7 +211,7 @@ PhantomVault has been designed with security best practices and has undergone co
 
 **PhantomVault** - *Your files, invisible until you need them.*
 
-[Download Latest Release](https://github.com/ishaq2321/phantomVault/releases/latest) • [View Documentation](docs/) • [Report Issues](https://github.com/ishaq2321/phantomVault/issues)
+[📥 Download v1.0.0](https://github.com/ishaq2321/phantomVault/releases/tag/v1.0.0) • [📖 Documentation](docs/) • [🐛 Report Issues](https://github.com/ishaq2321/phantomVault/issues)
 
 Made with ❤️ for privacy and security
 
