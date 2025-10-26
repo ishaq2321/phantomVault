@@ -59,41 +59,63 @@
   "build": {
     "appId": "dev.phantomvault.app",
     "productName": "PhantomVault",
+    "copyright": "Copyright © 2024 PhantomVault Team",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
       "assets/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!node_modules/.cache",
+      "!node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
     "extraResources": [
       {
         "from": "../core/build/bin/phantomvault-service",
-        "to": "bin/phantomvault-service"
+        "to": "bin/phantomvault-service",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../docs",
+        "to": "docs",
+        "filter": ["**/*.md", "**/*.pdf"]
       }
     ],
+    "extraMetadata": {
+      "main": "dist/main.js"
+    },
     "linux": {
       "target": [
         {
           "target": "deb",
-          "arch": ["x64", "arm64"]
-        },
-        {
-          "target": "rpm",
-          "arch": ["x64", "arm64"]
+          "arch": ["x64"]
         },
         {
           "target": "AppImage",
-          "arch": ["x64", "arm64"]
+          "arch": ["x64"]
         }
       ],
       "category": "Security",
+      "maintainer": "PhantomVault Team <team@phantomvault.dev>",
+      "vendor": "PhantomVault",
+      "synopsis": "Invisible Folder Security with Profile-Based Management",
+      "description": "PhantomVault provides invisible folder security with AES-256 encryption, profile-based management, and cross-platform compatibility. Secure your sensitive files with advanced encryption and invisible keyboard sequence detection.",
       "desktop": {
         "Name": "PhantomVault",
         "Comment": "Invisible Folder Security",
-        "Keywords": "security;encryption;privacy;folders;vault",
-        "StartupWMClass": "PhantomVault"
+        "Keywords": "security;encryption;privacy;folders;vault;aes;profiles",
+        "StartupWMClass": "PhantomVault",
+        "Categories": "Security;Utility;FileManager",
+        "MimeType": "application/x-phantomvault-profile"
       }
     },
     "mac": {
@@ -101,9 +123,41 @@
         {
           "target": "dmg",
           "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
         }
       ],
-      "category": "public.app-category.security"
+      "category": "public.app-category.security",
+      "icon": "assets/icon.icns",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "gatekeeperAssess": false,
+      "hardenedRuntime": true,
+      "darkModeSupport": true,
+      "type": "distribution"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "title": "PhantomVault ${version}",
+      "icon": "assets/icon.icns",
+      "background": "assets/dmg-background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "win": {
       "target": [
@@ -114,14 +168,57 @@
         {
           "target": "msi",
           "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64", "ia32"]
         }
-      ]
+      ],
+      "icon": "assets/icon.ico",
+      "publisherName": "PhantomVault Team",
+      "verifyUpdateCodeSignature": false,
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "shortcutName": "PhantomVault",
+      "uninstallDisplayName": "PhantomVault - Invisible Folder Security",
+      "license": "../LICENSE",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "menuCategory": "Security",
+      "include": "build/installer.nsh"
+    },
+    "msi": {
+      "oneClick": false,
+      "upgradeCode": "12345678-1234-1234-1234-123456789012"
+    },
+    "snap": {
+      "summary": "Invisible Folder Security",
+      "description": "PhantomVault provides invisible folder security with AES-256 encryption and profile-based management.",
+      "grade": "stable",
+      "confinement": "strict",
+      "plugs": [
+        "home",
+        "desktop",
+        "desktop-legacy",
+        "x11",
+        "wayland",
+        "unity7",
+        "browser-support",
+        "network",
+        "gsettings",
+        "audio-playback",
+        "pulseaudio",
+        "opengl"
+      ]
     }
   },
   "keywords": [
