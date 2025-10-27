@@ -63,6 +63,8 @@ set(CORE_SOURCES
     src/ipc_server.cpp
     src/memory_manager.cpp
     src/performance_monitor.cpp
+    src/encryption_engine.cpp
+    src/profile_vault.cpp
 )
 
 # Platform-specific sources (will be added in later phases)

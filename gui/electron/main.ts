@@ -11,7 +11,8 @@ import { spawn, ChildProcess } from 'child_process';
 import { existsSync } from 'fs';
 
 // Development mode detection
-const isDev = !app.isPackaged;
+// Check if we're in a proper development environment (not just unpackaged)
+const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production' && existsSync(join(__dirname, '../../src'));
 const isPackaged = app.isPackaged;
 
 // Service process reference
@@ -43,13 +44,17 @@ function createMainWindow(): void {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    // In production, load the built renderer files
+    const rendererPath = join(__dirname, '../renderer/index.html');
+    console.log('[Main] Loading renderer from:', rendererPath);
+    mainWindow.loadFile(rendererPath);
   }
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
     
+    // Only open dev tools in actual development mode
     if (isDev) {
       mainWindow?.webContents.openDevTools();
     }
@@ -81,8 +86,13 @@ function startService(): Promise<boolean> {
         const projectRoot = join(__dirname, '../..');
         servicePath = join(projectRoot, 'core/build/bin/phantomvault-service');
         console.log('[Main] Development service path:', servicePath);
-      } else {
+      } else if (isPackaged) {
+        // In packaged app, use resources path
         servicePath = join(process.resourcesPath, 'bin/phantomvault-service');
+      } else {
+        // In installed but unpackaged version (like our Linux installation)
+        servicePath = '/opt/phantomvault/bin/phantomvault-service';
+        console.log('[Main] Using system service path:', servicePath);
       }
       
       // Add .exe extension on Windows
