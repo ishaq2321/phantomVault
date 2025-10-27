@@ -180,6 +180,11 @@ create_service_user() {
         chmod 755 "/home/$SERVICE_USER"
         log_success "Created home directory for $SERVICE_USER"
     fi
+    
+    # Add current user to systemd-journal group for log access
+    if [[ -n "$SUDO_USER" ]]; then
+        usermod -a -G systemd-journal "$SUDO_USER" 2>/dev/null || log_warning "Could not add user to systemd-journal group"
+    fi
 }
 
 # Download and install application files
@@ -241,61 +246,116 @@ GUI_DIR="$INSTALL_DIR/gui"
 SERVICE_BIN="$INSTALL_DIR/bin/phantomvault-service"
 LOG_FILE="$INSTALL_DIR/logs/phantomvault.log"
 
-# Ensure log directory exists
-mkdir -p "$INSTALL_DIR/logs"
+# Function to check if service is running
+is_service_running() {
+    systemctl is-active --quiet phantomvault 2>/dev/null
+}
 
-# Check if service is running, start if needed
-if ! pgrep -f "phantomvault-service" > /dev/null; then
-    echo "Starting PhantomVault service..."
-    sudo systemctl start phantomvault
-    sleep 2
-fi
+# Function to check if service is responding
+is_service_responding() {
+    curl -s --connect-timeout 2 http://localhost:9876/health >/dev/null 2>&1
+}
 
-# Check if GUI is available
-if [[ -d "$GUI_DIR" && -f "$GUI_DIR/package.json" ]]; then
-    # Start the Electron GUI
-    cd "$GUI_DIR"
-    if command -v electron &> /dev/null; then
-        electron . 2>/dev/null &
-    elif command -v node &> /dev/null && [[ -f "$GUI_DIR/node_modules/.bin/electron" ]]; then
-        "$GUI_DIR/node_modules/.bin/electron" . 2>/dev/null &
+# Function to start service if not running
+ensure_service_running() {
+    if ! is_service_running; then
+        echo "PhantomVault service is not running. Starting it..."
+        
+        # Try to start the service using systemctl (no sudo needed if user is in right groups)
+        if systemctl --user start phantomvault 2>/dev/null; then
+            echo "Service started successfully"
+        elif pkexec systemctl start phantomvault 2>/dev/null; then
+            echo "Service started with elevated privileges"
+        else
+            echo "Failed to start service automatically."
+            echo "Please run: sudo systemctl start phantomvault"
+            echo "Or check if the service is installed correctly."
+            return 1
+        fi
+        
+        # Wait for service to be ready
+        echo "Waiting for service to be ready..."
+        for i in {1..10}; do
+            if is_service_running && is_service_responding; then
+                echo "Service is ready!"
+                return 0
+            fi
+            sleep 1
+        done
+        
+        echo "Service started but may not be fully ready"
+        return 1
+    fi
+    return 0
+}
+
+# Check if GUI is available and start it
+start_gui() {
+    if [[ -d "$GUI_DIR" && -f "$GUI_DIR/package.json" ]]; then
+        # Change to GUI directory
+        cd "$GUI_DIR" || {
+            echo "Failed to access GUI directory"
+            return 1
+        }
+        
+        # Try to start Electron GUI
+        if command -v electron &> /dev/null; then
+            echo "Starting PhantomVault GUI..."
+            electron . 2>/dev/null &
+            return 0
+        elif command -v node &> /dev/null && [[ -f "$GUI_DIR/node_modules/.bin/electron" ]]; then
+            echo "Starting PhantomVault GUI..."
+            "$GUI_DIR/node_modules/.bin/electron" . 2>/dev/null &
+            return 0
+        else
+            echo "Electron not found. Please install it:"
+            echo "sudo npm install -g electron"
+            return 1
+        fi
     else
-        # Fallback to status display
-        echo "PhantomVault GUI"
-        echo "================"
-        echo "Electron not found - showing status instead"
+        echo "GUI application not found at $GUI_DIR"
+        echo "Please reinstall PhantomVault to get the GUI"
+        return 1
+    fi
+}
+
+# Main execution
+main() {
+    # Ensure service is running
+    if ! ensure_service_running; then
+        echo "Cannot start GUI without the service running"
+        exit 1
+    fi
+    
+    # Start the GUI
+    if ! start_gui; then
+        echo "Failed to start GUI, showing status instead:"
         echo ""
-        if pgrep -f "phantomvault-service" > /dev/null; then
+        echo "PhantomVault Status"
+        echo "=================="
+        if is_service_running; then
             echo "✅ PhantomVault service is running"
             echo "🔒 Your folders are protected"
             echo ""
             echo "Usage:"
             echo "• Press Ctrl+Alt+V anywhere to access your folders"
             echo "• Run 'phantomvault --help' for more options"
-            echo "• Install electron: npm install -g electron"
         else
             echo "❌ PhantomVault service is not running"
             echo "Try running: sudo systemctl start phantomvault"
         fi
-        sleep 5
+        
+        # Keep terminal open for a moment if running in terminal
+        if [[ -t 1 ]]; then
+            echo ""
+            echo "Press Enter to continue..."
+            read -r
+        fi
     fi
-else
-    # Fallback to status display if GUI not installed
-    echo "PhantomVault Status"
-    echo "=================="
-    if pgrep -f "phantomvault-service" > /dev/null; then
-        echo "✅ PhantomVault service is running"
-        echo "🔒 Your folders are protected"
-        echo ""
-        echo "Usage:"
-        echo "• Press Ctrl+Alt+V anywhere to access your folders"
-        echo "• Run 'phantomvault --help' for more options"
-    else
-        echo "❌ PhantomVault service is not running"
-        echo "Try running: sudo systemctl start phantomvault"
-    fi
-    sleep 5
-fi
+}
+
+# Run main function
+main "$@"
 EOF
     
     chmod +x "$INSTALL_DIR/bin/phantomvault-gui"
@@ -373,6 +433,35 @@ EOF
     systemctl enable "$SERVICE_NAME"
     
     log_success "Created and enabled systemd service"
+    
+    # Create polkit rule to allow users to manage PhantomVault service
+    log_info "Creating polkit rule for service management..."
+    mkdir -p /etc/polkit-1/rules.d
+    cat > /etc/polkit-1/rules.d/50-phantomvault.rules << 'POLKIT_EOF'
+// Allow users to manage PhantomVault service
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "phantomvault.service" &&
+        subject.isInGroup("users")) {
+        return polkit.Result.YES;
+    }
+});
+
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-unit-files" &&
+        action.lookup("unit") == "phantomvault.service" &&
+        subject.isInGroup("users")) {
+        return polkit.Result.YES;
+    }
+});
+POLKIT_EOF
+    
+    # Reload polkit rules
+    if command -v systemctl &> /dev/null; then
+        systemctl reload polkit 2>/dev/null || true
+    fi
+    
+    log_success "Created polkit rule for service management"
 }
 
 # Create desktop entry
@@ -392,6 +481,7 @@ Categories=Security;Utility;FileManager;
 Keywords=security;encryption;privacy;folders;vault;
 StartupWMClass=PhantomVault
 MimeType=application/x-phantomvault-profile;
+StartupNotify=true
 EOF
 
     # Update desktop database
@@ -413,23 +503,40 @@ create_cli_tool() {
 INSTALL_DIR="/opt/phantomvault"
 SERVICE_BIN="$INSTALL_DIR/bin/phantomvault-service"
 
+# Function to check if service is running
+is_service_running() {
+    systemctl is-active --quiet phantomvault 2>/dev/null
+}
+
+# Function to get service status
+get_service_status() {
+    if is_service_running; then
+        echo "✅ Running"
+        if command -v ps &> /dev/null && pgrep -f "phantomvault-service" > /dev/null; then
+            local memory=$(ps -o rss= -p $(pgrep -f phantomvault-service) 2>/dev/null | awk '{print $1/1024 " MB"}')
+            echo "Memory: ${memory:-"Unknown"}"
+        fi
+    else
+        echo "❌ Not running"
+    fi
+}
+
 # If no arguments, show status
 if [[ $# -eq 0 ]]; then
     echo "PhantomVault - Invisible Folder Security"
     echo "========================================"
+    echo "Status: $(get_service_status)"
+    echo ""
     
-    if pgrep -f "phantomvault-service" > /dev/null; then
-        echo "Status: ✅ Running"
-        echo "Memory: $(ps -o rss= -p $(pgrep -f phantomvault-service) | awk '{print $1/1024 " MB"}')"
-        echo ""
+    if is_service_running; then
         echo "Quick Actions:"
         echo "• Press Ctrl+Alt+V to access folders"
-        echo "• phantomvault --help for more options"
         echo "• phantomvault --gui to open desktop app"
+        echo "• phantomvault --help for more options"
     else
-        echo "Status: ❌ Not running"
-        echo ""
+        echo "Service is not running."
         echo "Start with: sudo systemctl start phantomvault"
+        echo "Or check installation: phantomvault --status"
     fi
     exit 0
 fi
@@ -440,14 +547,74 @@ case "$1" in
         exec "$INSTALL_DIR/bin/phantomvault-gui"
         ;;
     --status)
-        systemctl status phantomvault
+        echo "Service Status:"
+        systemctl status phantomvault --no-pager -l
         ;;
     --logs)
-        journalctl -u phantomvault -f
+        echo "PhantomVault Logs (press Ctrl+C to exit):"
+        journalctl -u phantomvault -f --no-pager
+        ;;
+    --start)
+        echo "Starting PhantomVault service..."
+        if pkexec systemctl start phantomvault; then
+            echo "Service started successfully"
+        else
+            echo "Failed to start service"
+            exit 1
+        fi
+        ;;
+    --stop)
+        echo "Stopping PhantomVault service..."
+        if pkexec systemctl stop phantomvault; then
+            echo "Service stopped successfully"
+        else
+            echo "Failed to stop service"
+            exit 1
+        fi
+        ;;
+    --restart)
+        echo "Restarting PhantomVault service..."
+        if pkexec systemctl restart phantomvault; then
+            echo "Service restarted successfully"
+        else
+            echo "Failed to restart service"
+            exit 1
+        fi
+        ;;
+    --help|-h)
+        echo "PhantomVault - Invisible Folder Security"
+        echo "========================================"
+        echo ""
+        echo "Usage: phantomvault [OPTION]"
+        echo ""
+        echo "Options:"
+        echo "  (no args)     Show service status"
+        echo "  --gui         Open graphical interface"
+        echo "  --status      Show detailed service status"
+        echo "  --logs        Show service logs (live)"
+        echo "  --start       Start the service"
+        echo "  --stop        Stop the service"
+        echo "  --restart     Restart the service"
+        echo "  --help, -h    Show this help message"
+        echo ""
+        echo "Service Options (passed to phantomvault-service):"
+        echo "  --version     Show service version"
+        echo ""
+        echo "Examples:"
+        echo "  phantomvault              # Show status"
+        echo "  phantomvault --gui        # Open GUI"
+        echo "  phantomvault --start      # Start service"
+        echo "  phantomvault --logs       # View logs"
         ;;
     *)
-        # Pass all other arguments to service
-        exec "$SERVICE_BIN" "$@"
+        # Pass all other arguments to service binary
+        if [[ -x "$SERVICE_BIN" ]]; then
+            exec "$SERVICE_BIN" "$@"
+        else
+            echo "PhantomVault service binary not found at $SERVICE_BIN"
+            echo "Please check your installation"
+            exit 1
+        fi
         ;;
 esac
 EOF
