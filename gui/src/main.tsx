@@ -86,4 +86,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
-console.log('[PhantomVault] GUI application initialized');
+// PhantomVault GUI application initialized

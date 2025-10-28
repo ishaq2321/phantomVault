@@ -499,9 +499,42 @@ private:
             return handleRemoveFromVault(req);
         });
         
-        // Recovery key routes
+        // Enhanced vault operation routes
+        registerRoute("POST", "/api/vault/unlock/temporary", [this](const HttpRequest& req) -> HttpResponse {
+            return handleUnlockFoldersTemporary(req);
+        });
+        
+        registerRoute("POST", "/api/vault/unlock/permanent", [this](const HttpRequest& req) -> HttpResponse {
+            return handleUnlockFoldersPermanent(req);
+        });
+        
+        registerRoute("GET", "/api/vault/folders", [this](const HttpRequest& req) -> HttpResponse {
+            return handleGetVaultFolders(req);
+        });
+        
+        registerRoute("GET", "/api/vault/stats", [this](const HttpRequest& req) -> HttpResponse {
+            return handleGetVaultStats(req);
+        });
+        
+        registerRoute("POST", "/api/vault/lock/temporary", [this](const HttpRequest& req) -> HttpResponse {
+            return handleLockTemporaryFolders(req);
+        });
+        
+        // Enhanced recovery key routes
         registerRoute("POST", "/api/recovery/validate", [this](const HttpRequest& req) -> HttpResponse {
             return handleValidateRecoveryKey(req);
+        });
+        
+        registerRoute("POST", "/api/recovery/generate", [this](const HttpRequest& req) -> HttpResponse {
+            return handleGenerateRecoveryKey(req);
+        });
+        
+        registerRoute("POST", "/api/recovery/current", [this](const HttpRequest& req) -> HttpResponse {
+            return handleGetCurrentRecoveryKey(req);
+        });
+        
+        registerRoute("POST", "/api/recovery/change-password", [this](const HttpRequest& req) -> HttpResponse {
+            return handleChangePassword(req);
         });
         
         registerRoute("POST", "/api/profiles/change-password", [this](const HttpRequest& req) -> HttpResponse {
@@ -1211,6 +1244,329 @@ private:
         } catch (const std::exception& e) {
             response.status_code = 400;
             response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    // Enhanced vault operation handlers
+    HttpResponse handleUnlockFoldersTemporary(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            json request_data = json::parse(request.body);
+            std::string profile_id = request_data.value("profileId", "");
+            std::string master_key = request_data.value("masterKey", "");
+            
+            if (profile_id.empty() || master_key.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID and master key are required"})";
+                return response;
+            }
+            
+            auto result = folder_security_manager_->unlockFoldersTemporary(profile_id, master_key);
+            
+            json result_json = {
+                {"success", result.success},
+                {"successCount", result.successCount},
+                {"failedCount", result.failedCount},
+                {"unlockedFolderIds", result.unlockedFolderIds},
+                {"failedFolderIds", result.failedFolderIds},
+                {"message", result.message}
+            };
+            
+            if (!result.success) {
+                result_json["error"] = result.error;
+                response.status_code = 400;
+            }
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleUnlockFoldersPermanent(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            json request_data = json::parse(request.body);
+            std::string profile_id = request_data.value("profileId", "");
+            std::string master_key = request_data.value("masterKey", "");
+            std::vector<std::string> folder_ids = request_data.value("folderIds", std::vector<std::string>());
+            
+            if (profile_id.empty() || master_key.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID and master key are required"})";
+                return response;
+            }
+            
+            auto result = folder_security_manager_->unlockFoldersPermanent(profile_id, master_key, folder_ids);
+            
+            json result_json = {
+                {"success", result.success},
+                {"successCount", result.successCount},
+                {"failedCount", result.failedCount},
+                {"unlockedFolderIds", result.unlockedFolderIds},
+                {"failedFolderIds", result.failedFolderIds},
+                {"message", result.message}
+            };
+            
+            if (!result.success) {
+                result_json["error"] = result.error;
+                response.status_code = 400;
+            }
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleGetVaultFolders(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            std::string profile_id = extractQueryParam(request.path, "profileId");
+            
+            if (profile_id.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID is required"})";
+                return response;
+            }
+            
+            auto folders = folder_security_manager_->getProfileFolders(profile_id);
+            
+            json folders_json = json::array();
+            for (const auto& folder : folders) {
+                folders_json.push_back({
+                    {"id", folder.id},
+                    {"name", folder.originalName},
+                    {"originalPath", folder.originalPath},
+                    {"vaultPath", folder.vaultPath},
+                    {"isLocked", folder.isLocked},
+                    {"unlockMode", folder.unlockMode == UnlockMode::TEMPORARY ? "temporary" : "permanent"},
+                    {"size", folder.originalSize},
+                    {"createdAt", std::chrono::duration_cast<std::chrono::milliseconds>(folder.createdAt.time_since_epoch()).count()},
+                    {"lastAccess", std::chrono::duration_cast<std::chrono::milliseconds>(folder.lastAccess.time_since_epoch()).count()},
+                    {"encryptionStatus", folder.isLocked ? "encrypted" : "decrypted"}
+                });
+            }
+            
+            json result_json = {
+                {"success", true},
+                {"folders", folders_json}
+            };
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleGetVaultStats(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            std::string profile_id = extractQueryParam(request.path, "profileId");
+            
+            if (profile_id.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID is required"})";
+                return response;
+            }
+            
+            auto folders = folder_security_manager_->getProfileFolders(profile_id);
+            
+            size_t total_folders = folders.size();
+            size_t encrypted_folders = 0;
+            size_t total_size = 0;
+            
+            for (const auto& folder : folders) {
+                if (folder.isLocked) {
+                    encrypted_folders++;
+                }
+                total_size += folder.originalSize;
+            }
+            
+            json result_json = {
+                {"success", true},
+                {"stats", {
+                    {"totalFolders", total_folders},
+                    {"encryptedFolders", encrypted_folders},
+                    {"totalSize", total_size},
+                    {"lastBackup", "Never"}
+                }}
+            };
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleLockTemporaryFolders(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            json request_data = json::parse(request.body);
+            std::string profile_id = request_data.value("profileId", "");
+            
+            if (profile_id.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID is required"})";
+                return response;
+            }
+            
+            bool success = folder_security_manager_->lockTemporaryFolders(profile_id);
+            
+            json result_json = {
+                {"success", success},
+                {"message", success ? "Temporary folders locked successfully" : "Failed to lock temporary folders"}
+            };
+            
+            if (!success) {
+                result_json["error"] = folder_security_manager_->getLastError();
+                response.status_code = 400;
+            }
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleGenerateRecoveryKey(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            json request_data = json::parse(request.body);
+            std::string profile_id = request_data.value("profileId", "");
+            
+            if (profile_id.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID is required"})";
+                return response;
+            }
+            
+            auto result = profile_manager_->generateRecoveryKey(profile_id);
+            
+            json result_json = {
+                {"success", result.success},
+                {"recoveryKey", result.recovery_key}
+            };
+            
+            if (!result.success) {
+                result_json["error"] = result.error_message;
+                response.status_code = 400;
+            }
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleGetCurrentRecoveryKey(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            json request_data = json::parse(request.body);
+            std::string profile_id = request_data.value("profileId", "");
+            std::string master_key = request_data.value("masterKey", "");
+            
+            if (profile_id.empty() || master_key.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID and master key are required"})";
+                return response;
+            }
+            
+            // Authenticate first
+            auto auth_result = profile_manager_->authenticateProfile(profile_id, master_key);
+            if (!auth_result.success) {
+                response.status_code = 401;
+                response.body = R"({"success": false, "error": "Authentication failed"})";
+                return response;
+            }
+            
+            auto result = profile_manager_->getCurrentRecoveryKey(profile_id);
+            
+            json result_json = {
+                {"success", result.success},
+                {"recoveryKey", result.recovery_key}
+            };
+            
+            if (!result.success) {
+                result_json["error"] = result.error_message;
+                response.status_code = 400;
+            }
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleChangePassword(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            json request_data = json::parse(request.body);
+            std::string profile_id = request_data.value("profileId", "");
+            std::string current_password = request_data.value("currentPassword", "");
+            std::string new_password = request_data.value("newPassword", "");
+            
+            if (profile_id.empty() || current_password.empty() || new_password.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID, current password, and new password are required"})";
+                return response;
+            }
+            
+            auto result = profile_manager_->changeProfilePassword(profile_id, current_password, new_password);
+            
+            json result_json = {
+                {"success", result.success},
+                {"newRecoveryKey", result.new_recovery_key}
+            };
+            
+            if (!result.success) {
+                result_json["error"] = result.error_message;
+                response.status_code = 400;
+            }
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Internal server error"})";
         }
         
         return response;

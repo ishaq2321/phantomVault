@@ -43,15 +43,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        console.log('[App] Initializing PhantomVault GUI...');
-
-        // Check admin status
+        // Initialize PhantomVault GUI
         const isAdmin = await window.phantomVault.app.isAdmin();
-        console.log('[App] Admin status:', isAdmin);
-
-        // Check service status
         const status = await window.phantomVault.service.getStatus();
-        console.log('[App] Service status:', status);
 
         setAppState({
           isLoading: false,
@@ -59,7 +53,7 @@ const App: React.FC = () => {
           isAdmin,
         });
 
-        console.log('[App] Application initialized successfully');
+        // Application initialized successfully
       } catch (error) {
         console.error('[App] Failed to initialize application:', error);
         setAppState({

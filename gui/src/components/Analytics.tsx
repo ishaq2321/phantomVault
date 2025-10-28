@@ -180,10 +180,21 @@ const Analytics: React.FC = () => {
 
   const exportAnalytics = async () => {
     try {
-      // TODO: Implement actual export functionality
-      console.log('Exporting analytics data...');
+      const response = await window.phantomVault.ipc.getSystemAnalytics('all');
+      if (response.success) {
+        const dataStr = JSON.stringify(response.statistics, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'phantomvault_analytics.json';
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        setError('Failed to export analytics data: ' + response.error);
+      }
     } catch (err) {
-      setError('Failed to export analytics data');
+      setError('Failed to export analytics data: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 

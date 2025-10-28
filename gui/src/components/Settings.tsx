@@ -108,23 +108,27 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
 
   const loadPlatformCapabilities = async () => {
     try {
-      // TODO: Call actual service API
-      const mockCapabilities: PlatformCapabilities = {
-        supportsInvisibleLogging: true,
-        supportsHotkeys: true,
-        requiresPermissions: false,
-        requiredPermissions: [],
-      };
-      setPlatformCapabilities(mockCapabilities);
+      const response = await window.phantomVault.ipc.getPlatformInfo();
+      if (response.success) {
+        const capabilities: PlatformCapabilities = {
+          supportsInvisibleLogging: response.capabilities?.supportsInvisibleLogging || true,
+          supportsHotkeys: response.capabilities?.supportsHotkeys || true,
+          requiresPermissions: response.capabilities?.requiresPermissions || false,
+          requiredPermissions: response.capabilities?.requiredPermissions || [],
+        };
+        setPlatformCapabilities(capabilities);
+      } else {
+        setError('Failed to load platform capabilities: ' + response.error);
+      }
     } catch (err) {
-      setError('Failed to load platform capabilities');
+      setError('Failed to load platform capabilities: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
   const loadSystemSettings = async () => {
     try {
-      // TODO: Call actual service API to load settings
-      console.log('Loading system settings...');
+      // System settings are managed locally in the GUI for now
+      // Future enhancement: Load from service API
     } catch (err) {
       setError('Failed to load system settings');
     }
@@ -138,14 +142,17 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
 
     try {
       setLoading(true);
-      // TODO: Call actual service API to validate recovery key
-      console.log('Validating recovery key...');
+      const response = await window.phantomVault.ipc.recoverWithKey(recoveryKey);
       
-      setSuccess('Recovery key validated successfully');
-      setRecoveryDialog(false);
-      setRecoveryKey('');
+      if (response.success) {
+        setSuccess('Recovery key validated successfully');
+        setRecoveryDialog(false);
+        setRecoveryKey('');
+      } else {
+        setError('Invalid recovery key: ' + response.error);
+      }
     } catch (err) {
-      setError('Invalid recovery key');
+      setError('Recovery key validation failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -232,8 +239,9 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
   const saveSystemSettings = async () => {
     try {
       setLoading(true);
-      // TODO: Call actual service API to save settings
-      console.log('Saving system settings:', systemSettings);
+      // Save settings locally for now
+      // Future enhancement: Save to service API
+      localStorage.setItem('phantomvault_settings', JSON.stringify(systemSettings));
       setSuccess('Settings saved successfully');
     } catch (err) {
       setError('Failed to save settings');
@@ -249,8 +257,8 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
 
     try {
       setLoading(true);
-      // TODO: Call actual service API to clear data
-      console.log('Clearing all analytics data...');
+      // Clear local analytics data
+      localStorage.removeItem('phantomvault_analytics');
       setSuccess('All analytics data cleared successfully');
     } catch (err) {
       setError('Failed to clear analytics data');
