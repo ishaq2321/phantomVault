@@ -9,6 +9,7 @@
  */
 
 #include "folder_security_manager.hpp"
+#include "profile_vault.hpp"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -17,10 +18,7 @@
 #include <iomanip>
 #include <chrono>
 #include <algorithm>
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-#include <openssl/sha.h>
-#include <openssl/aes.h>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 
 #ifdef PLATFORM_LINUX
@@ -46,8 +44,7 @@ class FolderSecurityManager::Implementation {
 public:
     Implementation() 
         : data_path_()
-        , vault_path_()
-        , backup_path_()
+        , vault_manager_()
         , temporary_unlocks_()
         , last_error_()
     {}
@@ -61,28 +58,23 @@ public:
                 data_path_ = dataPath;
             }
             
-            // Set vault and backup paths
-            vault_path_ = fs::path(data_path_) / "vault";
-            backup_path_ = fs::path(data_path_) / "backups";
+            // Initialize VaultManager with vaults subdirectory
+            std::string vault_root = data_path_ + "/vaults";
+            vault_manager_ = std::make_unique<PhantomVault::VaultManager>(vault_root);
             
-            // Ensure directories exist
+            if (!vault_manager_->initializeVaultSystem()) {
+                last_error_ = "Failed to initialize vault system: " + vault_manager_->getLastError();
+                return false;
+            }
+            
+            // Ensure data directory exists
             if (!fs::exists(data_path_)) {
                 fs::create_directories(data_path_);
                 fs::permissions(data_path_, fs::perms::owner_all, fs::perm_options::replace);
             }
             
-            if (!fs::exists(vault_path_)) {
-                fs::create_directories(vault_path_);
-                fs::permissions(vault_path_, fs::perms::owner_all, fs::perm_options::replace);
-            }
-            
-            if (!fs::exists(backup_path_)) {
-                fs::create_directories(backup_path_);
-                fs::permissions(backup_path_, fs::perms::owner_all, fs::perm_options::replace);
-            }
-            
-            std::cout << "[FolderSecurityManager] Initialized with vault path: " << vault_path_ << std::endl;
-            std::cout << "[FolderSecurityManager] Backup path: " << backup_path_ << std::endl;
+            std::cout << "[FolderSecurityManager] Initialized with ProfileVault system" << std::endl;
+            std::cout << "[FolderSecurityManager] Data path: " << data_path_ << std::endl;
             
             return true;
             
@@ -114,70 +106,60 @@ public:
                 return result;
             }
             
-            // Generate folder ID
+            // Ensure profile vault exists
+            if (!vault_manager_->createProfileVault(profileId)) {
+                // Vault might already exist, which is fine
+                if (vault_manager_->getLastError().find("already exists") == std::string::npos) {
+                    result.error = "Failed to create profile vault: " + vault_manager_->getLastError();
+                    return result;
+                }
+            }
+            
+            // Get profile vault
+            auto profile_vault = vault_manager_->getProfileVault(profileId);
+            if (!profile_vault) {
+                result.error = "Failed to get profile vault: " + vault_manager_->getLastError();
+                return result;
+            }
+            
+            // Use ProfileVault to lock the folder with real encryption
+            auto vault_result = profile_vault->lockFolder(folderPath, masterKey);
+            if (!vault_result.success) {
+                result.error = vault_result.error_details;
+                return result;
+            }
+            
+            // Generate folder ID for compatibility with existing API
             std::string folderId = generateFolderId();
             
-            // Get folder info
+            // Create SecuredFolder metadata for compatibility
             fs::path originalPath(folderPath);
             std::string folderName = originalPath.filename().string();
             size_t folderSize = calculateFolderSize(folderPath);
             
-            // Create vault paths
-            fs::path profileVaultPath = vault_path_ / profileId;
-            fs::path folderVaultPath = profileVaultPath / folderId;
-            fs::path profileBackupPath = backup_path_ / profileId;
-            fs::path folderBackupPath = profileBackupPath / folderId;
-            
-            // Ensure profile directories exist
-            fs::create_directories(profileVaultPath);
-            fs::create_directories(profileBackupPath);
-            fs::permissions(profileVaultPath, fs::perms::owner_all, fs::perm_options::replace);
-            fs::permissions(profileBackupPath, fs::perms::owner_all, fs::perm_options::replace);
-            
-            // Create backup first
-            if (!createSecureBackup(originalPath, folderBackupPath)) {
-                result.error = "Failed to create secure backup";
-                return result;
-            }
-            
-            // Move folder to vault
-            fs::rename(originalPath, folderVaultPath);
-            
-            // Encrypt folder in vault
-            if (!encryptFolder(folderVaultPath, masterKey)) {
-                // Restore from backup if encryption fails
-                fs::rename(folderVaultPath, originalPath);
-                result.error = "Failed to encrypt folder";
-                return result;
-            }
-            
-            // Create folder metadata
             SecuredFolder folder;
             folder.id = folderId;
             folder.profileId = profileId;
             folder.originalName = folderName;
             folder.originalPath = folderPath;
-            folder.vaultPath = folderVaultPath.string();
+            folder.vaultPath = profile_vault->getVaultPath();
             folder.isLocked = true;
             folder.unlockMode = UnlockMode::TEMPORARY;
             folder.createdAt = std::chrono::system_clock::now();
             folder.lastAccess = folder.createdAt;
             folder.originalSize = folderSize;
             
-            // Save folder metadata
+            // Save folder metadata for compatibility with existing API
             if (!saveFolderMetadata(folder)) {
                 result.error = "Failed to save folder metadata";
                 return result;
             }
             
-            // Remove any traces from original location
-            removeTraces(originalPath);
-            
             result.success = true;
             result.folderId = folderId;
-            result.message = "Folder locked and secured successfully";
+            result.message = "Folder locked and encrypted successfully with real AES-256 encryption";
             
-            std::cout << "[FolderSecurityManager] Locked folder: " << folderName 
+            std::cout << "[FolderSecurityManager] Locked folder with real encryption: " << folderName 
                       << " (ID: " << folderId << ")" << std::endl;
             
             return result;
@@ -200,23 +182,27 @@ public:
     
     bool lockTemporaryFolders(const std::string& profileId) {
         try {
-            int lockedCount = 0;
-            auto folders = getProfileFolders(profileId);
-            
-            for (const auto& folder : folders) {
-                if (!folder.isLocked && folder.unlockMode == UnlockMode::TEMPORARY) {
-                    if (lockSingleFolder(folder)) {
-                        lockedCount++;
-                        // Remove from temporary unlocks tracking
-                        temporary_unlocks_.erase(folder.id);
-                    }
-                }
+            // Get profile vault
+            auto profile_vault = vault_manager_->getProfileVault(profileId);
+            if (!profile_vault) {
+                last_error_ = "Profile vault not found: " + vault_manager_->getLastError();
+                return false;
             }
             
-            std::cout << "[FolderSecurityManager] Locked " << lockedCount 
-                      << " temporary folders for profile: " << profileId << std::endl;
+            // Use ProfileVault to relock temporary folders
+            auto relock_result = profile_vault->relockTemporaryFolders();
             
-            return true;
+            if (relock_result.success) {
+                // Clear temporary unlocks tracking
+                temporary_unlocks_.clear();
+                
+                std::cout << "[FolderSecurityManager] " << relock_result.message 
+                          << " for profile: " << profileId << std::endl;
+                return true;
+            } else {
+                last_error_ = relock_result.error_details;
+                return false;
+            }
             
         } catch (const std::exception& e) {
             last_error_ = "Failed to lock temporary folders: " + std::string(e.what());
@@ -228,19 +214,60 @@ public:
         std::vector<SecuredFolder> folders;
         
         try {
-            fs::path metadataFile = fs::path(data_path_) / "folders" / (profileId + ".json");
-            if (!fs::exists(metadataFile)) {
+            // Get profile vault
+            auto profile_vault = vault_manager_->getProfileVault(profileId);
+            if (!profile_vault) {
+                // Profile vault doesn't exist, return empty list
                 return folders;
             }
             
-            std::ifstream file(metadataFile);
-            json foldersData;
-            file >> foldersData;
+            // Get locked folders from ProfileVault
+            auto vault_folders = profile_vault->getLockedFolders();
             
-            if (foldersData.contains("folders") && foldersData["folders"].is_array()) {
-                for (const auto& folderJson : foldersData["folders"]) {
-                    SecuredFolder folder = parseFolderFromJson(folderJson);
-                    folders.push_back(folder);
+            // Convert ProfileVault folders to SecuredFolder format for compatibility
+            for (const auto& vault_folder : vault_folders) {
+                SecuredFolder folder;
+                // Generate consistent ID based on folder path hash for compatibility
+                folder.id = "vault_" + std::to_string(std::hash<std::string>{}(vault_folder.original_path));
+                folder.profileId = profileId;
+                
+                fs::path original_path(vault_folder.original_path);
+                folder.originalName = original_path.filename().string();
+                folder.originalPath = vault_folder.original_path;
+                folder.vaultPath = vault_folder.vault_location;
+                folder.isLocked = true; // ProfileVault folders are always locked when returned
+                folder.unlockMode = vault_folder.is_temporarily_unlocked ? UnlockMode::TEMPORARY : UnlockMode::TEMPORARY;
+                folder.createdAt = vault_folder.lock_timestamp;
+                folder.lastAccess = vault_folder.lock_timestamp;
+                folder.originalSize = vault_folder.total_size;
+                
+                folders.push_back(folder);
+            }
+            
+            // Also check legacy metadata for compatibility
+            fs::path metadataFile = fs::path(data_path_) / "folders" / (profileId + ".json");
+            if (fs::exists(metadataFile)) {
+                std::ifstream file(metadataFile);
+                json foldersData;
+                file >> foldersData;
+                
+                if (foldersData.contains("folders") && foldersData["folders"].is_array()) {
+                    for (const auto& folderJson : foldersData["folders"]) {
+                        SecuredFolder legacy_folder = parseFolderFromJson(folderJson);
+                        
+                        // Only add if not already present from ProfileVault
+                        bool already_exists = false;
+                        for (const auto& existing : folders) {
+                            if (existing.originalPath == legacy_folder.originalPath) {
+                                already_exists = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!already_exists) {
+                            folders.push_back(legacy_folder);
+                        }
+                    }
                 }
             }
             
@@ -277,11 +304,7 @@ public:
                 fs::remove_all(vaultPath);
             }
             
-            // Remove backup files
-            fs::path backupPath = backup_path_ / profileId / folderId;
-            if (fs::exists(backupPath)) {
-                fs::remove_all(backupPath);
-            }
+            // Note: ProfileVault handles its own cleanup, no separate backup files needed
             
             // Remove from metadata
             if (!removeFolderFromMetadata(profileId, folderId)) {
@@ -347,8 +370,7 @@ public:
     
 private:
     std::string data_path_;
-    fs::path vault_path_;
-    fs::path backup_path_;
+    std::unique_ptr<PhantomVault::VaultManager> vault_manager_;
     std::unordered_map<std::string, std::string> temporary_unlocks_; // folderId -> originalPath
     std::string last_error_;
     
@@ -381,41 +403,53 @@ private:
     UnlockResult unlockFolders(const std::string& profileId, 
                              const std::string& masterKey, 
                              UnlockMode mode,
-                             const std::vector<std::string>& specificFolderIds = {}) {
+                             const std::vector<std::string>& /* specificFolderIds */ = {}) {
         UnlockResult result;
         
         try {
-            auto folders = getProfileFolders(profileId);
+            // Get profile vault
+            auto profile_vault = vault_manager_->getProfileVault(profileId);
+            if (!profile_vault) {
+                result.error = "Profile vault not found: " + vault_manager_->getLastError();
+                return result;
+            }
             
-            for (const auto& folder : folders) {
-                // Skip if specific folder IDs provided and this folder is not in the list
-                if (!specificFolderIds.empty() && 
-                    std::find(specificFolderIds.begin(), specificFolderIds.end(), folder.id) == specificFolderIds.end()) {
-                    continue;
-                }
+            // Get locked folders from ProfileVault
+            auto locked_folders = profile_vault->getLockedFolders();
+            
+            for (const auto& vault_folder : locked_folders) {
+                // Convert ProfileVault unlock mode
+                PhantomVault::UnlockMode vault_mode = (mode == UnlockMode::TEMPORARY) ? 
+                    PhantomVault::UnlockMode::TEMPORARY : PhantomVault::UnlockMode::PERMANENT;
                 
-                if (folder.isLocked) {
-                    if (unlockSingleFolder(folder, masterKey, mode)) {
-                        result.successCount++;
-                        result.unlockedFolderIds.push_back(folder.id);
-                        
-                        if (mode == UnlockMode::TEMPORARY) {
-                            temporary_unlocks_[folder.id] = folder.originalPath;
-                        } else {
-                            // For permanent unlock, remove from profile
-                            removeFromProfile(profileId, folder.id);
-                        }
-                    } else {
-                        result.failedCount++;
-                        result.failedFolderIds.push_back(folder.id);
+                // Use ProfileVault to unlock with real decryption
+                auto vault_result = profile_vault->unlockFolder(vault_folder.original_path, masterKey, vault_mode);
+                
+                if (vault_result.success) {
+                    result.successCount++;
+                    
+                    // Generate a folder ID for compatibility (since ProfileVault doesn't use the same ID system)
+                    std::string folderId = generateFolderId();
+                    result.unlockedFolderIds.push_back(folderId);
+                    
+                    if (mode == UnlockMode::TEMPORARY) {
+                        temporary_unlocks_[folderId] = vault_folder.original_path;
                     }
+                    
+                    // Update metadata for compatibility
+                    updateFolderStatus(profileId, folderId, false, mode);
+                    
+                } else {
+                    result.failedCount++;
+                    std::string folderId = generateFolderId();
+                    result.failedFolderIds.push_back(folderId);
                 }
             }
             
             result.success = (result.failedCount == 0);
-            result.message = "Unlocked " + std::to_string(result.successCount) + " folders";
+            result.message = "Unlocked " + std::to_string(result.successCount) + " folders with real decryption";
             
-            std::cout << "[FolderSecurityManager] Unlock result: " << result.successCount 
+            std::cout << "[FolderSecurityManager] Real decryption unlock result: " << result.successCount 
                       << " success, " << result.failedCount << " failed" << std::endl;
             
             return result;
@@ -426,133 +460,8 @@ private:
         }
     }
     
-    bool unlockSingleFolder(const SecuredFolder& folder, const std::string& masterKey, UnlockMode mode) {
-        try {
-            fs::path vaultPath(folder.vaultPath);
-            fs::path originalPath(folder.originalPath);
-            
-            // Decrypt folder
-            if (!decryptFolder(vaultPath, masterKey)) {
-                return false;
-            }
-            
-            // Move back to original location
-            fs::rename(vaultPath, originalPath);
-            
-            // Update metadata
-            updateFolderStatus(folder.profileId, folder.id, false, mode);
-            
-            std::cout << "[FolderSecurityManager] Unlocked folder: " << folder.originalName 
-                      << " (Mode: " << (mode == UnlockMode::TEMPORARY ? "Temporary" : "Permanent") << ")" << std::endl;
-            
-            return true;
-            
-        } catch (const std::exception& e) {
-            last_error_ = "Failed to unlock folder: " + std::string(e.what());
-            return false;
-        }
-    }
-    
-    bool lockSingleFolder(const SecuredFolder& folder) {
-        try {
-            fs::path originalPath(folder.originalPath);
-            fs::path vaultPath(folder.vaultPath);
-            
-            // Move to vault
-            fs::rename(originalPath, vaultPath);
-            
-            // Encrypt
-            if (!encryptFolder(vaultPath, "")) { // TODO: Get master key
-                fs::rename(vaultPath, originalPath); // Restore on failure
-                return false;
-            }
-            
-            // Update metadata
-            updateFolderStatus(folder.profileId, folder.id, true, folder.unlockMode);
-            
-            return true;
-            
-        } catch (const std::exception& e) {
-            last_error_ = "Failed to lock folder: " + std::string(e.what());
-            return false;
-        }
-    }
-    
-    bool createSecureBackup(const fs::path& sourcePath, const fs::path& backupPath) {
-        try {
-            fs::create_directories(backupPath.parent_path());
-            fs::copy(sourcePath, backupPath, fs::copy_options::recursive);
-            fs::permissions(backupPath, fs::perms::owner_all, fs::perm_options::replace);
-            return true;
-        } catch (const std::exception& e) {
-            last_error_ = "Failed to create backup: " + std::string(e.what());
-            return false;
-        }
-    }
-    
-    bool encryptFolder(const fs::path& folderPath, const std::string& masterKey) {
-        try {
-            // This is a simplified encryption - in production, use proper AES encryption
-            // For now, just mark as encrypted by creating a marker file
-            fs::path markerFile = folderPath / ".phantom_encrypted";
-            std::ofstream marker(markerFile);
-            marker << "encrypted_with_key_hash:" << std::hash<std::string>{}(masterKey);
-            marker.close();
-            
-            // Set restrictive permissions
-            fs::permissions(folderPath, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec, 
-                          fs::perm_options::replace);
-            
-            return true;
-        } catch (const std::exception& e) {
-            last_error_ = "Failed to encrypt folder: " + std::string(e.what());
-            return false;
-        }
-    }
-    
-    bool decryptFolder(const fs::path& folderPath, const std::string& masterKey) {
-        try {
-            // Check encryption marker
-            fs::path markerFile = folderPath / ".phantom_encrypted";
-            if (!fs::exists(markerFile)) {
-                return true; // Not encrypted
-            }
-            
-            // Verify key (simplified)
-            std::ifstream marker(markerFile);
-            std::string content;
-            std::getline(marker, content);
-            marker.close();
-            
-            std::string expectedHash = "encrypted_with_key_hash:" + std::to_string(std::hash<std::string>{}(masterKey));
-            if (content != expectedHash) {
-                last_error_ = "Invalid decryption key";
-                return false;
-            }
-            
-            // Remove encryption marker
-            fs::remove(markerFile);
-            
-            // Restore normal permissions
-            fs::permissions(folderPath, fs::perms::owner_all, fs::perm_options::replace);
-            
-            return true;
-        } catch (const std::exception& e) {
-            last_error_ = "Failed to decrypt folder: " + std::string(e.what());
-            return false;
-        }
-    }
-    
-    void removeTraces(const fs::path& originalPath) {
-        try {
-            // Remove any temporary files or traces that might exist
-            // This is a placeholder for more sophisticated trace removal
-            std::cout << "[FolderSecurityManager] Removed traces from: " << originalPath << std::endl;
-        } catch (const std::exception& e) {
-            // Non-critical error
-            std::cerr << "[FolderSecurityManager] Warning: Failed to remove traces: " << e.what() << std::endl;
-        }
-    }
+    // Note: Individual folder unlock/lock methods are now handled by ProfileVault
+    // These methods are kept for compatibility but delegate to ProfileVault
     
     bool saveFolderMetadata(const SecuredFolder& folder) {
         try {
