@@ -7,6 +7,7 @@
 
 #include "profile_manager.hpp"
 #include "profile_vault.hpp"
+#include "error_handler.hpp"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -45,6 +46,7 @@ public:
         , vault_manager_()
         , active_profile_id_()
         , last_error_()
+        , error_handler_(std::make_unique<ErrorHandler>())
     {}
     
     bool initialize(const std::string& dataPath) {
@@ -78,8 +80,16 @@ public:
                 return false;
             }
             
+            // Initialize error handler
+            std::string error_log_path = data_path_ + "/logs/profile_security.log";
+            if (!error_handler_->initialize(error_log_path)) {
+                last_error_ = "Failed to initialize error handler: " + error_handler_->getLastError();
+                return false;
+            }
+            
             std::cout << "[ProfileManager] Initialized with data path: " << data_path_ << std::endl;
             std::cout << "[ProfileManager] Vault system initialized: " << vault_root << std::endl;
+            std::cout << "[ProfileManager] Error handler initialized: " << error_log_path << std::endl;
             std::cout << "[ProfileManager] Admin mode: " << (isRunningAsAdmin() ? "Yes" : "No") << std::endl;
             
             return true;
@@ -283,9 +293,24 @@ public:
                 // Update last access time
                 updateLastAccess(profileId);
                 
+                // Log successful authentication
+                if (error_handler_) {
+                    error_handler_->logSecurityEvent(SecurityEventType::AUTHENTICATION_FAILURE, 
+                                                   ErrorSeverity::INFO, profileId, 
+                                                   "Profile authentication successful", {});
+                }
+                
                 std::cout << "[ProfileManager] Authenticated profile: " << profile->name << std::endl;
             } else {
-                result.error = "Invalid master key";
+                result.error = error_handler_ ? 
+                    error_handler_->getSecureErrorMessage(SecurityEventType::AUTHENTICATION_FAILURE) :
+                    "Invalid master key";
+                
+                // Log authentication failure with rate limiting
+                if (error_handler_) {
+                    error_handler_->handleAuthenticationFailure(profileId, "ProfileManager", 
+                                                              "Master key verification failed");
+                }
             }
             
             return result;
@@ -770,6 +795,7 @@ private:
     std::unique_ptr<PhantomVault::VaultManager> vault_manager_;
     std::string active_profile_id_;
     std::string last_error_;
+    std::unique_ptr<ErrorHandler> error_handler_;
     
     std::string getDefaultDataPath() {
         #ifdef PLATFORM_LINUX

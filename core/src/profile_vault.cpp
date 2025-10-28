@@ -1,4 +1,5 @@
 #include "profile_vault.hpp"
+#include "error_handler.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
@@ -28,7 +29,8 @@ ProfileVault::ProfileVault(const std::string& profile_id, const std::string& vau
     , vault_path_(vault_root_path + "/" + profile_id)
     , metadata_file_(vault_path_ + "/vault_metadata.json")
     , temp_unlock_file_(vault_path_ + "/temp_unlock.json")
-    , encryption_engine_(std::make_unique<EncryptionEngine>()) {
+    , encryption_engine_(std::make_unique<EncryptionEngine>())
+    , error_handler_(std::make_unique<ErrorHandler>()) {
     clearError();
 }
 
@@ -71,6 +73,13 @@ bool ProfileVault::initialize() {
         // Validate encryption engine
         if (!encryption_engine_->selfTest()) {
             setError("Encryption engine self-test failed: " + encryption_engine_->getLastError());
+            return false;
+        }
+        
+        // Initialize error handler
+        std::string error_log_path = vault_path_ + "/vault_security.log";
+        if (error_handler_ && !error_handler_->initialize(error_log_path)) {
+            setError("Failed to initialize vault error handler: " + error_handler_->getLastError());
             return false;
         }
         
@@ -355,7 +364,14 @@ bool ProfileVault::validateVaultIntegrity() const {
         // Validate each locked folder
         for (const auto& folder_path : vault_metadata_.locked_folders) {
             if (!verifyFolderIntegrity(generateVaultLocation(folder_path))) {
-                setError("Folder integrity check failed: " + folder_path);
+                std::string corruption_details = "Folder integrity check failed: " + folder_path;
+                setError(corruption_details);
+                
+                // Log vault corruption event
+                if (error_handler_) {
+                    error_handler_->handleVaultCorruption(profile_id_, vault_path_, corruption_details);
+                }
+                
                 return false;
             }
         }
@@ -568,10 +584,22 @@ VaultOperationResult ProfileVault::decryptAndRestoreFolder(const std::string& va
 }
 
 bool ProfileVault::encryptFile(const std::string& file_path, const std::string& vault_file_path, const std::string& master_key) {
+    // Create backup of original file before encryption
+    std::string backup_path;
+    if (error_handler_) {
+        backup_path = error_handler_->createFileBackup(file_path);
+    }
+    
     try {
         auto result = encryption_engine_->encryptFile(file_path, master_key);
         if (!result.success) {
             setError("Encryption failed: " + result.error_message);
+            
+            // Log encryption failure with backup information
+            if (error_handler_) {
+                error_handler_->handleEncryptionError(profile_id_, file_path, 
+                                                    result.error_message, backup_path);
+            }
             return false;
         }
         
