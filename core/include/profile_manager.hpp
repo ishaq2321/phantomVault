@@ -86,6 +86,12 @@ public:
     std::optional<Profile> getActiveProfile();
     void clearActiveProfile();
 
+    // Vault operations
+    size_t getProfileVaultSize(const std::string& profileId) const;
+    bool validateProfileVault(const std::string& profileId) const;
+    bool performProfileVaultMaintenance(const std::string& profileId);
+    std::vector<std::string> getProfileLockedFolders(const std::string& profileId) const;
+
     // Admin operations
     bool isRunningAsAdmin();
     bool requiresAdminForProfileCreation();

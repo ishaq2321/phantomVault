@@ -6,6 +6,7 @@
  */
 
 #include "profile_manager.hpp"
+#include "profile_vault.hpp"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -41,6 +42,7 @@ class ProfileManager::Implementation {
 public:
     Implementation() 
         : data_path_()
+        , vault_manager_()
         , active_profile_id_()
         , last_error_()
     {}
@@ -67,7 +69,17 @@ public:
                 fs::permissions(profiles_dir, fs::perms::owner_all, fs::perm_options::replace);
             }
             
+            // Initialize VaultManager with vaults subdirectory
+            std::string vault_root = data_path_ + "/vaults";
+            vault_manager_ = std::make_unique<PhantomVault::VaultManager>(vault_root);
+            
+            if (!vault_manager_->initializeVaultSystem()) {
+                last_error_ = "Failed to initialize vault system: " + vault_manager_->getLastError();
+                return false;
+            }
+            
             std::cout << "[ProfileManager] Initialized with data path: " << data_path_ << std::endl;
+            std::cout << "[ProfileManager] Vault system initialized: " << vault_root << std::endl;
             std::cout << "[ProfileManager] Admin mode: " << (isRunningAsAdmin() ? "Yes" : "No") << std::endl;
             
             return true;
@@ -129,6 +141,12 @@ public:
             profileData["createdAt"] = getCurrentTimestamp();
             profileData["lastAccess"] = getCurrentTimestamp();
             
+            // Create ProfileVault for this profile
+            if (!vault_manager_->createProfileVault(profileId)) {
+                result.error = "Failed to create profile vault: " + vault_manager_->getLastError();
+                return result;
+            }
+            
             // Save profile
             fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
             std::ofstream file(profileFile);
@@ -149,9 +167,9 @@ public:
             result.success = true;
             result.profileId = profileId;
             result.recoveryKey = recoveryKey;
-            result.message = "Profile created successfully";
+            result.message = "Profile and encrypted vault created successfully";
             
-            std::cout << "[ProfileManager] Created profile: " << name << " (ID: " << profileId << ")" << std::endl;
+            std::cout << "[ProfileManager] Created profile with vault: " << name << " (ID: " << profileId << ")" << std::endl;
             
             return result;
             
@@ -210,6 +228,12 @@ public:
                 return false;
             }
             
+            // Delete ProfileVault first (this will handle encrypted data cleanup)
+            if (!vault_manager_->deleteProfileVault(profileId, masterKey)) {
+                last_error_ = "Failed to delete profile vault: " + vault_manager_->getLastError();
+                return false;
+            }
+            
             // Remove profile file
             fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
             if (fs::exists(profileFile)) {
@@ -224,7 +248,7 @@ public:
             // Update profiles index
             updateProfilesIndex();
             
-            std::cout << "[ProfileManager] Deleted profile: " << profileId << std::endl;
+            std::cout << "[ProfileManager] Deleted profile and vault: " << profileId << std::endl;
             return true;
             
         } catch (const std::exception& e) {
@@ -300,6 +324,31 @@ public:
                 return result;
             }
             
+            // Get ProfileVault to handle encrypted data re-encryption
+            auto profile_vault = vault_manager_->getProfileVault(profileId);
+            if (profile_vault) {
+                // Get all locked folders
+                auto locked_folders = profile_vault->getLockedFolders();
+                
+                // Temporarily unlock all folders with old key
+                std::vector<std::string> temp_unlocked_paths;
+                for (const auto& folder : locked_folders) {
+                    auto unlock_result = profile_vault->unlockFolder(folder.original_path, oldKey, PhantomVault::UnlockMode::TEMPORARY);
+                    if (unlock_result.success) {
+                        temp_unlocked_paths.push_back(folder.original_path);
+                    }
+                }
+                
+                // Re-lock all folders with new key
+                for (const auto& folder_path : temp_unlocked_paths) {
+                    auto lock_result = profile_vault->lockFolder(folder_path, newKey);
+                    if (!lock_result.success) {
+                        result.error = "Failed to re-encrypt vault data with new key";
+                        return result;
+                    }
+                }
+            }
+            
             // Generate new recovery key
             std::string newRecoveryKey = generateRecoveryKey();
             
@@ -327,9 +376,9 @@ public:
             result.success = true;
             result.profileId = profileId;
             result.recoveryKey = newRecoveryKey;
-            result.message = "Password changed successfully";
+            result.message = "Password changed successfully and vault data re-encrypted";
             
-            std::cout << "[ProfileManager] Changed password for profile: " << profileId << std::endl;
+            std::cout << "[ProfileManager] Changed password and re-encrypted vault for profile: " << profileId << std::endl;
             
             return result;
             
@@ -418,12 +467,86 @@ public:
         return true;
     }
     
+    size_t getProfileVaultSize(const std::string& profileId) const {
+        try {
+            if (profileId.empty()) {
+                return 0;
+            }
+            
+            // Create a temporary non-const instance for vault access
+            ProfileManager::Implementation* non_const_this = const_cast<ProfileManager::Implementation*>(this);
+            auto profile_vault = non_const_this->vault_manager_->getProfileVault(profileId);
+            if (profile_vault) {
+                return profile_vault->getVaultSize();
+            }
+            return 0;
+        } catch (const std::exception& e) {
+            // Can't modify last_error_ in const method, just return 0
+            return 0;
+        }
+    }
+    
+    bool validateProfileVault(const std::string& profileId) const {
+        try {
+            if (profileId.empty()) {
+                return false;
+            }
+            
+            // Create a temporary non-const instance for vault access
+            ProfileManager::Implementation* non_const_this = const_cast<ProfileManager::Implementation*>(this);
+            auto profile_vault = non_const_this->vault_manager_->getProfileVault(profileId);
+            if (profile_vault) {
+                return profile_vault->validateVaultIntegrity();
+            }
+            return false;
+        } catch (const std::exception& e) {
+            // Can't modify last_error_ in const method, just return false
+            return false;
+        }
+    }
+    
+    bool performProfileVaultMaintenance(const std::string& profileId) {
+        try {
+            auto profile_vault = vault_manager_->getProfileVault(profileId);
+            if (profile_vault) {
+                return profile_vault->cleanupCorruptedEntries();
+            }
+            return false;
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to perform vault maintenance: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    std::vector<std::string> getProfileLockedFolders(const std::string& profileId) const {
+        std::vector<std::string> folder_paths;
+        try {
+            if (profileId.empty()) {
+                return folder_paths;
+            }
+            
+            // Create a temporary non-const instance for vault access
+            ProfileManager::Implementation* non_const_this = const_cast<ProfileManager::Implementation*>(this);
+            auto profile_vault = non_const_this->vault_manager_->getProfileVault(profileId);
+            if (profile_vault) {
+                auto locked_folders = profile_vault->getLockedFolders();
+                for (const auto& folder : locked_folders) {
+                    folder_paths.push_back(folder.original_path);
+                }
+            }
+        } catch (const std::exception& e) {
+            // Can't modify last_error_ in const method, just return empty vector
+        }
+        return folder_paths;
+    }
+
     std::string getLastError() const {
         return last_error_;
     }
     
 private:
     std::string data_path_;
+    std::unique_ptr<PhantomVault::VaultManager> vault_manager_;
     std::string active_profile_id_;
     std::string last_error_;
     
@@ -608,7 +731,19 @@ private:
             profile.createdAt = std::chrono::system_clock::from_time_t(createdAtMs / 1000);
             profile.lastAccess = std::chrono::system_clock::from_time_t(lastAccessMs / 1000);
             profile.isActive = (profile.id == active_profile_id_);
-            profile.folderCount = 0; // Will be updated when folder system is implemented
+            
+            // Get folder count from ProfileVault
+            profile.folderCount = 0;
+            try {
+                auto profile_vault = vault_manager_->getProfileVault(profile.id);
+                if (profile_vault) {
+                    auto locked_folders = profile_vault->getLockedFolders();
+                    profile.folderCount = locked_folders.size();
+                }
+            } catch (const std::exception& e) {
+                // Non-critical error, just use 0
+                profile.folderCount = 0;
+            }
             
             return profile;
             
@@ -706,6 +841,22 @@ bool ProfileManager::isRunningAsAdmin() {
 
 bool ProfileManager::requiresAdminForProfileCreation() {
     return pimpl->requiresAdminForProfileCreation();
+}
+
+size_t ProfileManager::getProfileVaultSize(const std::string& profileId) const {
+    return pimpl->getProfileVaultSize(profileId);
+}
+
+bool ProfileManager::validateProfileVault(const std::string& profileId) const {
+    return pimpl->validateProfileVault(profileId);
+}
+
+bool ProfileManager::performProfileVaultMaintenance(const std::string& profileId) {
+    return pimpl->performProfileVaultMaintenance(profileId);
+}
+
+std::vector<std::string> ProfileManager::getProfileLockedFolders(const std::string& profileId) const {
+    return pimpl->getProfileLockedFolders(profileId);
 }
 
 std::string ProfileManager::getLastError() const {
