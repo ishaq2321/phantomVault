@@ -394,13 +394,34 @@ ipcMain.handle('ipc:changeProfilePassword', async (_, { profileId, oldKey, newKe
   return await sendServiceRequest(`profiles/${profileId}/password`, { oldKey, newKey }, 'PUT');
 });
 
-// Folder operations
-ipcMain.handle('ipc:addFolder', async (_, { profileId, folderPath }) => {
-  return await sendServiceRequest('folders', { profileId, folderPath }, 'POST');
+// Folder operations (Enhanced with real encryption)
+ipcMain.handle('ipc:lockFolder', async (_, { profileId, folderPath, masterKey }) => {
+  return await sendServiceRequest('vault/lock', { profileId, folderPath, masterKey }, 'POST');
+});
+
+ipcMain.handle('ipc:unlockFoldersTemporary', async (_, { profileId, masterKey }) => {
+  return await sendServiceRequest('vault/unlock/temporary', { profileId, masterKey }, 'POST');
+});
+
+ipcMain.handle('ipc:unlockFoldersPermanent', async (_, { profileId, masterKey, folderIds }) => {
+  return await sendServiceRequest('vault/unlock/permanent', { profileId, masterKey, folderIds }, 'POST');
 });
 
 ipcMain.handle('ipc:getProfileFolders', async (_, { profileId }) => {
-  return await sendServiceRequest(`folders?profileId=${profileId}`);
+  return await sendServiceRequest(`vault/folders?profileId=${profileId}`);
+});
+
+ipcMain.handle('ipc:getVaultStats', async (_, { profileId }) => {
+  return await sendServiceRequest(`vault/stats?profileId=${profileId}`);
+});
+
+ipcMain.handle('ipc:lockTemporaryFolders', async (_, { profileId }) => {
+  return await sendServiceRequest('vault/lock/temporary', { profileId }, 'POST');
+});
+
+// Legacy folder operations (for backward compatibility)
+ipcMain.handle('ipc:addFolder', async (_, { profileId, folderPath }) => {
+  return await sendServiceRequest('folders', { profileId, folderPath }, 'POST');
 });
 
 ipcMain.handle('ipc:unlockFolderTemporary', async (_, { profileId, folderId }) => {
@@ -409,10 +430,6 @@ ipcMain.handle('ipc:unlockFolderTemporary', async (_, { profileId, folderId }) =
 
 ipcMain.handle('ipc:unlockFolderPermanent', async (_, { profileId, folderId }) => {
   return await sendServiceRequest(`folders/${folderId}/unlock`, { profileId, temporary: false }, 'POST');
-});
-
-ipcMain.handle('ipc:lockTemporaryFolders', async (_, { profileId }) => {
-  return await sendServiceRequest(`folders/lock`, { profileId, temporary: true }, 'POST');
 });
 
 // Analytics operations
@@ -424,9 +441,21 @@ ipcMain.handle('ipc:getSystemAnalytics', async (_, { timeRange }) => {
   return await sendServiceRequest(`analytics?timeRange=${timeRange}`);
 });
 
-// Recovery operations
+// Recovery operations (Enhanced with AES-256 encryption)
 ipcMain.handle('ipc:recoverWithKey', async (_, { recoveryKey }) => {
-  return await sendServiceRequest('recovery', { recoveryKey }, 'POST');
+  return await sendServiceRequest('recovery/validate', { recoveryKey }, 'POST');
+});
+
+ipcMain.handle('ipc:generateRecoveryKey', async (_, { profileId }) => {
+  return await sendServiceRequest('recovery/generate', { profileId }, 'POST');
+});
+
+ipcMain.handle('ipc:getCurrentRecoveryKey', async (_, { profileId, masterKey }) => {
+  return await sendServiceRequest('recovery/current', { profileId, masterKey }, 'POST');
+});
+
+ipcMain.handle('ipc:changePassword', async (_, { profileId, currentPassword, newPassword }) => {
+  return await sendServiceRequest('recovery/change-password', { profileId, currentPassword, newPassword }, 'POST');
 });
 
 // Platform operations

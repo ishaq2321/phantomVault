@@ -107,6 +107,14 @@ public:
             // Check admin privileges
             if (!isRunningAsAdmin()) {
                 result.error = "Admin privileges required for profile creation";
+                
+                // Log privilege violation
+                if (error_handler_) {
+                    error_handler_->logSecurityEvent(SecurityEventType::UNAUTHORIZED_ACCESS,
+                                                   ErrorSeverity::WARNING, "",
+                                                   "Profile creation attempted without admin privileges", {});
+                }
+                
                 return result;
             }
             

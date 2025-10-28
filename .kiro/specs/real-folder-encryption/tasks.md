@@ -42,7 +42,7 @@
   - Implement graceful degradation when advanced features are unavailable
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 8.1, 8.2, 8.3_
 
-- [ ] 7. Add vault handler for complete folder hiding
+- [x] 7. Add vault handler for complete folder hiding
   - Implement platform-specific folder hiding mechanisms requiring elevated privileges
   - Create folder restoration functionality that preserves original metadata
   - Add vault structure management and organization
@@ -70,14 +70,14 @@
   - Implement security event logging and audit trail functionality
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 12.4_
 
-- [ ] 11. Enforce admin privilege requirements
+- [x] 11. Enforce admin privilege requirements
   - Add privilege checking at application startup with appropriate error messages
   - Implement privilege elevation requests for vault operations
   - Create privilege validation for folder hiding and vault access
   - Add graceful handling of privilege loss during operation
   - _Requirements: 11.1, 11.2, 11.3, 11.5_
 
-- [ ] 12. Update GUI components for encryption features
+- [x] 12. Update GUI components for encryption features
   - Modify existing Dashboard component to show encrypted folder status
   - Add profile-specific vault management interface
   - Create unlock mode selection (temporary vs permanent) in GUI

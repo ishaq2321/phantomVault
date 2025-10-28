@@ -99,6 +99,7 @@ private:
     
     std::unique_ptr<EncryptionEngine> encryption_engine_;
     std::unique_ptr<class ErrorHandler> error_handler_;
+    std::unique_ptr<class phantomvault::VaultHandler> vault_handler_;
     
     // Internal folder operations
     VaultOperationResult encryptAndStoreFolder(const std::string& folder_path, const std::string& master_key);

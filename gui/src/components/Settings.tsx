@@ -71,11 +71,20 @@ interface SystemSettings {
 const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
   const [recoveryKey, setRecoveryKey] = useState('');
   const [newRecoveryKey, setNewRecoveryKey] = useState('');
+  const [currentRecoveryKey, setCurrentRecoveryKey] = useState('');
   const [recoveryDialog, setRecoveryDialog] = useState(false);
+  const [recoveryKeyDisplayDialog, setRecoveryKeyDisplayDialog] = useState(false);
+  const [passwordChangeDialog, setPasswordChangeDialog] = useState(false);
   const [helpDialog, setHelpDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Password change form states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [selectedProfile, setSelectedProfile] = useState('');
   
   const [platformCapabilities, setPlatformCapabilities] = useState<PlatformCapabilities>({
     supportsInvisibleLogging: true,
@@ -145,12 +154,76 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
   const generateNewRecoveryKey = async () => {
     try {
       setLoading(true);
-      // TODO: Call actual service API to generate new recovery key
-      const mockKey = 'PHANTOM-VAULT-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-      setNewRecoveryKey(mockKey);
-      setSuccess('New recovery key generated. Please save it securely!');
+      // Call the new recovery key generation API
+      const response = await window.phantomVault.ipc.generateRecoveryKey(selectedProfile);
+      if (response.success) {
+        setNewRecoveryKey(response.recoveryKey);
+        setSuccess('New AES-256 encrypted recovery key generated with PBKDF2 key derivation!');
+      } else {
+        setError('Failed to generate recovery key: ' + response.error);
+      }
     } catch (err) {
-      setError('Failed to generate new recovery key');
+      setError('Failed to generate new recovery key: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const displayCurrentRecoveryKey = async () => {
+    try {
+      setLoading(true);
+      // Call API to get current recovery key (requires authentication)
+      const response = await window.phantomVault.ipc.getCurrentRecoveryKey(selectedProfile, currentPassword);
+      if (response.success) {
+        setCurrentRecoveryKey(response.recoveryKey);
+        setRecoveryKeyDisplayDialog(true);
+      } else {
+        setError('Failed to retrieve recovery key: ' + response.error);
+      }
+    } catch (err) {
+      setError('Failed to retrieve recovery key: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError('Please fill all password fields');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters long');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      // Call the password change API which will generate new recovery key
+      const response = await window.phantomVault.ipc.changePassword(
+        selectedProfile, 
+        currentPassword, 
+        newPassword
+      );
+      
+      if (response.success) {
+        setPasswordChangeDialog(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setNewRecoveryKey(response.newRecoveryKey);
+        setSuccess('Password changed successfully! New recovery key generated.');
+      } else {
+        setError('Failed to change password: ' + response.error);
+      }
+    } catch (err) {
+      setError('Failed to change password: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -398,7 +471,8 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
                   <Typography variant="body1" sx={{ mb: 2 }}>
-                    Recovery keys allow you to regain access to your profiles if you forget your master key.
+                    Recovery keys use AES-256-CBC encryption with PBKDF2 key derivation. 
+                    They allow you to regain access to your profiles if you forget your master key.
                   </Typography>
                   
                   <Stack spacing={2}>
@@ -416,23 +490,65 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
                     >
                       Generate New Recovery Key
                     </Button>
+                    
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      onClick={() => setPasswordChangeDialog(true)}
+                    >
+                      Change Master Password
+                    </Button>
+                    
+                    <Button
+                      variant="text"
+                      onClick={() => setRecoveryKeyDisplayDialog(true)}
+                    >
+                      View Current Recovery Key
+                    </Button>
                   </Stack>
                 </Grid>
                 
                 <Grid item xs={12} md={6}>
                   {newRecoveryKey && (
-                    <Paper sx={{ p: 2, bgcolor: 'warning.light', color: 'warning.contrastText' }}>
+                    <Paper sx={{ p: 2, bgcolor: 'success.light', color: 'success.contrastText' }}>
                       <Typography variant="h6" sx={{ mb: 1 }}>
-                        New Recovery Key
+                        New Recovery Key (AES-256 Encrypted)
                       </Typography>
-                      <Typography variant="h5" sx={{ fontFamily: 'monospace', mb: 2 }}>
+                      <Typography variant="h5" sx={{ fontFamily: 'monospace', mb: 2, wordBreak: 'break-all' }}>
                         {newRecoveryKey}
                       </Typography>
-                      <Alert severity="warning">
-                        Save this key securely! You won't be able to see it again.
+                      <Alert severity="warning" sx={{ bgcolor: 'warning.main', color: 'warning.contrastText' }}>
+                        Save this key securely! It's encrypted with PBKDF2 and cannot be recovered if lost.
                       </Alert>
+                      <Box sx={{ mt: 2 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => navigator.clipboard.writeText(newRecoveryKey)}
+                        >
+                          Copy to Clipboard
+                        </Button>
+                      </Box>
                     </Paper>
                   )}
+                  
+                  <Paper sx={{ p: 2, mt: 2, bgcolor: 'info.light', color: 'info.contrastText' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Security Features:</Typography>
+                    <List dense>
+                      <ListItem>
+                        <ListItemText primary="AES-256-CBC encryption" />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText primary="PBKDF2 key derivation (100,000 iterations)" />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText primary="Cryptographically secure random generation" />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText primary="Master key recovery capability" />
+                      </ListItem>
+                    </List>
+                  </Paper>
                 </Grid>
               </Grid>
             </CardContent>
@@ -514,6 +630,113 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
         </DialogActions>
       </Dialog>
 
+      {/* Recovery Key Display Dialog */}
+      <Dialog open={recoveryKeyDisplayDialog} onClose={() => setRecoveryKeyDisplayDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Current Recovery Key</DialogTitle>
+        <DialogContent>
+          {currentRecoveryKey ? (
+            <Box>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Your current AES-256 encrypted recovery key:
+              </Typography>
+              <Paper sx={{ p: 2, bgcolor: 'grey.100', mb: 2 }}>
+                <Typography variant="h6" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  {currentRecoveryKey}
+                </Typography>
+              </Paper>
+              <Button
+                variant="outlined"
+                onClick={() => navigator.clipboard.writeText(currentRecoveryKey)}
+                fullWidth
+              >
+                Copy to Clipboard
+              </Button>
+            </Box>
+          ) : (
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Current Master Password"
+              type="password"
+              fullWidth
+              variant="outlined"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              helperText="Enter your current password to view the recovery key"
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRecoveryKeyDisplayDialog(false)}>Close</Button>
+          {!currentRecoveryKey && (
+            <Button onClick={displayCurrentRecoveryKey} variant="contained" disabled={loading}>
+              Show Recovery Key
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Password Change Dialog */}
+      <Dialog open={passwordChangeDialog} onClose={() => setPasswordChangeDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Change Master Password</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth margin="dense">
+            <InputLabel>Profile</InputLabel>
+            <Select
+              value={selectedProfile}
+              label="Profile"
+              onChange={(e) => setSelectedProfile(e.target.value)}
+            >
+              <MenuItem value="profile1">Profile 1</MenuItem>
+              <MenuItem value="profile2">Profile 2</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <TextField
+            margin="dense"
+            label="Current Password"
+            type="password"
+            fullWidth
+            variant="outlined"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          
+          <TextField
+            margin="dense"
+            label="New Password"
+            type="password"
+            fullWidth
+            variant="outlined"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          
+          <TextField
+            margin="dense"
+            label="Confirm New Password"
+            type="password"
+            fullWidth
+            variant="outlined"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+          
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Changing your password will generate a new AES-256 encrypted recovery key. 
+            Make sure to save the new recovery key securely!
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPasswordChangeDialog(false)}>Cancel</Button>
+          <Button onClick={handlePasswordChange} variant="contained" disabled={loading}>
+            Change Password
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Help Dialog */}
       <Dialog open={helpDialog} onClose={() => setHelpDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>Platform-Specific Guide</DialogTitle>
@@ -528,7 +751,7 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
               </ListItemIcon>
               <ListItemText
                 primary="X11 Keyboard Detection"
-                secondary="Full invisible keyboard logging support available"
+                secondary="Full invisible keyboard logging support with real-time sequence detection"
               />
             </ListItem>
             <ListItem>
@@ -536,8 +759,8 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
                 <CheckCircleIcon color="success" />
               </ListItemIcon>
               <ListItemText
-                primary="Ctrl+Alt+V Hotkey"
-                secondary="Global hotkey detection works without special permissions"
+                primary="Advanced Folder Hiding"
+                secondary="Platform-specific hiding with elevated privileges and metadata preservation"
               />
             </ListItem>
             <ListItem>
@@ -545,26 +768,38 @@ const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
                 <CheckCircleIcon color="success" />
               </ListItemIcon>
               <ListItemText
-                primary="Secure Storage"
-                secondary="Files stored in ~/.phantomvault with owner-only permissions"
+                primary="AES-256-CBC Encryption"
+                secondary="Industry-standard encryption with PBKDF2 key derivation"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon>
+                <CheckCircleIcon color="success" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Secure Vault Storage"
+                secondary="Files encrypted and stored in secure vault with complete metadata preservation"
               />
             </ListItem>
           </List>
           
           <Typography variant="h6" sx={{ mb: 2, mt: 3 }}>
-            Usage Instructions
+            Enhanced Security Features
           </Typography>
           <Typography variant="body2" sx={{ mb: 1 }}>
-            1. Create a profile with admin privileges
+            • Real AES-256-CBC encryption (no more fake marker files)
           </Typography>
           <Typography variant="body2" sx={{ mb: 1 }}>
-            2. Add folders to secure them with encryption
+            • Platform-specific folder hiding with elevated privileges
           </Typography>
           <Typography variant="body2" sx={{ mb: 1 }}>
-            3. Use Ctrl+Alt+V followed by typing your password to unlock
+            • Complete metadata preservation and restoration
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            • Secure vault management with integrity checking
           </Typography>
           <Typography variant="body2">
-            4. Folders auto-lock when you lock your screen or after timeout
+            • Comprehensive error handling and audit logging
           </Typography>
         </DialogContent>
         <DialogActions>

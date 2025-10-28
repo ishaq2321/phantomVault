@@ -36,7 +36,13 @@ export interface PhantomVaultAPI {
     authenticateProfile(profileId: string, masterKey: string): Promise<any>;
     changeProfilePassword(profileId: string, oldKey: string, newKey: string): Promise<any>;
     
-    // Folder operations
+    // Enhanced vault operations (AES-256 encryption)
+    lockFolder(profileId: string, folderPath: string, masterKey: string): Promise<any>;
+    unlockFoldersTemporary(profileId: string, masterKey: string): Promise<any>;
+    unlockFoldersPermanent(profileId: string, masterKey: string, folderIds: string[]): Promise<any>;
+    getVaultStats(profileId: string): Promise<any>;
+    
+    // Folder operations (legacy and new)
     addFolder(profileId: string, folderPath: string): Promise<any>;
     getProfileFolders(profileId: string): Promise<any>;
     unlockFolderTemporary(profileId: string, folderId: string): Promise<any>;
@@ -47,8 +53,11 @@ export interface PhantomVaultAPI {
     getProfileAnalytics(profileId: string, timeRange: string): Promise<any>;
     getSystemAnalytics(timeRange: string): Promise<any>;
     
-    // Recovery operations
+    // Enhanced recovery operations (AES-256 with PBKDF2)
     recoverWithKey(recoveryKey: string): Promise<any>;
+    generateRecoveryKey(profileId: string): Promise<any>;
+    getCurrentRecoveryKey(profileId: string, masterKey: string): Promise<any>;
+    changePassword(profileId: string, currentPassword: string, newPassword: string): Promise<any>;
     
     // Platform operations
     getPlatformInfo(): Promise<any>;
@@ -104,7 +113,17 @@ const phantomVaultAPI: PhantomVaultAPI = {
     changeProfilePassword: (profileId, oldKey, newKey) => 
       ipcRenderer.invoke('ipc:changeProfilePassword', { profileId, oldKey, newKey }),
     
-    // Folder operations
+    // Enhanced vault operations (AES-256 encryption)
+    lockFolder: (profileId, folderPath, masterKey) => 
+      ipcRenderer.invoke('ipc:lockFolder', { profileId, folderPath, masterKey }),
+    unlockFoldersTemporary: (profileId, masterKey) => 
+      ipcRenderer.invoke('ipc:unlockFoldersTemporary', { profileId, masterKey }),
+    unlockFoldersPermanent: (profileId, masterKey, folderIds) => 
+      ipcRenderer.invoke('ipc:unlockFoldersPermanent', { profileId, masterKey, folderIds }),
+    getVaultStats: (profileId) => 
+      ipcRenderer.invoke('ipc:getVaultStats', { profileId }),
+    
+    // Folder operations (legacy and new)
     addFolder: (profileId, folderPath) => 
       ipcRenderer.invoke('ipc:addFolder', { profileId, folderPath }),
     getProfileFolders: (profileId) => 
@@ -122,9 +141,15 @@ const phantomVaultAPI: PhantomVaultAPI = {
     getSystemAnalytics: (timeRange) => 
       ipcRenderer.invoke('ipc:getSystemAnalytics', { timeRange }),
     
-    // Recovery operations
+    // Enhanced recovery operations (AES-256 with PBKDF2)
     recoverWithKey: (recoveryKey) => 
       ipcRenderer.invoke('ipc:recoverWithKey', { recoveryKey }),
+    generateRecoveryKey: (profileId) => 
+      ipcRenderer.invoke('ipc:generateRecoveryKey', { profileId }),
+    getCurrentRecoveryKey: (profileId, masterKey) => 
+      ipcRenderer.invoke('ipc:getCurrentRecoveryKey', { profileId, masterKey }),
+    changePassword: (profileId, currentPassword, newPassword) => 
+      ipcRenderer.invoke('ipc:changePassword', { profileId, currentPassword, newPassword }),
     
     // Platform operations
     getPlatformInfo: () => 

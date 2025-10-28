@@ -10,6 +10,8 @@
 
 #include "folder_security_manager.hpp"
 #include "profile_vault.hpp"
+#include "privilege_manager.hpp"
+#include "vault_handler.hpp"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -47,6 +49,7 @@ public:
         , vault_manager_()
         , temporary_unlocks_()
         , last_error_()
+        , privilege_manager_(std::make_unique<PrivilegeManager>())
     {}
     
     bool initialize(const std::string& dataPath) {
@@ -373,6 +376,7 @@ private:
     std::unique_ptr<PhantomVault::VaultManager> vault_manager_;
     std::unordered_map<std::string, std::string> temporary_unlocks_; // folderId -> originalPath
     std::string last_error_;
+    std::unique_ptr<PrivilegeManager> privilege_manager_;
     
     std::string getDefaultDataPath() {
         #ifdef PLATFORM_LINUX

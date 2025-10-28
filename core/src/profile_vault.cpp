@@ -1,5 +1,6 @@
 #include "profile_vault.hpp"
 #include "error_handler.hpp"
+#include "vault_handler.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
@@ -30,7 +31,8 @@ ProfileVault::ProfileVault(const std::string& profile_id, const std::string& vau
     , metadata_file_(vault_path_ + "/vault_metadata.json")
     , temp_unlock_file_(vault_path_ + "/temp_unlock.json")
     , encryption_engine_(std::make_unique<EncryptionEngine>())
-    , error_handler_(std::make_unique<ErrorHandler>()) {
+    , error_handler_(std::make_unique<ErrorHandler>())
+    , vault_handler_(std::make_unique<phantomvault::VaultHandler>()) {
     clearError();
 }
 
@@ -83,7 +85,21 @@ bool ProfileVault::initialize() {
             return false;
         }
         
+        // Initialize vault handler for advanced folder hiding
+        if (vault_handler_ && !vault_handler_->initialize(vault_root_path_)) {
+            setError("Failed to initialize vault handler: " + vault_handler_->getLastError());
+            return false;
+        }
+        
+        // Create advanced vault structure
+        if (vault_handler_ && !vault_handler_->createVaultStructure(profile_id_, profile_id_)) {
+            setError("Failed to create advanced vault structure: " + vault_handler_->getLastError());
+            return false;
+        }
+        
         std::cout << "[ProfileVault] Initialized vault for profile: " << profile_id_ << std::endl;
+        std::cout << "[ProfileVault] Advanced folder hiding: " << 
+                     (vault_handler_->requiresElevatedPrivileges() ? "Requires elevation" : "Available") << std::endl;
         return true;
         
     } catch (const std::exception& e) {
@@ -232,10 +248,30 @@ VaultOperationResult ProfileVault::unlockFolder(const std::string& folder_path, 
                     saveVaultMetadata();
                 }
                 
-                // Clean up vault files
-                std::string vault_folder_path = getVaultFolderPath(folder_info->vault_location);
-                if (fs::exists(vault_folder_path)) {
-                    fs::remove_all(vault_folder_path);
+                // Secure deletion from vault using VaultHandler
+                if (vault_handler_) {
+                    std::hash<std::string> hasher;
+                    std::string folder_identifier = "folder_" + std::to_string(hasher(folder_path));
+                    
+                    auto cleanup_result = vault_handler_->secureDeleteFromVault(profile_id_, folder_identifier);
+                    if (cleanup_result.success) {
+                        std::cout << "[ProfileVault] Secure deletion completed: " << cleanup_result.message << std::endl;
+                    } else {
+                        std::cout << "[ProfileVault] Secure deletion failed, using basic cleanup: " 
+                                  << cleanup_result.error_details << std::endl;
+                        
+                        // Fallback: Basic cleanup
+                        std::string vault_folder_path = getVaultFolderPath(folder_info->vault_location);
+                        if (fs::exists(vault_folder_path)) {
+                            fs::remove_all(vault_folder_path);
+                        }
+                    }
+                } else {
+                    // Fallback: Basic cleanup
+                    std::string vault_folder_path = getVaultFolderPath(folder_info->vault_location);
+                    if (fs::exists(vault_folder_path)) {
+                        fs::remove_all(vault_folder_path);
+                    }
                 }
                 
                 result.message = "Folder permanently unlocked and removed from vault";
@@ -959,8 +995,20 @@ bool ProfileVault::verifyFolderIntegrity(const std::string& vault_location) cons
 
 bool ProfileVault::hideOriginalFolder(const std::string& folder_path) {
     try {
-        // For now, we'll rename the folder to a hidden name
-        // In a production system, this would use platform-specific hiding mechanisms
+        // Use advanced VaultHandler for platform-specific hiding with elevated privileges
+        if (vault_handler_) {
+            auto hiding_result = vault_handler_->hideFolder(folder_path, profile_id_);
+            if (hiding_result.success) {
+                std::cout << "[ProfileVault] Advanced folder hiding successful: " << hiding_result.message << std::endl;
+                return true;
+            } else {
+                // Fall back to basic hiding if advanced hiding fails
+                std::cout << "[ProfileVault] Advanced hiding failed, falling back to basic hiding: " 
+                          << hiding_result.error_details << std::endl;
+            }
+        }
+        
+        // Fallback: Basic folder hiding (rename with hidden suffix)
         std::string hidden_path = folder_path + ".phantomvault_hidden";
         
         if (fs::exists(hidden_path)) {
@@ -973,8 +1021,15 @@ bool ProfileVault::hideOriginalFolder(const std::string& folder_path) {
         #ifdef PLATFORM_LINUX
         // On Linux, files starting with . are hidden
         // We could also use extended attributes
+        #elif PLATFORM_WINDOWS
+        // Set hidden attribute on Windows
+        DWORD attributes = GetFileAttributesA(hidden_path.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES) {
+            SetFileAttributesA(hidden_path.c_str(), attributes | FILE_ATTRIBUTE_HIDDEN);
+        }
         #endif
         
+        std::cout << "[ProfileVault] Basic folder hiding completed for: " << folder_path << std::endl;
         return true;
         
     } catch (const std::exception& e) {
@@ -983,8 +1038,27 @@ bool ProfileVault::hideOriginalFolder(const std::string& folder_path) {
     }
 }
 
-bool ProfileVault::restoreOriginalFolder(const std::string& folder_path, const std::string& /* vault_location */) {
+bool ProfileVault::restoreOriginalFolder(const std::string& folder_path, const std::string& vault_location) {
     try {
+        // Try advanced VaultHandler restoration first
+        if (vault_handler_) {
+            // Generate folder identifier from path for VaultHandler
+            std::hash<std::string> hasher;
+            std::string folder_identifier = "folder_" + std::to_string(hasher(folder_path));
+            
+            auto restoration_result = vault_handler_->restoreFolder(profile_id_, folder_identifier);
+            if (restoration_result.success) {
+                std::cout << "[ProfileVault] Advanced folder restoration successful: " 
+                          << restoration_result.message << std::endl;
+                return true;
+            } else {
+                // Fall back to basic restoration
+                std::cout << "[ProfileVault] Advanced restoration failed, falling back to basic restoration: " 
+                          << restoration_result.error_details << std::endl;
+            }
+        }
+        
+        // Fallback: Basic folder restoration
         std::string hidden_path = folder_path + ".phantomvault_hidden";
         
         if (fs::exists(hidden_path)) {
@@ -992,6 +1066,16 @@ bool ProfileVault::restoreOriginalFolder(const std::string& folder_path, const s
                 fs::remove_all(folder_path);
             }
             fs::rename(hidden_path, folder_path);
+            
+            #ifdef PLATFORM_WINDOWS
+            // Remove hidden attribute on Windows
+            DWORD attributes = GetFileAttributesA(folder_path.c_str());
+            if (attributes != INVALID_FILE_ATTRIBUTES) {
+                SetFileAttributesA(folder_path.c_str(), attributes & ~FILE_ATTRIBUTE_HIDDEN);
+            }
+            #endif
+            
+            std::cout << "[ProfileVault] Basic folder restoration completed for: " << folder_path << std::endl;
         }
         
         return true;

@@ -12,6 +12,7 @@
 #include "ipc_server.hpp"
 #include "performance_monitor.hpp"
 #include "memory_manager.hpp"
+#include "privilege_manager.hpp"
 
 #include <iostream>
 #include <memory>
@@ -42,6 +43,7 @@ public:
         , analytics_engine_(nullptr)
         , ipc_server_(nullptr)
         , performance_monitor_(nullptr)
+        , privilege_manager_(nullptr)
         , last_error_()
     {}
 
@@ -52,6 +54,24 @@ public:
     bool initialize(const std::string& configFile, const std::string& logLevel, int ipcPort) {
         try {
             std::cout << "[ServiceManager] Initializing PhantomVault service..." << std::endl;
+            
+            // Initialize privilege manager first
+            privilege_manager_ = std::make_unique<PrivilegeManager>();
+            if (!privilege_manager_->initialize()) {
+                last_error_ = "Failed to initialize privilege manager: " + privilege_manager_->getLastError();
+                return false;
+            }
+            
+            // Check startup privileges
+            if (!privilege_manager_->validateStartupPrivileges()) {
+                last_error_ = privilege_manager_->getStartupPrivilegeError();
+                std::cout << "[ServiceManager] PRIVILEGE ERROR: " << last_error_ << std::endl;
+                return false;
+            }
+            
+            std::cout << "[ServiceManager] Privilege validation PASSED" << std::endl;
+            std::cout << "[ServiceManager] Current user: " << privilege_manager_->getCurrentUser() << std::endl;
+            std::cout << "[ServiceManager] Privilege level: " << static_cast<int>(privilege_manager_->getCurrentPrivilegeLevel()) << std::endl;
             
             // Platform detection is now handled by individual components
             #ifdef PLATFORM_LINUX
@@ -443,6 +463,7 @@ private:
     std::unique_ptr<AnalyticsEngine> analytics_engine_;
     std::unique_ptr<IPCServer> ipc_server_;
     std::unique_ptr<PerformanceMonitor> performance_monitor_;
+    std::unique_ptr<PrivilegeManager> privilege_manager_;
     
     std::string last_error_;
 };

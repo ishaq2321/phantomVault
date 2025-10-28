@@ -24,7 +24,6 @@ import {
   DialogActions,
   TextField,
   Alert,
-  Divider,
   Paper,
   Stack,
   LinearProgress,
@@ -39,7 +38,6 @@ import {
   Security as SecurityIcon,
   Person as PersonIcon,
   Storage as StorageIcon,
-  AccessTime as TimeIcon,
 } from '@mui/icons-material';
 
 interface DashboardProps {
@@ -59,22 +57,37 @@ interface SecuredFolder {
   id: string;
   name: string;
   originalPath: string;
+  vaultPath: string;
   isLocked: boolean;
+  unlockMode: 'temporary' | 'permanent';
   size: number;
   createdAt: string;
+  lastAccess: string;
+  encryptionStatus: 'encrypted' | 'decrypted' | 'processing' | 'error';
+}
+
+interface VaultStats {
+  totalFolders: number;
+  encryptedFolders: number;
+  totalSize: number;
+  lastBackup: string;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [folders, setFolders] = useState<SecuredFolder[]>([]);
+  const [vaultStats, setVaultStats] = useState<VaultStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   
   // Dialog states
   const [createProfileDialog, setCreateProfileDialog] = useState(false);
   const [authDialog, setAuthDialog] = useState(false);
   const [addFolderDialog, setAddFolderDialog] = useState(false);
+  const [unlockModeDialog, setUnlockModeDialog] = useState(false);
+  const [vaultManagementDialog, setVaultManagementDialog] = useState(false);
   
   // Form states
   const [profileName, setProfileName] = useState('');
@@ -117,6 +130,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       const response = await window.phantomVault.ipc.getProfileFolders(profileId);
       if (response.success) {
         setFolders(response.folders);
+        // Load vault statistics
+        await loadVaultStats(profileId);
       } else {
         setError('Failed to load folders: ' + response.error);
       }
@@ -124,6 +139,17 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       setError('Failed to load folders: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadVaultStats = async (profileId: string) => {
+    try {
+      const response = await window.phantomVault.ipc.getVaultStats(profileId);
+      if (response.success) {
+        setVaultStats(response.stats);
+      }
+    } catch (err) {
+      console.warn('Failed to load vault stats:', err);
     }
   };
 
@@ -182,39 +208,56 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   };
 
   const handleAddFolder = async () => {
-    if (!selectedFolderPath) {
-      setError('Please select a folder');
+    if (!selectedFolderPath || !selectedProfile) {
+      setError('Please select a folder and ensure profile is authenticated');
       return;
     }
 
     try {
       setLoading(true);
-      // TODO: Call actual service API
-      console.log('Adding folder:', selectedFolderPath);
+      // Call the new vault API endpoint for real encryption
+      const response = await window.phantomVault.ipc.lockFolder(
+        selectedProfile.id, 
+        selectedFolderPath, 
+        authKey || masterKey
+      );
       
-      setAddFolderDialog(false);
-      setSelectedFolderPath('');
-      if (selectedProfile) {
+      if (response.success) {
+        setAddFolderDialog(false);
+        setSelectedFolderPath('');
         loadFolders(selectedProfile.id);
+        setSuccess(`Folder encrypted and secured: ${response.message}`);
+      } else {
+        setError('Failed to secure folder: ' + response.error);
       }
     } catch (err) {
-      setError('Failed to add folder');
+      setError('Failed to secure folder: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleUnlockFolders = async (permanent: boolean = false) => {
+    if (!selectedProfile || !authKey) {
+      setError('Please authenticate profile first');
+      return;
+    }
+
     try {
       setLoading(true);
-      // TODO: Call actual service API
-      console.log('Unlocking folders:', permanent ? 'permanent' : 'temporary');
+      // Call the appropriate unlock API endpoint
+      const response = permanent 
+        ? await window.phantomVault.ipc.unlockFoldersPermanent(selectedProfile.id, authKey, [])
+        : await window.phantomVault.ipc.unlockFoldersTemporary(selectedProfile.id, authKey);
       
-      if (selectedProfile) {
+      if (response.success) {
         loadFolders(selectedProfile.id);
+        setSuccess(`Folders unlocked ${permanent ? 'permanently' : 'temporarily'}: ${response.successCount} folders processed`);
+      } else {
+        setError('Failed to unlock folders: ' + response.error);
       }
     } catch (err) {
-      setError('Failed to unlock folders');
+      setError('Failed to unlock folders: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -238,6 +281,12 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+      
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+          {success}
         </Alert>
       )}
       
@@ -406,25 +455,42 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
               ) : (
                 <>
                   <Box sx={{ mb: 2 }}>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
                       <Button
                         variant="contained"
                         startIcon={<LockOpenIcon />}
-                        onClick={() => handleUnlockFolders(false)}
+                        onClick={() => setUnlockModeDialog(true)}
                         size="small"
                       >
-                        Unlock Temporary
+                        Unlock Folders
                       </Button>
                       <Button
                         variant="outlined"
-                        startIcon={<LockOpenIcon />}
-                        onClick={() => handleUnlockFolders(true)}
+                        startIcon={<StorageIcon />}
+                        onClick={() => setVaultManagementDialog(true)}
                         size="small"
-                        color="warning"
                       >
-                        Unlock Permanent
+                        Manage Vault
                       </Button>
                     </Stack>
+                    
+                    {vaultStats && (
+                      <Paper sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>Vault Statistics</Typography>
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <Typography variant="body2">
+                              Encrypted: {vaultStats.encryptedFolders}/{vaultStats.totalFolders}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Typography variant="body2">
+                              Size: {formatFileSize(vaultStats.totalSize)}
+                            </Typography>
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    )}
                   </Box>
                   
                   <List>
@@ -448,6 +514,21 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
                               ) : (
                                 <LockOpenIcon color="success" fontSize="small" />
                               )}
+                              <Chip
+                                label={folder.encryptionStatus}
+                                size="small"
+                                color={
+                                  folder.encryptionStatus === 'encrypted' ? 'success' :
+                                  folder.encryptionStatus === 'processing' ? 'warning' :
+                                  folder.encryptionStatus === 'error' ? 'error' : 'default'
+                                }
+                              />
+                              <Chip
+                                label={folder.unlockMode}
+                                size="small"
+                                variant="outlined"
+                                color={folder.unlockMode === 'permanent' ? 'warning' : 'primary'}
+                              />
                             </Box>
                           }
                           secondary={
@@ -557,12 +638,135 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
             placeholder="/path/to/folder"
           />
           <Alert severity="warning" sx={{ mt: 2 }}>
-            The selected folder will be encrypted and moved to secure storage. Make sure you have a backup!
+            The selected folder will be encrypted with AES-256-CBC and moved to secure vault storage. 
+            Original files will be completely hidden using platform-specific mechanisms.
+          </Alert>
+          <Alert severity="info" sx={{ mt: 1 }}>
+            Encryption process preserves all metadata including permissions, timestamps, and extended attributes.
           </Alert>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddFolderDialog(false)}>Cancel</Button>
-          <Button onClick={handleAddFolder} variant="contained">Add Folder</Button>
+          <Button onClick={handleAddFolder} variant="contained">Encrypt & Secure</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Unlock Mode Selection Dialog */}
+      <Dialog open={unlockModeDialog} onClose={() => setUnlockModeDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Select Unlock Mode</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Choose how you want to unlock your encrypted folders:
+          </Typography>
+          
+          <Stack spacing={2}>
+            <Paper sx={{ p: 2, border: 1, borderColor: 'primary.main' }}>
+              <Typography variant="h6" color="primary" sx={{ mb: 1 }}>
+                Temporary Unlock
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Folders will be decrypted and accessible until you lock your screen, 
+                reboot, or manually re-lock them. Recommended for regular use.
+              </Typography>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => {
+                  setUnlockModeDialog(false);
+                  handleUnlockFolders(false);
+                }}
+              >
+                Unlock Temporarily
+              </Button>
+            </Paper>
+            
+            <Paper sx={{ p: 2, border: 1, borderColor: 'warning.main' }}>
+              <Typography variant="h6" color="warning.main" sx={{ mb: 1 }}>
+                Permanent Unlock
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Folders will be permanently decrypted and removed from vault. 
+                Use only when you no longer need encryption protection.
+              </Typography>
+              <Button
+                variant="outlined"
+                color="warning"
+                fullWidth
+                onClick={() => {
+                  setUnlockModeDialog(false);
+                  handleUnlockFolders(true);
+                }}
+              >
+                Unlock Permanently
+              </Button>
+            </Paper>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUnlockModeDialog(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Vault Management Dialog */}
+      <Dialog open={vaultManagementDialog} onClose={() => setVaultManagementDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Vault Management - {selectedProfile?.name}</DialogTitle>
+        <DialogContent>
+          {vaultStats && (
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2 }}>Storage Statistics</Typography>
+                    <Stack spacing={1}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography>Total Folders:</Typography>
+                        <Typography fontWeight="bold">{vaultStats.totalFolders}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography>Encrypted:</Typography>
+                        <Typography fontWeight="bold" color="success.main">
+                          {vaultStats.encryptedFolders}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography>Total Size:</Typography>
+                        <Typography fontWeight="bold">{formatFileSize(vaultStats.totalSize)}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography>Last Backup:</Typography>
+                        <Typography>{vaultStats.lastBackup}</Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2 }}>Vault Operations</Typography>
+                    <Stack spacing={2}>
+                      <Button variant="outlined" fullWidth>
+                        Verify Vault Integrity
+                      </Button>
+                      <Button variant="outlined" fullWidth>
+                        Compact Vault Storage
+                      </Button>
+                      <Button variant="outlined" fullWidth>
+                        Export Vault Backup
+                      </Button>
+                      <Button variant="outlined" color="warning" fullWidth>
+                        Repair Vault Structure
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVaultManagementDialog(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
