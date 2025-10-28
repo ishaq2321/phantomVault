@@ -35,7 +35,7 @@
   - Create secure sequence matching without storing plaintext sequences
   - _Requirements: 2.2, 2.3, 2.5, 5.2_
 
-- [ ] 6. Create platform adapter for capability detection and fallbacks
+- [x] 6. Create platform adapter for capability detection and fallbacks
   - Implement platform capability detection (keyboard monitoring, notifications, etc.)
   - Add notification-based password input for platforms that support it
   - Create context menu integration for vault access where available
@@ -49,14 +49,14 @@
   - Implement secure folder deletion from vault when permanently unlocked
   - _Requirements: 3.1, 3.2, 3.3, 5.4, 11.3, 11.4_
 
-- [ ] 8. Integrate encryption system with existing service architecture
+- [x] 8. Integrate encryption system with existing service architecture
   - Add new HTTP API endpoints to existing IPC server for vault operations
   - Extend service manager to handle encryption service lifecycle
   - Update existing service startup to initialize encryption components
   - Modify service shutdown to securely cleanup cryptographic material
   - _Requirements: 2.1, 11.1, 11.2_
 
-- [ ] 9. Implement recovery key system and password management
+- [x] 9. Implement recovery key system and password management
   - Add recovery key generation during profile creation using cryptographically secure methods
   - Implement recovery key validation and master key retrieval
   - Create password change functionality with new recovery key generation

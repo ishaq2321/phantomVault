@@ -473,6 +473,44 @@ private:
         registerRoute("GET", "/api/platform", [this](const HttpRequest&) -> HttpResponse {
             return handleGetPlatformInfo();
         });
+        
+        // Vault operation routes
+        registerRoute("POST", "/api/vault/lock", [this](const HttpRequest& req) -> HttpResponse {
+            return handleLockFolder(req);
+        });
+        
+        registerRoute("POST", "/api/vault/unlock", [this](const HttpRequest& req) -> HttpResponse {
+            return handleUnlockFolder(req);
+        });
+        
+        registerRoute("GET", "/api/vault/status", [this](const HttpRequest& req) -> HttpResponse {
+            return handleGetVaultStatus(req);
+        });
+        
+        registerRoute("POST", "/api/vault/relock", [this](const HttpRequest& req) -> HttpResponse {
+            return handleRelockTemporaryFolders(req);
+        });
+        
+        registerRoute("GET", "/api/vault/info", [this](const HttpRequest& req) -> HttpResponse {
+            return handleGetVaultInfo(req);
+        });
+        
+        registerRoute("DELETE", "/api/vault/folder", [this](const HttpRequest& req) -> HttpResponse {
+            return handleRemoveFromVault(req);
+        });
+        
+        // Recovery key routes
+        registerRoute("POST", "/api/recovery/validate", [this](const HttpRequest& req) -> HttpResponse {
+            return handleValidateRecoveryKey(req);
+        });
+        
+        registerRoute("POST", "/api/profiles/change-password", [this](const HttpRequest& req) -> HttpResponse {
+            return handleChangeProfilePassword(req);
+        });
+        
+        registerRoute("POST", "/api/recovery/recover-master-key", [this](const HttpRequest& req) -> HttpResponse {
+            return handleRecoverMasterKey(req);
+        });
     }
     
     // Route handlers
@@ -788,6 +826,391 @@ private:
         } catch (const std::exception& e) {
             response.status_code = 500;
             response.body = R"({"success": false, "error": ")" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    // New vault operation handlers
+    HttpResponse handleLockFolder(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!folder_security_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Folder security manager not available"})";
+                return response;
+            }
+            
+            json requestData = json::parse(request.body);
+            std::string profileId = requestData["profileId"];
+            std::string folderPath = requestData["folderPath"];
+            std::string masterKey = requestData["masterKey"];
+            
+            auto result = folder_security_manager_->lockFolder(profileId, folderPath, masterKey);
+            
+            json responseJson = {
+                {"success", result.success},
+                {"folderId", result.folderId},
+                {"message", result.message}
+            };
+            
+            if (!result.success) {
+                responseJson["error"] = result.error;
+                response.status_code = 400;
+            }
+            
+            response.body = responseJson.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 400;
+            response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleUnlockFolder(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!folder_security_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Folder security manager not available"})";
+                return response;
+            }
+            
+            json requestData = json::parse(request.body);
+            std::string profileId = requestData["profileId"];
+            std::string masterKey = requestData["masterKey"];
+            bool permanent = requestData.value("permanent", false);
+            std::vector<std::string> folderIds = requestData.value("folderIds", std::vector<std::string>());
+            
+            auto result = permanent ? 
+                folder_security_manager_->unlockFoldersPermanent(profileId, masterKey, folderIds) :
+                folder_security_manager_->unlockFoldersTemporary(profileId, masterKey);
+            
+            json responseJson = {
+                {"success", result.success},
+                {"successCount", result.successCount},
+                {"failedCount", result.failedCount},
+                {"unlockedFolderIds", result.unlockedFolderIds},
+                {"failedFolderIds", result.failedFolderIds},
+                {"message", result.message}
+            };
+            
+            if (!result.success) {
+                responseJson["error"] = result.error;
+                response.status_code = 400;
+            }
+            
+            response.body = responseJson.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 400;
+            response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleGetVaultStatus(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!profile_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Profile manager not available"})";
+                return response;
+            }
+            
+            std::string profileId = request.query_params.count("profileId") ? 
+                                   request.query_params.at("profileId") : "";
+            
+            if (profileId.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID required"})";
+                return response;
+            }
+            
+            size_t vaultSize = profile_manager_->getProfileVaultSize(profileId);
+            bool vaultValid = profile_manager_->validateProfileVault(profileId);
+            auto lockedFolders = profile_manager_->getProfileLockedFolders(profileId);
+            
+            json result = {
+                {"success", true},
+                {"profileId", profileId},
+                {"vaultSize", vaultSize},
+                {"vaultValid", vaultValid},
+                {"lockedFolderCount", lockedFolders.size()},
+                {"lockedFolders", lockedFolders}
+            };
+            
+            response.body = result.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": ")" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleRelockTemporaryFolders(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!folder_security_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Folder security manager not available"})";
+                return response;
+            }
+            
+            json requestData = json::parse(request.body);
+            std::string profileId = requestData["profileId"];
+            
+            bool success = folder_security_manager_->lockTemporaryFolders(profileId);
+            
+            json responseJson = {
+                {"success", success},
+                {"message", success ? "Temporary folders re-locked successfully" : "Failed to re-lock temporary folders"}
+            };
+            
+            if (!success) {
+                response.status_code = 400;
+                responseJson["error"] = folder_security_manager_->getLastError();
+            }
+            
+            response.body = responseJson.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 400;
+            response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleGetVaultInfo(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!profile_manager_ || !folder_security_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Required managers not available"})";
+                return response;
+            }
+            
+            std::string profileId = request.query_params.count("profileId") ? 
+                                   request.query_params.at("profileId") : "";
+            
+            if (profileId.empty()) {
+                response.status_code = 400;
+                response.body = R"({"success": false, "error": "Profile ID required"})";
+                return response;
+            }
+            
+            auto profile = profile_manager_->getProfile(profileId);
+            if (!profile) {
+                response.status_code = 404;
+                response.body = R"({"success": false, "error": "Profile not found"})";
+                return response;
+            }
+            
+            auto folders = folder_security_manager_->getProfileFolders(profileId);
+            size_t vaultSize = profile_manager_->getProfileVaultSize(profileId);
+            
+            json result = {
+                {"success", true},
+                {"profile", {
+                    {"id", profile->id},
+                    {"name", profile->name},
+                    {"createdAt", std::chrono::duration_cast<std::chrono::milliseconds>(profile->createdAt.time_since_epoch()).count()},
+                    {"lastAccess", std::chrono::duration_cast<std::chrono::milliseconds>(profile->lastAccess.time_since_epoch()).count()},
+                    {"folderCount", profile->folderCount}
+                }},
+                {"vault", {
+                    {"size", vaultSize},
+                    {"folderCount", folders.size()}
+                }},
+                {"folders", json::array()}
+            };
+            
+            for (const auto& folder : folders) {
+                json folderJson = {
+                    {"id", folder.id},
+                    {"name", folder.originalName},
+                    {"originalPath", folder.originalPath},
+                    {"isLocked", folder.isLocked},
+                    {"unlockMode", folder.unlockMode == UnlockMode::TEMPORARY ? "temporary" : "permanent"},
+                    {"size", folder.originalSize},
+                    {"createdAt", std::chrono::duration_cast<std::chrono::milliseconds>(folder.createdAt.time_since_epoch()).count()},
+                    {"lastAccess", std::chrono::duration_cast<std::chrono::milliseconds>(folder.lastAccess.time_since_epoch()).count()}
+                };
+                result["folders"].push_back(folderJson);
+            }
+            
+            response.body = result.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": ")" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleRemoveFromVault(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!folder_security_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Folder security manager not available"})";
+                return response;
+            }
+            
+            json requestData = json::parse(request.body);
+            std::string profileId = requestData["profileId"];
+            std::string folderId = requestData["folderId"];
+            
+            auto result = folder_security_manager_->removeFromProfile(profileId, folderId);
+            
+            json responseJson = {
+                {"success", result.success},
+                {"folderId", result.folderId},
+                {"message", result.message}
+            };
+            
+            if (!result.success) {
+                responseJson["error"] = result.error;
+                response.status_code = 400;
+            }
+            
+            response.body = responseJson.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 400;
+            response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleValidateRecoveryKey(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!profile_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Profile manager not available"})";
+                return response;
+            }
+            
+            json requestData = json::parse(request.body);
+            std::string recoveryKey = requestData["recoveryKey"];
+            
+            auto profileId = profile_manager_->getProfileIdFromRecoveryKey(recoveryKey);
+            
+            json responseJson = {
+                {"success", profileId.has_value()},
+                {"message", profileId.has_value() ? "Recovery key is valid" : "Invalid recovery key"}
+            };
+            
+            if (profileId.has_value()) {
+                responseJson["profileId"] = profileId.value();
+            } else {
+                response.status_code = 401;
+                responseJson["error"] = "Invalid recovery key";
+            }
+            
+            response.body = responseJson.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 400;
+            response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleChangeProfilePassword(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!profile_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Profile manager not available"})";
+                return response;
+            }
+            
+            json requestData = json::parse(request.body);
+            std::string profileId = requestData["profileId"];
+            std::string oldPassword = requestData["oldPassword"];
+            std::string newPassword = requestData["newPassword"];
+            
+            auto result = profile_manager_->changeProfilePassword(profileId, oldPassword, newPassword);
+            
+            json responseJson = {
+                {"success", result.success},
+                {"message", result.message}
+            };
+            
+            if (result.success) {
+                responseJson["newRecoveryKey"] = result.recoveryKey;
+            } else {
+                responseJson["error"] = result.error;
+                response.status_code = 400;
+            }
+            
+            response.body = responseJson.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 400;
+            response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleRecoverMasterKey(const HttpRequest& request) {
+        HttpResponse response;
+        
+        try {
+            if (!profile_manager_) {
+                response.status_code = 500;
+                response.body = R"({"success": false, "error": "Profile manager not available"})";
+                return response;
+            }
+            
+            json requestData = json::parse(request.body);
+            std::string recoveryKey = requestData["recoveryKey"];
+            
+            auto masterKey = profile_manager_->recoverMasterKeyFromRecoveryKey(recoveryKey);
+            
+            json responseJson = {
+                {"success", masterKey.has_value()},
+                {"message", masterKey.has_value() ? "Master key recovered successfully" : "Recovery failed"}
+            };
+            
+            if (masterKey.has_value()) {
+                responseJson["masterKey"] = masterKey.value();
+                
+                // Also return the profile ID for convenience
+                auto profileId = profile_manager_->getProfileIdFromRecoveryKey(recoveryKey);
+                if (profileId.has_value()) {
+                    responseJson["profileId"] = profileId.value();
+                }
+            } else {
+                response.status_code = 401;
+                responseJson["error"] = "Invalid recovery key or recovery failed";
+            }
+            
+            response.body = responseJson.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 400;
+            response.body = R"({"success": false, "error": "Invalid request: )" + std::string(e.what()) + R"("})";
         }
         
         return response;

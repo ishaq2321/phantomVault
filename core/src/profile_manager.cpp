@@ -132,12 +132,20 @@ public:
             // Encrypt recovery key with master key
             std::string encryptedRecoveryKey = encryptRecoveryKey(recoveryKey, masterKey);
             
+            // Hash recovery key for validation
+            std::string recoveryKeyHash = hashRecoveryKey(recoveryKey);
+            
+            // Encrypt master key with recovery key for recovery purposes
+            std::string masterKeyEncryptedWithRecovery = encryptMasterKeyWithRecoveryKey(masterKey, recoveryKey);
+            
             // Create profile data
             json profileData;
             profileData["id"] = profileId;
             profileData["name"] = name;
             profileData["masterKeyHash"] = masterKeyHash;
             profileData["encryptedRecoveryKey"] = encryptedRecoveryKey;
+            profileData["recoveryKeyHash"] = recoveryKeyHash;
+            profileData["masterKeyEncryptedWithRecovery"] = masterKeyEncryptedWithRecovery;
             profileData["createdAt"] = getCurrentTimestamp();
             profileData["lastAccess"] = getCurrentTimestamp();
             
@@ -358,6 +366,12 @@ public:
             // Encrypt new recovery key with new master key
             std::string newEncryptedRecoveryKey = encryptRecoveryKey(newRecoveryKey, newKey);
             
+            // Hash new recovery key for validation
+            std::string newRecoveryKeyHash = hashRecoveryKey(newRecoveryKey);
+            
+            // Encrypt new master key with new recovery key
+            std::string newMasterKeyEncryptedWithRecovery = encryptMasterKeyWithRecoveryKey(newKey, newRecoveryKey);
+            
             // Update profile
             fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
             std::ifstream inFile(profileFile);
@@ -367,6 +381,8 @@ public:
             
             profileData["masterKeyHash"] = newMasterKeyHash;
             profileData["encryptedRecoveryKey"] = newEncryptedRecoveryKey;
+            profileData["recoveryKeyHash"] = newRecoveryKeyHash;
+            profileData["masterKeyEncryptedWithRecovery"] = newMasterKeyEncryptedWithRecovery;
             profileData["lastAccess"] = getCurrentTimestamp();
             
             std::ofstream outFile(profileFile);
@@ -398,13 +414,17 @@ public:
                 json profileData;
                 file >> profileData;
                 
-                std::string encryptedRecoveryKey = profileData["encryptedRecoveryKey"];
-                std::string decryptedKey = decryptRecoveryKey(encryptedRecoveryKey, recoveryKey);
-                
-                if (decryptedKey == recoveryKey) {
-                    // Recovery key matches, but we can't return the actual master key
-                    // Instead, we return the profile ID to indicate success
-                    return profile.id;
+                // For recovery key validation, we need to check if the provided recovery key
+                // matches the one stored for this profile. Since we can't decrypt without
+                // the master key, we store a hash of the recovery key for validation.
+                if (profileData.contains("recoveryKeyHash")) {
+                    std::string storedRecoveryHash = profileData["recoveryKeyHash"];
+                    std::string providedRecoveryHash = hashRecoveryKey(recoveryKey);
+                    
+                    if (storedRecoveryHash == providedRecoveryHash) {
+                        // Recovery key matches - return profile ID for validation
+                        return profile.id;
+                    }
                 }
             }
             
@@ -422,6 +442,207 @@ public:
             return profileId;
         }
         return std::nullopt;
+    }
+    
+    std::optional<std::string> recoverMasterKeyFromRecoveryKey(const std::string& recoveryKey) {
+        try {
+            // First validate the recovery key and get profile ID
+            auto profileId = getProfileIdFromRecoveryKey(recoveryKey);
+            if (!profileId.has_value()) {
+                return std::nullopt;
+            }
+            
+            // Load profile data
+            fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId.value() + ".json");
+            std::ifstream file(profileFile);
+            json profileData;
+            file >> profileData;
+            
+            if (!profileData.contains("encryptedRecoveryKey")) {
+                return std::nullopt;
+            }
+            
+            // The recovery key itself is stored encrypted with the master key
+            // For recovery, we need a different approach: store the master key encrypted with recovery key
+            if (profileData.contains("masterKeyEncryptedWithRecovery")) {
+                std::string encryptedMasterKey = profileData["masterKeyEncryptedWithRecovery"];
+                std::string decryptedMasterKey = decryptMasterKeyWithRecoveryKey(encryptedMasterKey, recoveryKey);
+                
+                if (!decryptedMasterKey.empty()) {
+                    return decryptedMasterKey;
+                }
+            }
+            
+            return std::nullopt;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Master key recovery failed: " + std::string(e.what());
+            return std::nullopt;
+        }
+    }
+    
+    std::string decryptMasterKeyWithRecoveryKey(const std::string& encryptedData, const std::string& recoveryKey) {
+        try {
+            // Parse encrypted data: salt:iv:encrypted_data (same format as recovery key encryption)
+            std::vector<std::string> parts;
+            std::stringstream ss(encryptedData);
+            std::string part;
+            
+            while (std::getline(ss, part, ':')) {
+                parts.push_back(part);
+            }
+            
+            if (parts.size() != 3) {
+                return ""; // Invalid format
+            }
+            
+            // Convert hex parts to bytes
+            unsigned char salt[16], iv[16];
+            
+            // Parse salt
+            if (parts[0].length() != 32) return "";
+            for (int i = 0; i < 16; ++i) {
+                std::string byteStr = parts[0].substr(i * 2, 2);
+                salt[i] = (unsigned char)std::stoi(byteStr, nullptr, 16);
+            }
+            
+            // Parse IV
+            if (parts[1].length() != 32) return "";
+            for (int i = 0; i < 16; ++i) {
+                std::string byteStr = parts[1].substr(i * 2, 2);
+                iv[i] = (unsigned char)std::stoi(byteStr, nullptr, 16);
+            }
+            
+            // Parse encrypted data
+            std::vector<unsigned char> encrypted_bytes;
+            for (size_t i = 0; i < parts[2].length(); i += 2) {
+                std::string byteStr = parts[2].substr(i, 2);
+                encrypted_bytes.push_back((unsigned char)std::stoi(byteStr, nullptr, 16));
+            }
+            
+            // Derive decryption key from recovery key
+            unsigned char derived_key[32];
+            if (PKCS5_PBKDF2_HMAC(recoveryKey.c_str(), recoveryKey.length(), salt, sizeof(salt),
+                                 50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
+                return "";
+            }
+            
+            // Decrypt using AES-256-CBC
+            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+            if (!ctx) {
+                return "";
+            }
+            
+            std::string decrypted_data;
+            
+            if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, derived_key, iv) == 1) {
+                unsigned char decrypted[1024];
+                int len = 0, total_len = 0;
+                
+                if (EVP_DecryptUpdate(ctx, decrypted, &len, encrypted_bytes.data(), encrypted_bytes.size()) == 1) {
+                    total_len += len;
+                    
+                    if (EVP_DecryptFinal_ex(ctx, decrypted + total_len, &len) == 1) {
+                        total_len += len;
+                        decrypted_data = std::string(reinterpret_cast<char*>(decrypted), total_len);
+                    }
+                }
+            }
+            
+            EVP_CIPHER_CTX_free(ctx);
+            
+            // Secure cleanup
+            memset(derived_key, 0, sizeof(derived_key));
+            
+            return decrypted_data;
+            
+        } catch (const std::exception& e) {
+            return "";
+        }
+    }
+    
+    std::string encryptMasterKeyWithRecoveryKey(const std::string& masterKey, const std::string& recoveryKey) {
+        try {
+            // Generate a unique salt for this encryption
+            unsigned char salt[16];
+            if (RAND_bytes(salt, sizeof(salt)) != 1) {
+                throw std::runtime_error("Failed to generate salt for master key encryption");
+            }
+            
+            // Derive encryption key from recovery key using PBKDF2
+            unsigned char derived_key[32];
+            if (PKCS5_PBKDF2_HMAC(recoveryKey.c_str(), recoveryKey.length(), salt, sizeof(salt),
+                                 50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
+                throw std::runtime_error("Failed to derive key for master key encryption");
+            }
+            
+            // Generate IV for AES encryption
+            unsigned char iv[16];
+            if (RAND_bytes(iv, sizeof(iv)) != 1) {
+                throw std::runtime_error("Failed to generate IV for master key encryption");
+            }
+            
+            // Encrypt master key using AES-256-CBC
+            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+            if (!ctx) {
+                throw std::runtime_error("Failed to create cipher context for master key");
+            }
+            
+            std::string encrypted_data;
+            
+            if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, derived_key, iv) == 1) {
+                unsigned char encrypted[1024];
+                int len = 0, total_len = 0;
+                
+                if (EVP_EncryptUpdate(ctx, encrypted, &len, 
+                                    reinterpret_cast<const unsigned char*>(masterKey.c_str()), 
+                                    masterKey.length()) == 1) {
+                    total_len += len;
+                    
+                    if (EVP_EncryptFinal_ex(ctx, encrypted + total_len, &len) == 1) {
+                        total_len += len;
+                        
+                        // Create final encrypted package: salt + iv + encrypted_data
+                        std::stringstream ss;
+                        
+                        // Add salt (hex)
+                        for (int i = 0; i < 16; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)salt[i];
+                        }
+                        ss << ":";
+                        
+                        // Add IV (hex)
+                        for (int i = 0; i < 16; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)iv[i];
+                        }
+                        ss << ":";
+                        
+                        // Add encrypted data (hex)
+                        for (int i = 0; i < total_len; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)encrypted[i];
+                        }
+                        
+                        encrypted_data = ss.str();
+                    }
+                }
+            }
+            
+            EVP_CIPHER_CTX_free(ctx);
+            
+            // Secure cleanup
+            memset(derived_key, 0, sizeof(derived_key));
+            memset(iv, 0, sizeof(iv));
+            memset(salt, 0, sizeof(salt));
+            
+            if (encrypted_data.empty()) {
+                throw std::runtime_error("Master key encryption failed");
+            }
+            
+            return encrypted_data;
+            
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Master key encryption error: " + std::string(e.what()));
+        }
     }
     
     void setActiveProfile(const std::string& profileId) {
@@ -604,6 +825,38 @@ private:
         return recoveryKey;
     }
     
+    std::string hashRecoveryKey(const std::string& recoveryKey) {
+        try {
+            // Generate salt for recovery key hash
+            unsigned char salt[16];
+            if (RAND_bytes(salt, sizeof(salt)) != 1) {
+                throw std::runtime_error("Failed to generate salt for recovery key hash");
+            }
+            
+            // Hash recovery key with PBKDF2
+            unsigned char hash[32];
+            if (PKCS5_PBKDF2_HMAC(recoveryKey.c_str(), recoveryKey.length(), salt, sizeof(salt),
+                                 100000, EVP_sha256(), sizeof(hash), hash) != 1) {
+                throw std::runtime_error("Failed to hash recovery key");
+            }
+            
+            // Combine salt and hash
+            std::stringstream ss;
+            for (int i = 0; i < 16; ++i) {
+                ss << std::hex << std::setw(2) << std::setfill('0') << (int)salt[i];
+            }
+            ss << ":";
+            for (int i = 0; i < 32; ++i) {
+                ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+            }
+            
+            return ss.str();
+            
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Recovery key hashing failed: " + std::string(e.what()));
+        }
+    }
+    
     std::string hashPassword(const std::string& password) {
         // Generate salt
         unsigned char salt[16];
@@ -670,38 +923,164 @@ private:
     }
     
     std::string encryptRecoveryKey(const std::string& recoveryKey, const std::string& masterKey) {
-        // Simple XOR encryption for recovery key storage
-        // In production, this would use proper AES encryption
-        std::string encrypted = recoveryKey;
-        for (size_t i = 0; i < encrypted.length(); ++i) {
-            encrypted[i] ^= masterKey[i % masterKey.length()];
+        try {
+            // Use proper AES encryption for recovery key storage
+            // Generate a unique salt for this recovery key
+            unsigned char salt[16];
+            if (RAND_bytes(salt, sizeof(salt)) != 1) {
+                throw std::runtime_error("Failed to generate salt for recovery key encryption");
+            }
+            
+            // Derive encryption key from master key using PBKDF2
+            unsigned char derived_key[32];
+            if (PKCS5_PBKDF2_HMAC(masterKey.c_str(), masterKey.length(), salt, sizeof(salt),
+                                 50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
+                throw std::runtime_error("Failed to derive key for recovery key encryption");
+            }
+            
+            // Generate IV for AES encryption
+            unsigned char iv[16];
+            if (RAND_bytes(iv, sizeof(iv)) != 1) {
+                throw std::runtime_error("Failed to generate IV for recovery key encryption");
+            }
+            
+            // Encrypt recovery key using AES-256-CBC
+            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+            if (!ctx) {
+                throw std::runtime_error("Failed to create cipher context for recovery key");
+            }
+            
+            std::string encrypted_data;
+            
+            if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, derived_key, iv) == 1) {
+                unsigned char encrypted[1024];
+                int len = 0, total_len = 0;
+                
+                if (EVP_EncryptUpdate(ctx, encrypted, &len, 
+                                    reinterpret_cast<const unsigned char*>(recoveryKey.c_str()), 
+                                    recoveryKey.length()) == 1) {
+                    total_len += len;
+                    
+                    if (EVP_EncryptFinal_ex(ctx, encrypted + total_len, &len) == 1) {
+                        total_len += len;
+                        
+                        // Create final encrypted package: salt + iv + encrypted_data
+                        std::stringstream ss;
+                        
+                        // Add salt (hex)
+                        for (int i = 0; i < 16; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)salt[i];
+                        }
+                        ss << ":";
+                        
+                        // Add IV (hex)
+                        for (int i = 0; i < 16; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)iv[i];
+                        }
+                        ss << ":";
+                        
+                        // Add encrypted data (hex)
+                        for (int i = 0; i < total_len; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)encrypted[i];
+                        }
+                        
+                        encrypted_data = ss.str();
+                    }
+                }
+            }
+            
+            EVP_CIPHER_CTX_free(ctx);
+            
+            // Secure cleanup
+            memset(derived_key, 0, sizeof(derived_key));
+            memset(iv, 0, sizeof(iv));
+            memset(salt, 0, sizeof(salt));
+            
+            if (encrypted_data.empty()) {
+                throw std::runtime_error("Recovery key encryption failed");
+            }
+            
+            return encrypted_data;
+            
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Recovery key encryption error: " + std::string(e.what()));
         }
-        
-        // Convert to hex
-        std::stringstream ss;
-        for (char c : encrypted) {
-            ss << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)c;
-        }
-        
-        return ss.str();
     }
     
-    std::string decryptRecoveryKey(const std::string& encryptedHex, const std::string& recoveryKey) {
+    std::string decryptRecoveryKey(const std::string& encryptedData, const std::string& masterKey) {
         try {
-            // Convert hex to bytes
-            std::string encrypted;
-            for (size_t i = 0; i < encryptedHex.length(); i += 2) {
-                std::string byteStr = encryptedHex.substr(i, 2);
-                encrypted += (char)std::stoi(byteStr, nullptr, 16);
+            // Parse encrypted data: salt:iv:encrypted_data
+            std::vector<std::string> parts;
+            std::stringstream ss(encryptedData);
+            std::string part;
+            
+            while (std::getline(ss, part, ':')) {
+                parts.push_back(part);
             }
             
-            // Try to decrypt with recovery key
-            std::string decrypted = encrypted;
-            for (size_t i = 0; i < decrypted.length(); ++i) {
-                decrypted[i] ^= recoveryKey[i % recoveryKey.length()];
+            if (parts.size() != 3) {
+                return ""; // Invalid format
             }
             
-            return decrypted;
+            // Convert hex parts to bytes
+            unsigned char salt[16], iv[16];
+            
+            // Parse salt
+            if (parts[0].length() != 32) return "";
+            for (int i = 0; i < 16; ++i) {
+                std::string byteStr = parts[0].substr(i * 2, 2);
+                salt[i] = (unsigned char)std::stoi(byteStr, nullptr, 16);
+            }
+            
+            // Parse IV
+            if (parts[1].length() != 32) return "";
+            for (int i = 0; i < 16; ++i) {
+                std::string byteStr = parts[1].substr(i * 2, 2);
+                iv[i] = (unsigned char)std::stoi(byteStr, nullptr, 16);
+            }
+            
+            // Parse encrypted data
+            std::vector<unsigned char> encrypted_bytes;
+            for (size_t i = 0; i < parts[2].length(); i += 2) {
+                std::string byteStr = parts[2].substr(i, 2);
+                encrypted_bytes.push_back((unsigned char)std::stoi(byteStr, nullptr, 16));
+            }
+            
+            // Derive decryption key from master key
+            unsigned char derived_key[32];
+            if (PKCS5_PBKDF2_HMAC(masterKey.c_str(), masterKey.length(), salt, sizeof(salt),
+                                 50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
+                return "";
+            }
+            
+            // Decrypt using AES-256-CBC
+            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+            if (!ctx) {
+                return "";
+            }
+            
+            std::string decrypted_data;
+            
+            if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, derived_key, iv) == 1) {
+                unsigned char decrypted[1024];
+                int len = 0, total_len = 0;
+                
+                if (EVP_DecryptUpdate(ctx, decrypted, &len, encrypted_bytes.data(), encrypted_bytes.size()) == 1) {
+                    total_len += len;
+                    
+                    if (EVP_DecryptFinal_ex(ctx, decrypted + total_len, &len) == 1) {
+                        total_len += len;
+                        decrypted_data = std::string(reinterpret_cast<char*>(decrypted), total_len);
+                    }
+                }
+            }
+            
+            EVP_CIPHER_CTX_free(ctx);
+            
+            // Secure cleanup
+            memset(derived_key, 0, sizeof(derived_key));
+            
+            return decrypted_data;
             
         } catch (const std::exception& e) {
             return "";
@@ -821,6 +1200,10 @@ std::string ProfileManager::recoverMasterKey(const std::string& recoveryKey) {
 
 std::optional<std::string> ProfileManager::getProfileIdFromRecoveryKey(const std::string& recoveryKey) {
     return pimpl->getProfileIdFromRecoveryKey(recoveryKey);
+}
+
+std::optional<std::string> ProfileManager::recoverMasterKeyFromRecoveryKey(const std::string& recoveryKey) {
+    return pimpl->recoverMasterKeyFromRecoveryKey(recoveryKey);
 }
 
 void ProfileManager::setActiveProfile(const std::string& profileId) {

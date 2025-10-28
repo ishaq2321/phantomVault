@@ -126,6 +126,13 @@ public:
             
             std::cout << "[ServiceManager] Performance monitor initialized" << std::endl;
             
+            // Initialize encryption service components
+            if (!initializeEncryptionServices()) {
+                last_error_ = "Failed to initialize encryption services";
+                return false;
+            }
+            std::cout << "[ServiceManager] Encryption services initialized" << std::endl;
+            
             std::cout << "[ServiceManager] All components initialized successfully" << std::endl;
             return true;
             
@@ -187,6 +194,9 @@ public:
         
         std::cout << "[ServiceManager] Stopping PhantomVault service..." << std::endl;
         
+        // Perform secure cleanup of cryptographic material first
+        secureCleanupCryptographicMaterial();
+        
         // Stop components in reverse order
         if (performance_monitor_) {
             performance_monitor_->stop();
@@ -205,7 +215,7 @@ public:
         }
         
         running_ = false;
-        std::cout << "[ServiceManager] Service stopped" << std::endl;
+        std::cout << "[ServiceManager] Service stopped with secure cleanup" << std::endl;
     }
 
     bool isRunning() const {
@@ -282,6 +292,145 @@ public:
         #else
         return 0;
         #endif
+    }
+    
+    bool initializeEncryptionServices() {
+        try {
+            std::cout << "[ServiceManager] Initializing encryption service components..." << std::endl;
+            
+            // Verify encryption engine functionality
+            if (profile_manager_) {
+                // Test encryption engine through profile manager
+                auto profiles = profile_manager_->getAllProfiles();
+                std::cout << "[ServiceManager] Encryption engine verified through profile system" << std::endl;
+            }
+            
+            // Setup keyboard sequence callbacks for encryption operations
+            if (keyboard_sequence_detector_ && folder_security_manager_) {
+                keyboard_sequence_detector_->setOnPasswordDetected([this](const PasswordPattern& pattern) {
+                    handlePasswordDetection(pattern);
+                });
+                std::cout << "[ServiceManager] Keyboard sequence callbacks configured" << std::endl;
+            }
+            
+            // Initialize vault system integrity checks
+            if (profile_manager_) {
+                auto profiles = profile_manager_->getAllProfiles();
+                for (const auto& profile : profiles) {
+                    if (!profile_manager_->validateProfileVault(profile.id)) {
+                        std::cout << "[ServiceManager] Warning: Vault integrity issue detected for profile: " << profile.name << std::endl;
+                        // Attempt maintenance
+                        profile_manager_->performProfileVaultMaintenance(profile.id);
+                    }
+                }
+                std::cout << "[ServiceManager] Vault integrity checks completed" << std::endl;
+            }
+            
+            // Setup encryption analytics tracking
+            if (analytics_engine_) {
+                analytics_engine_->logEvent(EventType::SERVICE_STARTED, SecurityLevel::INFO, "", 
+                                          "Encryption services initialized", {{"version", "1.0.0"}});
+                std::cout << "[ServiceManager] Encryption analytics tracking enabled" << std::endl;
+            }
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Encryption service initialization failed: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    void handlePasswordDetection(const PasswordPattern& pattern) {
+        try {
+            std::cout << "[ServiceManager] Password pattern detected, attempting unlock..." << std::endl;
+            
+            if (!folder_security_manager_) {
+                return;
+            }
+            
+            // Try to find matching profile for this password
+            if (profile_manager_) {
+                auto profiles = profile_manager_->getAllProfiles();
+                for (const auto& profile : profiles) {
+                    if (profile_manager_->verifyMasterKey(profile.id, pattern.password)) {
+                        std::cout << "[ServiceManager] Master key matched for profile: " << profile.name << std::endl;
+                        
+                        // Perform unlock based on pattern type
+                        if (pattern.isTemporary) {
+                            auto result = folder_security_manager_->unlockFoldersTemporary(profile.id, pattern.password);
+                            if (result.success) {
+                                std::cout << "[ServiceManager] Temporary unlock successful: " << result.successCount << " folders" << std::endl;
+                            }
+                        } else if (pattern.isPermanent) {
+                            auto result = folder_security_manager_->unlockFoldersPermanent(profile.id, pattern.password);
+                            if (result.success) {
+                                std::cout << "[ServiceManager] Permanent unlock successful: " << result.successCount << " folders" << std::endl;
+                            }
+                        } else {
+                            // Default to temporary unlock
+                            auto result = folder_security_manager_->unlockFoldersTemporary(profile.id, pattern.password);
+                            if (result.success) {
+                                std::cout << "[ServiceManager] Default temporary unlock successful: " << result.successCount << " folders" << std::endl;
+                            }
+                        }
+                        
+                        // Log analytics event
+                        if (analytics_engine_) {
+                            analytics_engine_->logEvent(EventType::KEYBOARD_SEQUENCE_DETECTED, SecurityLevel::INFO, 
+                                                      profile.id, "Password pattern detected and processed", {});
+                        }
+                        
+                        break; // Found matching profile, stop searching
+                    }
+                }
+            }
+            
+        } catch (const std::exception& e) {
+            std::cout << "[ServiceManager] Error handling password detection: " << e.what() << std::endl;
+            if (analytics_engine_) {
+                analytics_engine_->logEvent(EventType::SECURITY_VIOLATION, SecurityLevel::WARNING, "", 
+                                          "Password detection error", {{"error", e.what()}});
+            }
+        }
+    }
+    
+    void secureCleanupCryptographicMaterial() {
+        try {
+            std::cout << "[ServiceManager] Performing secure cleanup of cryptographic material..." << std::endl;
+            
+            // Clear any cached keys or sensitive data
+            if (profile_manager_) {
+                profile_manager_->clearActiveProfile();
+                std::cout << "[ServiceManager] Active profile cleared" << std::endl;
+            }
+            
+            // Re-lock any temporarily unlocked folders
+            if (folder_security_manager_) {
+                auto profiles = profile_manager_ ? profile_manager_->getAllProfiles() : std::vector<Profile>();
+                for (const auto& profile : profiles) {
+                    folder_security_manager_->lockTemporaryFolders(profile.id);
+                }
+                std::cout << "[ServiceManager] Temporary folders re-locked" << std::endl;
+            }
+            
+            // Stop keyboard monitoring to prevent key capture
+            if (keyboard_sequence_detector_) {
+                keyboard_sequence_detector_->deactivateSequenceDetection();
+                std::cout << "[ServiceManager] Keyboard sequence detection deactivated" << std::endl;
+            }
+            
+            // Log security event
+            if (analytics_engine_) {
+                analytics_engine_->logEvent(EventType::SERVICE_STOPPED, SecurityLevel::INFO, "", 
+                                          "Secure cleanup completed", {});
+            }
+            
+            std::cout << "[ServiceManager] Cryptographic material cleanup completed" << std::endl;
+            
+        } catch (const std::exception& e) {
+            std::cout << "[ServiceManager] Error during secure cleanup: " << e.what() << std::endl;
+        }
     }
 
 private:

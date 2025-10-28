@@ -80,6 +80,7 @@ public:
     // Recovery operations
     std::string recoverMasterKey(const std::string& recoveryKey);
     std::optional<std::string> getProfileIdFromRecoveryKey(const std::string& recoveryKey);
+    std::optional<std::string> recoverMasterKeyFromRecoveryKey(const std::string& recoveryKey);
 
     // Session management
     void setActiveProfile(const std::string& profileId);
