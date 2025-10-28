@@ -91,7 +91,7 @@
   - Implement performance tests for encryption operations and system impact
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
 
-- [ ] 14. Add migration support for existing installations
+- [x] 14. Add migration support for existing installations
   - Create detection mechanism for existing marker-file based "encryption"
   - Implement migration wizard to convert fake encryption to real encryption
   - Add backup creation before migration with verification
