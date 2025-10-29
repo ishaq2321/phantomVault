@@ -36,6 +36,37 @@ endif()
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
+# Find Argon2 library
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(ARGON2 QUIET libargon2)
+    pkg_check_modules(ZSTD QUIET libzstd)
+endif()
+
+if(NOT ARGON2_FOUND)
+    # If not found, we'll fetch it
+    message(STATUS "Argon2 not found, fetching from source")
+    include(FetchContent)
+    FetchContent_Declare(
+        argon2
+        GIT_REPOSITORY https://github.com/P-H-C/phc-winner-argon2.git
+        GIT_TAG 20190702
+    )
+    FetchContent_MakeAvailable(argon2)
+    set(ARGON2_LIBRARIES argon2)
+    set(ARGON2_INCLUDE_DIRS ${argon2_SOURCE_DIR}/include)
+endif()
+
+if(NOT ZSTD_FOUND)
+    # Try to find system zstd
+    find_library(ZSTD_LIBRARIES NAMES zstd)
+    find_path(ZSTD_INCLUDE_DIRS NAMES zstd.h)
+    if(NOT ZSTD_LIBRARIES OR NOT ZSTD_INCLUDE_DIRS)
+        message(STATUS "Zstandard not found, will use system package")
+        set(ZSTD_LIBRARIES zstd)
+    endif()
+endif()
+
 # Find or fetch nlohmann/json
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
@@ -51,6 +82,12 @@ endif()
 
 # Include directories
 include_directories(include)
+if(ARGON2_INCLUDE_DIRS)
+    include_directories(${ARGON2_INCLUDE_DIRS})
+endif()
+if(ZSTD_INCLUDE_DIRS)
+    include_directories(${ZSTD_INCLUDE_DIRS})
+endif()
 
 # Source files (main.cpp removed - using unified entry point from src/main.cpp)
 set(CORE_SOURCES
@@ -82,6 +119,8 @@ target_link_libraries(phantomvault-service
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
+    ${ARGON2_LIBRARIES}
+    ${ZSTD_LIBRARIES}
 )
 
 # Link nlohmann/json

@@ -3,6 +3,8 @@
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <openssl/err.h>
+#include <argon2.h>
+#include <zstd.h>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -88,18 +90,29 @@ EncryptionEngine::EncryptionResult EncryptionEngine::encryptFile(
         return result;
     }
     
-    // Derive key
-    std::vector<uint8_t> key = deriveKey(password, result.salt, config.iterations, config.key_length);
+    // Derive key using Argon2id
+    std::vector<uint8_t> key = deriveKey(password, result.salt, config);
     if (key.empty()) {
         result.error_message = last_error_;
         return result;
     }
     
-    // Encrypt data
-    result.encrypted_data = encryptData(file_data, key, result.iv);
+    // Compress data before encryption
+    result.original_size = file_data.size();
+    std::vector<uint8_t> compressed_data = compressData(file_data);
+    if (compressed_data.empty()) {
+        // If compression fails, use original data
+        compressed_data = file_data;
+        result.compression_algorithm = "none";
+    }
+    result.compressed_size = compressed_data.size();
+    
+    // Encrypt compressed data
+    result.encrypted_data = encryptData(compressed_data, key, result.iv);
     
     // Secure cleanup
     secureWipe(file_data);
+    secureWipe(compressed_data);
     secureWipe(key);
     
     if (result.encrypted_data.empty()) {
@@ -120,8 +133,8 @@ std::vector<uint8_t> EncryptionEngine::decryptFile(
     
     clearError();
     
-    // Derive key
-    std::vector<uint8_t> key = deriveKey(password, salt, config.iterations, config.key_length);
+    // Derive key using Argon2id
+    std::vector<uint8_t> key = deriveKey(password, salt, config);
     if (key.empty()) {
         return {};
     }
@@ -161,8 +174,8 @@ std::vector<uint8_t> EncryptionEngine::encryptData(
     std::vector<uint8_t> encrypted_data;
     
     do {
-        // Initialize encryption
-        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(), iv.data()) != 1) {
+        // Initialize encryption with AES-256-XTS
+        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_xts(), nullptr, key.data(), iv.data()) != 1) {
             setError("Failed to initialize encryption");
             break;
         }
@@ -228,8 +241,8 @@ std::vector<uint8_t> EncryptionEngine::decryptData(
     std::vector<uint8_t> decrypted_data;
     
     do {
-        // Initialize decryption
-        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(), iv.data()) != 1) {
+        // Initialize decryption with AES-256-XTS
+        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_xts(), nullptr, key.data(), iv.data()) != 1) {
             setError("Failed to initialize decryption");
             break;
         }
@@ -272,8 +285,7 @@ std::vector<uint8_t> EncryptionEngine::decryptData(
 std::vector<uint8_t> EncryptionEngine::deriveKey(
     const std::string& password,
     const std::vector<uint8_t>& salt,
-    int iterations,
-    int key_length) {
+    const KeyDerivationConfig& config) {
     
     clearError();
     
@@ -287,24 +299,38 @@ std::vector<uint8_t> EncryptionEngine::deriveKey(
         return {};
     }
     
-    if (iterations < 10000) {
-        setError("Iteration count too low (minimum 10,000)");
+    if (config.memory_cost < 8) {
+        setError("Memory cost too low (minimum 8 KiB)");
         return {};
     }
     
-    std::vector<uint8_t> key(key_length);
+    if (config.time_cost < 1) {
+        setError("Time cost too low (minimum 1)");
+        return {};
+    }
     
-    int result = PKCS5_PBKDF2_HMAC(
-        password.c_str(), password.length(),
-        salt.data(), salt.size(),
-        iterations,
-        EVP_sha256(),
-        key_length,
-        key.data()
+    if (config.parallelism < 1) {
+        setError("Parallelism too low (minimum 1)");
+        return {};
+    }
+    
+    std::vector<uint8_t> key(config.key_length);
+    
+    // Use Argon2id for key derivation (memory-hard, resistant to GPU attacks)
+    int result = argon2id_hash_raw(
+        config.time_cost,           // t_cost (iterations)
+        config.memory_cost,         // m_cost (memory in KiB)
+        config.parallelism,         // parallelism
+        password.c_str(),           // pwd
+        password.length(),          // pwdlen
+        salt.data(),               // salt
+        salt.size(),               // saltlen
+        key.data(),                // hash
+        config.key_length          // hashlen
     );
     
-    if (result != 1) {
-        setError("PBKDF2 key derivation failed");
+    if (result != ARGON2_OK) {
+        setError("Argon2id key derivation failed: " + std::string(argon2_error_message(result)));
         return {};
     }
     
@@ -335,6 +361,105 @@ std::vector<uint8_t> EncryptionEngine::generateSalt(size_t length) {
 
 std::vector<uint8_t> EncryptionEngine::generateIV() {
     return generateRandomBytes(AES_BLOCK_SIZE);
+}
+
+std::vector<uint8_t> EncryptionEngine::compressData(const std::vector<uint8_t>& data, int compression_level) {
+    clearError();
+    
+    if (data.empty()) {
+        setError("Cannot compress empty data");
+        return {};
+    }
+    
+    if (compression_level < 1 || compression_level > 22) {
+        setError("Invalid compression level (must be 1-22)");
+        return {};
+    }
+    
+    // Estimate compressed size (worst case: original size + header)
+    size_t max_compressed_size = ZSTD_compressBound(data.size());
+    std::vector<uint8_t> compressed_data(max_compressed_size);
+    
+    // Compress using Zstandard
+    size_t compressed_size = ZSTD_compress(
+        compressed_data.data(), max_compressed_size,
+        data.data(), data.size(),
+        compression_level
+    );
+    
+    if (ZSTD_isError(compressed_size)) {
+        setError("Compression failed: " + std::string(ZSTD_getErrorName(compressed_size)));
+        return {};
+    }
+    
+    // Resize to actual compressed size
+    compressed_data.resize(compressed_size);
+    return compressed_data;
+}
+
+std::vector<uint8_t> EncryptionEngine::decompressData(const std::vector<uint8_t>& compressed_data, size_t original_size) {
+    clearError();
+    
+    if (compressed_data.empty()) {
+        setError("Cannot decompress empty data");
+        return {};
+    }
+    
+    if (original_size == 0) {
+        setError("Original size cannot be zero");
+        return {};
+    }
+    
+    std::vector<uint8_t> decompressed_data(original_size);
+    
+    // Decompress using Zstandard
+    size_t decompressed_size = ZSTD_decompress(
+        decompressed_data.data(), original_size,
+        compressed_data.data(), compressed_data.size()
+    );
+    
+    if (ZSTD_isError(decompressed_size)) {
+        setError("Decompression failed: " + std::string(ZSTD_getErrorName(decompressed_size)));
+        return {};
+    }
+    
+    if (decompressed_size != original_size) {
+        setError("Decompressed size mismatch");
+        return {};
+    }
+    
+    return decompressed_data;
+}
+
+std::vector<uint8_t> EncryptionEngine::decryptFile(
+    const std::vector<uint8_t>& encrypted_data,
+    const std::string& password,
+    const std::vector<uint8_t>& iv,
+    const std::vector<uint8_t>& salt,
+    const std::string& compression_algorithm,
+    size_t original_size,
+    const KeyDerivationConfig& config) {
+    
+    clearError();
+    
+    // First decrypt the data
+    std::vector<uint8_t> decrypted_data = decryptFile(encrypted_data, password, iv, salt, config);
+    if (decrypted_data.empty()) {
+        return {};
+    }
+    
+    // Then decompress if needed
+    if (compression_algorithm == "zstd") {
+        std::vector<uint8_t> decompressed_data = decompressData(decrypted_data, original_size);
+        secureWipe(decrypted_data);
+        return decompressed_data;
+    } else if (compression_algorithm == "none") {
+        return decrypted_data;
+    } else {
+        setError("Unsupported compression algorithm: " + compression_algorithm);
+        secureWipe(decrypted_data);
+        return {};
+    }
 }
 
 std::string EncryptionEngine::calculateFileChecksum(const std::string& file_path) {
@@ -422,11 +547,38 @@ EncryptionEngine::FileMetadata EncryptionEngine::getFileMetadata(const std::stri
 
 void EncryptionEngine::secureWipe(void* data, size_t size) {
     if (data && size > 0) {
-        // Use volatile to prevent compiler optimization
+        // Use multiple passes with different patterns for enhanced security
         volatile uint8_t* ptr = static_cast<volatile uint8_t*>(data);
+        
+        // Pass 1: Fill with 0xFF
         for (size_t i = 0; i < size; ++i) {
-            ptr[i] = 0;
+            ptr[i] = 0xFF;
         }
+        
+        // Pass 2: Fill with 0x00
+        for (size_t i = 0; i < size; ++i) {
+            ptr[i] = 0x00;
+        }
+        
+        // Pass 3: Fill with random data
+        std::vector<uint8_t> random_data(size);
+        if (RAND_bytes(random_data.data(), size) == 1) {
+            for (size_t i = 0; i < size; ++i) {
+                ptr[i] = random_data[i];
+            }
+        }
+        
+        // Final pass: Fill with 0x00
+        for (size_t i = 0; i < size; ++i) {
+            ptr[i] = 0x00;
+        }
+        
+        // Memory barrier to prevent reordering
+        #ifdef __GNUC__
+        __asm__ __volatile__("" ::: "memory");
+        #elif defined(_MSC_VER)
+        _ReadWriteBarrier();
+        #endif
     }
 }
 
@@ -435,6 +587,33 @@ void EncryptionEngine::secureWipe(std::vector<uint8_t>& data) {
         secureWipe(data.data(), data.size());
         data.clear();
     }
+}
+
+bool EncryptionEngine::constantTimeCompare(const void* a, const void* b, size_t size) {
+    if (!a || !b) {
+        return false;
+    }
+    
+    const volatile uint8_t* ptr_a = static_cast<const volatile uint8_t*>(a);
+    const volatile uint8_t* ptr_b = static_cast<const volatile uint8_t*>(b);
+    
+    volatile uint8_t result = 0;
+    
+    // Compare all bytes regardless of early differences (constant-time)
+    for (size_t i = 0; i < size; ++i) {
+        result |= ptr_a[i] ^ ptr_b[i];
+    }
+    
+    // Return true if result is 0 (all bytes matched)
+    return result == 0;
+}
+
+bool EncryptionEngine::constantTimeCompare(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    
+    return constantTimeCompare(a.data(), b.data(), a.size());
 }
 
 bool EncryptionEngine::selfTest() {
@@ -448,8 +627,9 @@ bool EncryptionEngine::selfTest() {
         return false;
     }
     
-    std::vector<uint8_t> key1 = deriveKey(test_password, test_salt, 10000, 32);
-    std::vector<uint8_t> key2 = deriveKey(test_password, test_salt, 10000, 32);
+    KeyDerivationConfig test_config(8192, 2, 1, 32, 32); // Lightweight config for testing
+    std::vector<uint8_t> key1 = deriveKey(test_password, test_salt, test_config);
+    std::vector<uint8_t> key2 = deriveKey(test_password, test_salt, test_config);
     
     if (key1.empty() || key2.empty() || key1 != key2) {
         setError("Self-test failed: Key derivation inconsistent");
