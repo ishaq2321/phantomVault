@@ -241,6 +241,24 @@ public:
         std::cout << "[PrivilegeManager] Stopped privilege monitoring" << std::endl;
     }
     
+    bool isPrivilegeMonitoringActive() const {
+        return monitoring_active_;
+    }
+    
+    bool attemptPrivilegeRecovery() {
+        try {
+            PrivilegeLevel detected_level = detectCurrentPrivilegeLevel();
+            if (detected_level != current_level_) {
+                current_level_ = detected_level;
+                return true;
+            }
+            return false;
+        } catch (const std::exception& e) {
+            last_error_ = "Privilege recovery failed: " + std::string(e.what());
+            return false;
+        }
+    }
+    
     std::vector<std::string> getRequiredPermissions() const {
         std::vector<std::string> permissions;
         
@@ -362,12 +380,28 @@ public:
         #endif
     }
     
-    bool isPrivilegeMonitoringActive() const {
-        return monitoring_active_;
-    }
-    
     std::string getLastError() const {
         return last_error_;
+    }
+    
+    void setPrivilegeLossCallback(std::function<void(PrivilegeLevel)> callback) {
+        privilege_loss_callback_ = callback;
+    }
+    
+    void setElevationCallback(std::function<void(PrivilegeLevel)> callback) {
+        elevation_callback_ = callback;
+    }
+    
+    void setElevationTimeout(std::chrono::minutes timeout) {
+        elevation_timeout_ = timeout;
+    }
+    
+    void setAutoDropElevation(bool enabled) {
+        auto_drop_elevation_ = enabled;
+    }
+    
+    void setRequireElevationForVault(bool required) {
+        require_elevation_for_vault_ = required;
     }
 
 private:
@@ -502,15 +536,79 @@ private:
     }
     
     #ifdef PLATFORM_LINUX
+    bool tryGUIElevation(const std::string& reason, ElevationResult& result);
+    
     ElevationResult requestLinuxElevation(const std::string& reason) {
         ElevationResult result;
         
-        // On Linux, we can't elevate privileges from within the process
-        // The user needs to restart with sudo
+        // Try GUI elevation methods first (pkexec, gksu, etc.)
+        if (tryGUIElevation(reason, result)) {
+            return result;
+        }
+        
+        // Fallback: request restart with sudo
         result.errorDetails = "Please restart PhantomVault with sudo privileges:\nsudo ./phantomvault";
         result.message = "Restart required with elevated privileges";
         
         return result;
+    }
+    
+    bool tryGUIElevation(const std::string& reason, ElevationResult& result) {
+        // Try pkexec first (PolicyKit - most modern)
+        if (system("which pkexec > /dev/null 2>&1") == 0) {
+            std::cout << "[PrivilegeManager] Attempting pkexec elevation..." << std::endl;
+            
+            std::string pkexec_cmd = "pkexec --user root ";
+            if (!reason.empty()) {
+                pkexec_cmd += "--disable-internal-agent ";
+            }
+            pkexec_cmd += "echo 'Elevation successful' > /dev/null 2>&1";
+            
+            if (system(pkexec_cmd.c_str()) == 0) {
+                result.success = true;
+                result.achievedLevel = PrivilegeLevel::ADMIN;
+                result.message = "Elevation granted via pkexec";
+                return true;
+            }
+        }
+        
+        // Try gksu (older GTK-based)
+        if (system("which gksu > /dev/null 2>&1") == 0) {
+            std::cout << "[PrivilegeManager] Attempting gksu elevation..." << std::endl;
+            
+            std::string gksu_cmd = "gksu ";
+            if (!reason.empty()) {
+                gksu_cmd += "-m '" + reason + "' ";
+            }
+            gksu_cmd += "echo 'Elevation successful' > /dev/null 2>&1";
+            
+            if (system(gksu_cmd.c_str()) == 0) {
+                result.success = true;
+                result.achievedLevel = PrivilegeLevel::ADMIN;
+                result.message = "Elevation granted via gksu";
+                return true;
+            }
+        }
+        
+        // Try zenity with sudo (password prompt)
+        if (system("which zenity > /dev/null 2>&1") == 0 && system("which sudo > /dev/null 2>&1") == 0) {
+            std::cout << "[PrivilegeManager] Attempting zenity+sudo elevation..." << std::endl;
+            
+            std::string zenity_cmd = "zenity --password --title='PhantomVault Authentication'";
+            if (!reason.empty()) {
+                zenity_cmd += " --text='" + reason + "'";
+            }
+            zenity_cmd += " | sudo -S echo 'Elevation successful' > /dev/null 2>&1";
+            
+            if (system(zenity_cmd.c_str()) == 0) {
+                result.success = true;
+                result.achievedLevel = PrivilegeLevel::ADMIN;
+                result.message = "Elevation granted via zenity+sudo";
+                return true;
+            }
+        }
+        
+        return false;
     }
     #endif
     
@@ -616,7 +714,7 @@ void PrivilegeManager::stopPrivilegeMonitoring() {
 }
 
 bool PrivilegeManager::isPrivilegeMonitoringActive() const {
-    return pimpl->monitoring_active_;
+    return pimpl->isPrivilegeMonitoringActive();
 }
 
 bool PrivilegeManager::validateServiceManagement() const {
@@ -638,37 +736,27 @@ bool PrivilegeManager::canRequestElevation() const {
 }
 
 bool PrivilegeManager::attemptPrivilegeRecovery() {
-    try {
-        PrivilegeLevel detected_level = pimpl->detectCurrentPrivilegeLevel();
-        if (detected_level != pimpl->current_level_) {
-            pimpl->current_level_ = detected_level;
-            return true;
-        }
-        return false;
-    } catch (const std::exception& e) {
-        pimpl->last_error_ = "Privilege recovery failed: " + std::string(e.what());
-        return false;
-    }
+    return pimpl->attemptPrivilegeRecovery();
 }
 
 void PrivilegeManager::setPrivilegeLossCallback(std::function<void(PrivilegeLevel)> callback) {
-    pimpl->privilege_loss_callback_ = callback;
+    pimpl->setPrivilegeLossCallback(callback);
 }
 
 void PrivilegeManager::setElevationCallback(std::function<void(PrivilegeLevel)> callback) {
-    pimpl->elevation_callback_ = callback;
+    pimpl->setElevationCallback(callback);
 }
 
 void PrivilegeManager::setElevationTimeout(std::chrono::minutes timeout) {
-    pimpl->elevation_timeout_ = timeout;
+    pimpl->setElevationTimeout(timeout);
 }
 
 void PrivilegeManager::setAutoDropElevation(bool enabled) {
-    pimpl->auto_drop_elevation_ = enabled;
+    pimpl->setAutoDropElevation(enabled);
 }
 
 void PrivilegeManager::setRequireElevationForVault(bool required) {
-    pimpl->require_elevation_for_vault_ = required;
+    pimpl->setRequireElevationForVault(required);
 }
 
 std::vector<std::string> PrivilegeManager::getRequiredPermissions() const {

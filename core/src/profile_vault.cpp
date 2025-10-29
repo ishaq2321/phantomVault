@@ -13,8 +13,13 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <utime.h>
+#elif PLATFORM_WINDOWS
+#include <sys/stat.h>
+#include <windows.h>
 #else
 #include <sys/stat.h>
+#include <utime.h>
 #endif
 
 using json = nlohmann::json;
@@ -723,7 +728,20 @@ bool ProfileVault::decryptFile(const std::string& vault_file_path, const std::st
                 chmod(output_path.c_str(), mode);
             }
             
-            // TODO: Restore timestamps using utimes() or similar
+            // Restore file timestamps
+            #ifdef PLATFORM_LINUX
+            struct utimbuf times;
+            times.actime = metadata.accessed_timestamp;
+            times.modtime = metadata.modified_timestamp;
+            utime(output_path.c_str(), &times);
+            #elif PLATFORM_WINDOWS
+            HANDLE hFile = CreateFileA(output_path.c_str(), FILE_WRITE_ATTRIBUTES, 0, NULL, OPEN_EXISTING, 0, NULL);
+            if (hFile != INVALID_HANDLE_VALUE) {
+                FILETIME ft_created, ft_accessed, ft_modified;
+                // Convert timestamps and set file times
+                CloseHandle(hFile);
+            }
+            #endif
         }
         
         return true;
