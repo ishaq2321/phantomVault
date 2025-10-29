@@ -8,11 +8,15 @@
 #include "phantomvault_application.hpp"
 #include "../core/include/service_manager.hpp"
 #include "../core/include/privilege_manager.hpp"
+#include "../core/include/profile_manager.hpp"
+#include "../core/include/folder_security_manager.hpp"
 #include <iostream>
 #include <cstring>
 #include <signal.h>
 #include <thread>
 #include <chrono>
+#include <filesystem>
+#include <cstdlib>
 
 // Global application instance for signal handling
 static PhantomVaultApplication* g_app_instance = nullptr;
@@ -173,8 +177,14 @@ bool PhantomVaultApplication::ensurePrivileges() {
         return false;
     }
     
+    // Initialize privilege manager first
+    if (!privilege_manager_->initialize()) {
+        last_error_ = "Failed to initialize privilege manager";
+        return false;
+    }
+    
     // Check if we already have required privileges
-    if (privilege_manager_->hasRequiredPermissions()) {
+    if (privilege_manager_->hasAdminPrivileges()) {
         return true;
     }
     
@@ -183,15 +193,18 @@ bool PhantomVaultApplication::ensurePrivileges() {
         std::cout << "PhantomVault requires administrator privileges for folder protection.\n";
         std::cout << "Requesting elevated privileges...\n";
         
-        if (!privilege_manager_->requestElevatedPrivileges()) {
-            last_error_ = "Failed to obtain required privileges. Please run as administrator.";
+        auto elevation_result = privilege_manager_->requestElevation("PhantomVault requires admin privileges for folder protection");
+        if (!elevation_result.success) {
+            last_error_ = "Failed to obtain required privileges: " + elevation_result.errorDetails;
             return false;
         }
     }
     else {
         // For CLI and service modes, require existing privileges
-        last_error_ = "Insufficient privileges. Please run with sudo/administrator rights.";
-        return false;
+        if (!privilege_manager_->validateStartupPrivileges()) {
+            last_error_ = privilege_manager_->getStartupPrivilegeError();
+            return false;
+        }
     }
     
     return true;
@@ -216,11 +229,20 @@ int PhantomVaultApplication::runGUIMode() {
     
     std::cout << "[INFO] 🚀 Service started successfully" << std::endl;
     std::cout << "[INFO] 🎯 Global hotkey active: Press Ctrl+Alt+V anywhere to unlock folders" << std::endl;
-    std::cout << "[INFO] 💻 GUI will launch shortly..." << std::endl;
+    std::cout << "[INFO] 📡 IPC server listening on port " << config_.ipc_port << std::endl;
+    std::cout << "[INFO] 💻 Launching GUI application..." << std::endl;
     
-    // TODO: Launch Electron GUI process here
-    // For now, run service loop (will be replaced with GUI integration)
+    // Launch Electron GUI process
+    if (!launchElectronGUI()) {
+        std::cerr << "Failed to launch GUI application" << std::endl;
+        service_manager_->stop();
+        return 1;
+    }
     
+    std::cout << "[INFO] ✅ GUI application launched successfully" << std::endl;
+    std::cout << "[INFO] Service running in background..." << std::endl;
+    
+    // Main service loop - keep service running while GUI is active
     while (g_running && service_manager_->isRunning()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -242,29 +264,25 @@ int PhantomVaultApplication::runCLIMode() {
     std::string command = config_.cli_args[0];
     
     if (command == "status") {
-        // TODO: Implement service status check
-        std::cout << "Service Status: Checking..." << std::endl;
-        return 0;
+        return checkServiceStatus();
     }
     else if (command == "start") {
-        // TODO: Implement service start
-        std::cout << "Starting PhantomVault service..." << std::endl;
-        return 0;
+        return startService();
     }
     else if (command == "stop") {
-        // TODO: Implement service stop
-        std::cout << "Stopping PhantomVault service..." << std::endl;
-        return 0;
+        return stopService();
     }
     else if (command == "restart") {
-        // TODO: Implement service restart
-        std::cout << "Restarting PhantomVault service..." << std::endl;
-        return 0;
+        return restartService();
     }
     else if (command == "profiles") {
-        // TODO: Implement profile listing
-        std::cout << "Available profiles:" << std::endl;
-        return 0;
+        return listProfiles();
+    }
+    else if (command == "lock" && config_.cli_args.size() > 1) {
+        return lockProfile(config_.cli_args[1]);
+    }
+    else if (command == "unlock" && config_.cli_args.size() > 1) {
+        return unlockProfile(config_.cli_args[1]);
     }
     else {
         std::cerr << "Error: Unknown command '" << command << "'. Use --help for usage." << std::endl;
@@ -304,4 +322,215 @@ int PhantomVaultApplication::runServiceMode() {
     std::cout << "[INFO] Service stopped" << std::endl;
     
     return 0;
+}
+
+// CLI Command Implementations
+
+int PhantomVaultApplication::checkServiceStatus() {
+    std::cout << "Checking PhantomVault service status..." << std::endl;
+    
+    // Try to connect to existing service via IPC
+    // For now, we'll create a temporary service manager to check status
+    auto temp_service = std::make_unique<phantomvault::ServiceManager>();
+    
+    if (temp_service->isRunning()) {
+        std::cout << "✅ PhantomVault service is running" << std::endl;
+        std::cout << "   Version: " << temp_service->getVersion() << std::endl;
+        std::cout << "   Platform: " << temp_service->getPlatformInfo() << std::endl;
+        std::cout << "   Memory Usage: " << temp_service->getMemoryUsage() << " bytes" << std::endl;
+        return 0;
+    } else {
+        std::cout << "❌ PhantomVault service is not running" << std::endl;
+        return 1;
+    }
+}
+
+int PhantomVaultApplication::startService() {
+    std::cout << "Starting PhantomVault service..." << std::endl;
+    
+    // Initialize service manager
+    service_manager_ = std::make_unique<phantomvault::ServiceManager>();
+    
+    if (!service_manager_->initialize(config_.config_file, config_.log_level, config_.ipc_port)) {
+        std::cerr << "❌ Failed to initialize service: " << service_manager_->getLastError() << std::endl;
+        return 1;
+    }
+    
+    if (!service_manager_->start()) {
+        std::cerr << "❌ Failed to start service: " << service_manager_->getLastError() << std::endl;
+        return 1;
+    }
+    
+    std::cout << "✅ PhantomVault service started successfully" << std::endl;
+    std::cout << "   IPC Port: " << config_.ipc_port << std::endl;
+    std::cout << "   Log Level: " << config_.log_level << std::endl;
+    
+    // Keep service running in foreground for CLI start
+    std::cout << "Press Ctrl+C to stop the service..." << std::endl;
+    while (g_running && service_manager_->isRunning()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    
+    service_manager_->stop();
+    std::cout << "Service stopped." << std::endl;
+    return 0;
+}
+
+int PhantomVaultApplication::stopService() {
+    std::cout << "Stopping PhantomVault service..." << std::endl;
+    
+    // Try to connect to running service via HTTP IPC
+    std::string stop_command = "curl -s -X POST http://localhost:" + std::to_string(config_.ipc_port) + "/api/service/stop";
+    
+    int result = system(stop_command.c_str());
+    
+    if (result == 0) {
+        std::cout << "✅ PhantomVault service stopped successfully" << std::endl;
+        return 0;
+    } else {
+        // If IPC fails, try to find and terminate the process
+        std::cout << "IPC stop failed, attempting process termination..." << std::endl;
+        
+        // Try to find PhantomVault processes
+        int kill_result = system("pkill -f phantomvault 2>/dev/null");
+        
+        if (kill_result == 0) {
+            std::cout << "✅ PhantomVault service terminated" << std::endl;
+            return 0;
+        } else {
+            std::cerr << "❌ No running PhantomVault service found" << std::endl;
+            return 1;
+        }
+    }
+}
+
+int PhantomVaultApplication::restartService() {
+    std::cout << "Restarting PhantomVault service..." << std::endl;
+    
+    // Stop first, then start
+    int stop_result = stopService();
+    if (stop_result != 0) {
+        return stop_result;
+    }
+    
+    std::this_thread::sleep_for(std::chrono::seconds(1)); // Brief pause
+    
+    return startService();
+}
+
+int PhantomVaultApplication::listProfiles() {
+    std::cout << "Listing PhantomVault profiles..." << std::endl;
+    
+    // Initialize service manager to access ProfileManager
+    service_manager_ = std::make_unique<phantomvault::ServiceManager>();
+    
+    if (!service_manager_->initialize()) {
+        std::cerr << "❌ Failed to initialize service: " << service_manager_->getLastError() << std::endl;
+        return 1;
+    }
+    
+    auto* profile_manager = service_manager_->getProfileManager();
+    if (!profile_manager) {
+        std::cerr << "❌ Failed to access profile manager" << std::endl;
+        return 1;
+    }
+    
+    auto profiles = profile_manager->getAllProfiles();
+    
+    if (profiles.empty()) {
+        std::cout << "No profiles found. Create a profile first using the GUI." << std::endl;
+        return 0;
+    }
+    
+    std::cout << "Available profiles:" << std::endl;
+    for (const auto& profile : profiles) {
+        std::cout << "  • " << profile.name << " (ID: " << profile.id << ")" << std::endl;
+        std::cout << "    Created: " << std::chrono::duration_cast<std::chrono::seconds>(
+            profile.createdAt.time_since_epoch()).count() << std::endl;
+        std::cout << "    Folders: " << profile.folderCount << std::endl;
+        std::cout << "    Status: " << (profile.isActive ? "Active" : "Inactive") << std::endl;
+        std::cout << std::endl;
+    }
+    
+    return 0;
+}
+
+int PhantomVaultApplication::lockProfile(const std::string& profileId) {
+    std::cout << "Locking profile: " << profileId << std::endl;
+    
+    // Initialize service manager to access components
+    service_manager_ = std::make_unique<phantomvault::ServiceManager>();
+    
+    if (!service_manager_->initialize()) {
+        std::cerr << "❌ Failed to initialize service: " << service_manager_->getLastError() << std::endl;
+        return 1;
+    }
+    
+    auto* folder_manager = service_manager_->getFolderSecurityManager();
+    if (!folder_manager) {
+        std::cerr << "❌ Failed to access folder security manager" << std::endl;
+        return 1;
+    }
+    
+    // Lock temporary folders for the profile
+    if (folder_manager->lockTemporaryFolders(profileId)) {
+        std::cout << "✅ Profile folders locked successfully" << std::endl;
+        return 0;
+    } else {
+        std::cerr << "❌ Failed to lock profile folders: " << folder_manager->getLastError() << std::endl;
+        return 1;
+    }
+}
+
+int PhantomVaultApplication::unlockProfile(const std::string& profileId) {
+    std::cout << "Unlocking profile: " << profileId << std::endl;
+    std::cout << "❌ Profile unlock requires master key authentication" << std::endl;
+    std::cout << "Use the GUI application for secure profile unlock operations" << std::endl;
+    
+    // For security reasons, we don't allow CLI unlock without proper authentication
+    // This would require implementing secure password input in CLI
+    
+    return 1;
+}
+
+bool PhantomVaultApplication::launchElectronGUI() {
+    // Check if GUI directory exists
+    if (!std::filesystem::exists("gui")) {
+        last_error_ = "GUI directory not found. Please ensure PhantomVault is properly installed.";
+        return false;
+    }
+    
+    // Check if GUI is built
+    if (!std::filesystem::exists("gui/dist")) {
+        std::cout << "[INFO] GUI not built, building now..." << std::endl;
+        
+        // Try to build the GUI
+        int build_result = system("cd gui && npm run build > /dev/null 2>&1");
+        if (build_result != 0) {
+            last_error_ = "Failed to build GUI. Run 'cd gui && npm install && npm run build' manually.";
+            return false;
+        }
+    }
+    
+    // Launch Electron GUI in background
+    std::cout << "[INFO] Starting Electron GUI process..." << std::endl;
+    
+    // Use system() to launch GUI in background
+    // The GUI will connect to the service via IPC on the configured port
+    int launch_result = system("cd gui && npm run dev > /dev/null 2>&1 &");
+    
+    if (launch_result != 0) {
+        // Try alternative launch method
+        launch_result = system("cd gui && electron . > /dev/null 2>&1 &");
+        
+        if (launch_result != 0) {
+            last_error_ = "Failed to launch Electron GUI. Ensure Node.js and Electron are installed.";
+            return false;
+        }
+    }
+    
+    // Give GUI time to start
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    return true;
 }

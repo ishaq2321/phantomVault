@@ -53,9 +53,20 @@ private:
     int runCLIMode();
     int runServiceMode();
 
+    // CLI command implementations
+    int checkServiceStatus();
+    int startService();
+    int stopService();
+    int restartService();
+    int listProfiles();
+    int lockProfile(const std::string& profileId);
+    int unlockProfile(const std::string& profileId);
+
+    // GUI management
+    bool launchElectronGUI();
+
     // Privilege management
     bool ensurePrivileges();
-    bool requestElevatedPrivileges();
 
     // Core components (preserving existing architecture)
     std::unique_ptr<phantomvault::ServiceManager> service_manager_;
