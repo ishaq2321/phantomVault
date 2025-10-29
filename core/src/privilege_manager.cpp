@@ -2,15 +2,19 @@
  * PhantomVault Privilege Manager Implementation
  * 
  * Platform-specific privilege checking, elevation, and validation.
+ * Enhanced with dual-layer access control requiring both admin privileges
+ * and profile master key authentication.
  */
 
 #include "privilege_manager.hpp"
+#include "profile_manager.hpp"
 #include <iostream>
 #include <thread>
 #include <atomic>
 #include <mutex>
 #include <chrono>
 #include <sstream>
+#include <functional>
 
 #ifdef PLATFORM_LINUX
 #include <unistd.h>
@@ -32,6 +36,8 @@
 
 namespace phantomvault {
 
+
+
 class PrivilegeManager::Implementation {
 public:
     Implementation()
@@ -46,6 +52,11 @@ public:
         , elevation_callback_()
         , monitoring_thread_()
         , monitoring_running_(false)
+        , session_timeout_(std::chrono::minutes(15))
+        , require_dual_layer_auth_(true)
+        , profile_manager_(nullptr)
+        , auth_state_()
+        , tamper_check_hash_(0)
     {}
     
     ~Implementation() {
@@ -91,6 +102,12 @@ public:
     }
     
     bool hasPrivilegeForOperation(PrivilegedOperation operation) const {
+        // If dual-layer authentication is required, use that validation
+        if (require_dual_layer_auth_) {
+            return validateDualLayerAccess(operation);
+        }
+        
+        // Fallback to traditional privilege checking
         switch (operation) {
             case PrivilegedOperation::VAULT_ACCESS:
                 return require_elevation_for_vault_ ? hasAdminPrivileges() : true;
@@ -403,6 +420,173 @@ public:
     void setRequireElevationForVault(bool required) {
         require_elevation_for_vault_ = required;
     }
+    
+    void setSessionTimeout(std::chrono::minutes timeout) {
+        session_timeout_ = timeout;
+    }
+    
+    void setRequireDualLayerAuth(bool required) {
+        require_dual_layer_auth_ = required;
+    }
+    
+    void setProfileManager(ProfileManager* profileManager) {
+        profile_manager_ = profileManager;
+    }
+    
+    DualAuthResult requestDualLayerAuthentication(const std::string& profileId, 
+                                                 const std::string& masterKey,
+                                                 PrivilegedOperation operation) {
+        DualAuthResult result;
+        
+        try {
+            std::lock_guard<std::mutex> lock(auth_state_mutex_);
+            
+            // Step 1: Validate admin privileges
+            if (!hasAdminPrivileges()) {
+                auto elevation_result = requestElevation("Dual-layer authentication for " + getOperationDescription(operation));
+                if (!elevation_result.success) {
+                    result.errorDetails = "Admin privilege elevation failed: " + elevation_result.errorDetails;
+                    return result;
+                }
+                result.adminLayerPassed = true;
+            } else {
+                result.adminLayerPassed = true;
+            }
+            
+            // Step 2: Validate profile authentication
+            if (!profile_manager_) {
+                result.errorDetails = "Profile manager not available for authentication";
+                return result;
+            }
+            
+            // Authenticate with profile manager
+            auto auth_result = profile_manager_->authenticateProfile(profileId, masterKey);
+            if (!auth_result.success) {
+                result.errorDetails = "Profile authentication failed: " + auth_result.error;
+                return result;
+            }
+            
+            result.profileLayerPassed = true;
+            result.profileId = profileId;
+            
+            // Step 3: Establish authenticated session
+            auto now = std::chrono::system_clock::now();
+            auth_state_.hasAdminPrivileges = true;
+            auth_state_.hasProfileAuthentication = true;
+            auth_state_.authenticatedProfileId = profileId;
+            auth_state_.adminElevationTime = now;
+            auth_state_.profileAuthTime = now;
+            auth_state_.sessionExpiry = now + session_timeout_;
+            auth_state_.isTamperResistant = true;
+            
+            // Calculate tamper-resistant hash
+            updateTamperCheckHash();
+            
+            result.success = true;
+            result.sessionExpiry = auth_state_.sessionExpiry;
+            result.message = "Dual-layer authentication successful";
+            
+            std::cout << "[PrivilegeManager] Dual-layer authentication successful for profile: " << profileId << std::endl;
+            
+        } catch (const std::exception& e) {
+            result.errorDetails = "Dual-layer authentication failed: " + std::string(e.what());
+        }
+        
+        return result;
+    }
+    
+    bool validateDualLayerAccess(PrivilegedOperation operation) const {
+        if (!require_dual_layer_auth_) {
+            return hasPrivilegeForOperation(operation);
+        }
+        
+        std::lock_guard<std::mutex> lock(auth_state_mutex_);
+        
+        // Check if authentication state is valid and not tampered
+        if (!validateAuthenticationIntegrity()) {
+            return false;
+        }
+        
+        // Check if session is expired
+        if (auth_state_.isExpired()) {
+            return false;
+        }
+        
+        // Check if we have both layers of authentication
+        return auth_state_.isFullyAuthenticated();
+    }
+    
+    AuthenticationState getCurrentAuthenticationState() const {
+        std::lock_guard<std::mutex> lock(auth_state_mutex_);
+        return auth_state_;
+    }
+    
+    bool refreshAuthenticationSession(const std::string& profileId, const std::string& masterKey) {
+        try {
+            std::lock_guard<std::mutex> lock(auth_state_mutex_);
+            
+            // Verify current authentication
+            if (auth_state_.authenticatedProfileId != profileId) {
+                return false;
+            }
+            
+            // Re-authenticate with profile manager
+            if (!profile_manager_) {
+                return false;
+            }
+            
+            auto auth_result = profile_manager_->authenticateProfile(profileId, masterKey);
+            if (!auth_result.success) {
+                return false;
+            }
+            
+            // Extend session
+            auto now = std::chrono::system_clock::now();
+            auth_state_.profileAuthTime = now;
+            auth_state_.sessionExpiry = now + session_timeout_;
+            
+            updateTamperCheckHash();
+            
+            std::cout << "[PrivilegeManager] Authentication session refreshed for profile: " << profileId << std::endl;
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Session refresh failed: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    void clearAuthenticationSession() {
+        std::lock_guard<std::mutex> lock(auth_state_mutex_);
+        
+        auth_state_ = AuthenticationState();
+        tamper_check_hash_ = 0;
+        
+        std::cout << "[PrivilegeManager] Authentication session cleared" << std::endl;
+    }
+    
+    bool validateAuthenticationIntegrity() const {
+        if (!auth_state_.isTamperResistant) {
+            return true; // No tamper resistance enabled
+        }
+        
+        // Calculate expected hash
+        size_t expected_hash = calculateAuthStateHash();
+        
+        return expected_hash == tamper_check_hash_;
+    }
+    
+    void enableTamperResistance() {
+        std::lock_guard<std::mutex> lock(auth_state_mutex_);
+        auth_state_.isTamperResistant = true;
+        updateTamperCheckHash();
+    }
+    
+    void disableTamperResistance() {
+        std::lock_guard<std::mutex> lock(auth_state_mutex_);
+        auth_state_.isTamperResistant = false;
+        tamper_check_hash_ = 0;
+    }
 
 private:
     bool initialized_;
@@ -418,6 +602,14 @@ private:
     
     std::thread monitoring_thread_;
     std::atomic<bool> monitoring_running_;
+    
+    // Dual-layer authentication members
+    std::chrono::minutes session_timeout_;
+    bool require_dual_layer_auth_;
+    ProfileManager* profile_manager_;
+    AuthenticationState auth_state_;
+    mutable std::mutex auth_state_mutex_;
+    size_t tamper_check_hash_;
     
     PrivilegeLevel detectCurrentPrivilegeLevel() const {
         #ifdef PLATFORM_LINUX
@@ -521,6 +713,29 @@ private:
                 
                 if (detected_level != current_level_) {
                     handlePrivilegeLoss();
+                }
+                
+                // Check authentication session integrity and expiry
+                if (require_dual_layer_auth_) {
+                    std::lock_guard<std::mutex> lock(auth_state_mutex_);
+                    
+                    // Check for session expiry
+                    if (auth_state_.hasProfileAuthentication && auth_state_.isExpired()) {
+                        std::cout << "[PrivilegeManager] Authentication session expired, clearing session" << std::endl;
+                        auth_state_ = AuthenticationState();
+                        tamper_check_hash_ = 0;
+                    }
+                    
+                    // Check for tampering
+                    if (auth_state_.isTamperResistant && !validateAuthenticationIntegrity()) {
+                        std::cout << "[PrivilegeManager] Authentication tampering detected, clearing session" << std::endl;
+                        auth_state_ = AuthenticationState();
+                        tamper_check_hash_ = 0;
+                        
+                        if (privilege_loss_callback_) {
+                            privilege_loss_callback_(PrivilegeLevel::USER);
+                        }
+                    }
                 }
                 
                 // Sleep for monitoring interval
@@ -647,6 +862,28 @@ private:
         return result;
     }
     #endif
+    
+    // Tamper resistance helper methods
+    void updateTamperCheckHash() {
+        tamper_check_hash_ = calculateAuthStateHash();
+    }
+    
+    size_t calculateAuthStateHash() const {
+        // Create a hash of the authentication state to detect tampering
+        std::hash<std::string> hasher;
+        std::string state_data = 
+            std::to_string(auth_state_.hasAdminPrivileges) +
+            std::to_string(auth_state_.hasProfileAuthentication) +
+            auth_state_.authenticatedProfileId +
+            std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                auth_state_.adminElevationTime.time_since_epoch()).count()) +
+            std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                auth_state_.profileAuthTime.time_since_epoch()).count()) +
+            std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                auth_state_.sessionExpiry.time_since_epoch()).count());
+        
+        return hasher(state_data);
+    }
 };
 
 // PrivilegeManager public interface implementation
@@ -791,6 +1028,53 @@ std::string PrivilegeManager::getLastError() const {
     return pimpl->getLastError();
 }
 
+// Dual-layer access control methods
+DualAuthResult PrivilegeManager::requestDualLayerAuthentication(const std::string& profileId, 
+                                                               const std::string& masterKey,
+                                                               PrivilegedOperation operation) {
+    return pimpl->requestDualLayerAuthentication(profileId, masterKey, operation);
+}
+
+bool PrivilegeManager::validateDualLayerAccess(PrivilegedOperation operation) const {
+    return pimpl->validateDualLayerAccess(operation);
+}
+
+AuthenticationState PrivilegeManager::getCurrentAuthenticationState() const {
+    return pimpl->getCurrentAuthenticationState();
+}
+
+bool PrivilegeManager::refreshAuthenticationSession(const std::string& profileId, const std::string& masterKey) {
+    return pimpl->refreshAuthenticationSession(profileId, masterKey);
+}
+
+void PrivilegeManager::clearAuthenticationSession() {
+    pimpl->clearAuthenticationSession();
+}
+
+bool PrivilegeManager::validateAuthenticationIntegrity() const {
+    return pimpl->validateAuthenticationIntegrity();
+}
+
+void PrivilegeManager::enableTamperResistance() {
+    pimpl->enableTamperResistance();
+}
+
+void PrivilegeManager::disableTamperResistance() {
+    pimpl->disableTamperResistance();
+}
+
+void PrivilegeManager::setSessionTimeout(std::chrono::minutes timeout) {
+    pimpl->setSessionTimeout(timeout);
+}
+
+void PrivilegeManager::setRequireDualLayerAuth(bool required) {
+    pimpl->setRequireDualLayerAuth(required);
+}
+
+void PrivilegeManager::setProfileManager(ProfileManager* profileManager) {
+    pimpl->setProfileManager(profileManager);
+}
+
 // PrivilegeElevationGuard implementation
 PrivilegeElevationGuard::PrivilegeElevationGuard(PrivilegeManager* manager, PrivilegedOperation operation)
     : manager_(manager)
@@ -830,6 +1114,59 @@ PrivilegeLevel PrivilegeElevationGuard::getLevel() const {
 
 std::string PrivilegeElevationGuard::getErrorMessage() const {
     return error_message_;
+}
+
+// DualLayerAuthGuard implementation
+DualLayerAuthGuard::DualLayerAuthGuard(PrivilegeManager* manager, const std::string& profileId, 
+                                      const std::string& masterKey, PrivilegedOperation operation)
+    : manager_(manager)
+    , was_authenticated_(false)
+    , admin_layer_passed_(false)
+    , profile_layer_passed_(false)
+    , profile_id_(profileId) {
+    
+    if (manager_) {
+        auto result = manager_->requestDualLayerAuthentication(profileId, masterKey, operation);
+        
+        was_authenticated_ = result.success;
+        admin_layer_passed_ = result.adminLayerPassed;
+        profile_layer_passed_ = result.profileLayerPassed;
+        profile_id_ = result.profileId;
+        session_expiry_ = result.sessionExpiry;
+        
+        if (!was_authenticated_) {
+            error_message_ = result.errorDetails;
+        }
+    }
+}
+
+DualLayerAuthGuard::~DualLayerAuthGuard() {
+    // Session cleanup is handled by the PrivilegeManager's monitoring
+    // or explicit clearAuthenticationSession() calls
+}
+
+bool DualLayerAuthGuard::isAuthenticated() const {
+    return was_authenticated_;
+}
+
+bool DualLayerAuthGuard::hasAdminLayer() const {
+    return admin_layer_passed_;
+}
+
+bool DualLayerAuthGuard::hasProfileLayer() const {
+    return profile_layer_passed_;
+}
+
+std::string DualLayerAuthGuard::getProfileId() const {
+    return profile_id_;
+}
+
+std::string DualLayerAuthGuard::getErrorMessage() const {
+    return error_message_;
+}
+
+std::chrono::system_clock::time_point DualLayerAuthGuard::getSessionExpiry() const {
+    return session_expiry_;
 }
 
 } // namespace phantomvault
