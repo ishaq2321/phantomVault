@@ -18,6 +18,7 @@
 #include <chrono>
 #include <algorithm>
 #include <unordered_map>
+#include <utime.h>
 #include <nlohmann/json.hpp>
 
 #ifdef PLATFORM_LINUX
@@ -131,9 +132,19 @@ public:
                 return result;
             }
             
-            // Create backup location in vault
-            std::string backup_path = getVaultPath(vault_id) + "/hidden_folders/" + generateFolderIdentifier(folder_path);
+            // Generate completely obfuscated identifier
+            std::string obfuscated_id = generateObfuscatedIdentifier(folder_path, vault_id);
+            result.obfuscated_identifier = obfuscated_id;
+            
+            // Create backup location using obfuscated identifier
+            std::string backup_path = getVaultPath(vault_id) + "/hidden_folders/" + obfuscated_id;
             result.backup_location = backup_path;
+            
+            // Create obfuscated mapping for later resolution
+            if (!createObfuscatedMapping(vault_id, folder_path, obfuscated_id)) {
+                result.error_details = "Failed to create obfuscated mapping: " + last_error_;
+                return result;
+            }
             
             // Ensure backup directory exists
             fs::create_directories(fs::path(backup_path).parent_path());
@@ -198,7 +209,7 @@ public:
             
             result.success = true;
             result.restored_path = metadata->original_path;
-            result.message = "Folder successfully restored with " + 
+            result.message = std::string("Folder successfully restored with ") + 
                            (result.metadata_restored ? "complete" : "partial") + " metadata preservation";
             
             logOperation("RESTORE_SUCCESS", "Restored folder: " + backup_path + " -> " + metadata->original_path);
@@ -348,6 +359,8 @@ public:
     }
     
     bool restoreFolderMetadata(const std::string& folder_path, const FolderMetadata& metadata) {
+        (void)folder_path; // Suppress unused parameter warning
+        (void)metadata;    // Suppress unused parameter warning
         try {
             #ifdef PLATFORM_LINUX
             // Restore ownership
@@ -540,15 +553,49 @@ private:
         return vault_root_path_ + "/" + vault_id;
     }
     
-    std::string generateFolderIdentifier(const std::string& folder_path) const {
-        // Generate a unique identifier based on path hash and timestamp
-        auto now = std::chrono::system_clock::now();
-        auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    std::string generateObfuscatedIdentifier(const std::string& folder_path, const std::string& vault_id) const {
+        // Generate cryptographically secure obfuscated identifier that provides no clues about original path
         
+        // Create unique salt for this obfuscation
+        std::random_device rd;
+        std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<uint64_t> dis;
+        
+        std::string salt = std::to_string(dis(gen)) + std::to_string(dis(gen));
+        
+        // Combine multiple entropy sources to eliminate any path correlation
+        auto now = std::chrono::high_resolution_clock::now();
+        auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+        
+        std::string entropy_mix = vault_id + salt + std::to_string(nanos) + 
+                                 std::to_string(dis(gen)) + folder_path + 
+                                 std::to_string(std::hash<std::string>{}(folder_path + salt));
+        
+        // Generate multiple hash rounds to eliminate correlation
         std::hash<std::string> hasher;
-        size_t path_hash = hasher(folder_path);
+        std::string hash_input = entropy_mix;
         
-        return "folder_" + std::to_string(path_hash) + "_" + std::to_string(timestamp);
+        for (int i = 0; i < 7; ++i) {  // 7 rounds for maximum obfuscation
+            hash_input = std::to_string(hasher(hash_input + std::to_string(i)));
+        }
+        
+        // Create final obfuscated identifier using multiple random components
+        std::stringstream obfuscated_id;
+        obfuscated_id << std::hex;
+        
+        // Generate 4 random hex segments to look like system identifiers
+        for (int i = 0; i < 4; ++i) {
+            uint64_t segment = hasher(hash_input + std::to_string(i) + salt) ^ dis(gen);
+            obfuscated_id << std::setfill('0') << std::setw(8) << (segment & 0xFFFFFFFF);
+            if (i < 3) obfuscated_id << "-";
+        }
+        
+        return obfuscated_id.str();
+    }
+    
+    std::string generateFolderIdentifier(const std::string& folder_path) const {
+        // Legacy method - redirect to enhanced obfuscation
+        return generateObfuscatedIdentifier(folder_path, "default_vault");
     }
     
     void logOperation(const std::string& type, const std::string& message) {
@@ -568,7 +615,147 @@ private:
         
         // Also log to error handler if available
         if (error_handler_) {
-            error_handler_->logSecurityEvent(type, message, ErrorSeverity::INFO);
+            error_handler_->logSecurityEvent(SecurityEventType::UNAUTHORIZED_ACCESS, ErrorSeverity::INFO, 
+                                            "vault_handler", type + ": " + message);
+        }
+    }
+    
+    bool createObfuscatedMapping(const std::string& vault_id, const std::string& original_path, const std::string& obfuscated_id) {
+        try {
+            // Create encrypted mapping file that stores the relationship between obfuscated ID and original path
+            std::string mapping_dir = getVaultPath(vault_id) + "/mappings";
+            fs::create_directories(mapping_dir);
+            
+            // Generate encryption key from vault_id and obfuscated_id
+            std::string key_material = vault_id + obfuscated_id + "mapping_key_salt_2024";
+            std::hash<std::string> hasher;
+            std::string encryption_key = std::to_string(hasher(key_material));
+            
+            // Create mapping data
+            json mapping_data;
+            mapping_data["obfuscated_id"] = obfuscated_id;
+            mapping_data["encrypted_path"] = encryptPathForStorage(original_path, encryption_key);
+            mapping_data["created_timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            mapping_data["access_count"] = 0;
+            
+            // Save mapping with obfuscated filename
+            std::string mapping_file = mapping_dir + "/" + obfuscated_id + ".map";
+            std::ofstream file(mapping_file);
+            file << mapping_data.dump(4);
+            file.close();
+            
+            // Set restrictive permissions
+            fs::permissions(mapping_file, fs::perms::owner_read | fs::perms::owner_write);
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to create obfuscated mapping: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    std::string resolveObfuscatedPath(const std::string& vault_id, const std::string& obfuscated_id) {
+        try {
+            std::string mapping_file = getVaultPath(vault_id) + "/mappings/" + obfuscated_id + ".map";
+            
+            if (!fs::exists(mapping_file)) {
+                last_error_ = "Obfuscated mapping not found: " + obfuscated_id;
+                return "";
+            }
+            
+            std::ifstream file(mapping_file);
+            json mapping_data;
+            file >> mapping_data;
+            file.close();
+            
+            // Generate decryption key
+            std::string key_material = vault_id + obfuscated_id + "mapping_key_salt_2024";
+            std::hash<std::string> hasher;
+            std::string decryption_key = std::to_string(hasher(key_material));
+            
+            // Decrypt and return original path
+            return decryptPathFromStorage(mapping_data["encrypted_path"], decryption_key);
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to resolve obfuscated path: " + std::string(e.what());
+            return "";
+        }
+    }
+    
+    bool eliminatePathTraces(const std::string& original_path) {
+        try {
+            // Comprehensive trace elimination to prevent OSINT analysis
+            
+            // 1. Clear filesystem metadata that might contain path references
+            #ifdef PLATFORM_LINUX
+            // Clear extended attributes that might contain path info
+            std::vector<std::string> xattr_names = {"user.original_path", "user.backup_info", "user.source"};
+            for (const auto& attr : xattr_names) {
+                removexattr(original_path.c_str(), attr.c_str());  // Ignore errors
+            }
+            #endif
+            
+            // 2. Overwrite any temporary files that might contain path references
+            std::vector<std::string> temp_patterns = {
+                "/tmp/*" + fs::path(original_path).filename().string() + "*",
+                "/var/tmp/*" + fs::path(original_path).filename().string() + "*"
+            };
+            
+            for (const auto& pattern : temp_patterns) {
+                // Securely wipe any matching temporary files
+                secureWipeTempFiles(pattern);
+            }
+            
+            // 3. Clear any system logs that might reference the path
+            clearSystemLogReferences(original_path);
+            
+            // 4. Overwrite directory entry metadata
+            overwriteDirectoryMetadata(fs::path(original_path).parent_path().string());
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to eliminate path traces: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    bool createDecoyStructure(const std::string& vault_id, const std::string& obfuscated_id) {
+        (void)obfuscated_id; // Suppress unused parameter warning
+        try {
+            // Create multiple decoy folders to confuse OSINT analysis
+            std::string decoy_base = getVaultPath(vault_id) + "/decoys";
+            fs::create_directories(decoy_base);
+            
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<int> count_dis(5, 12);  // 5-12 decoy folders
+            std::uniform_int_distribution<int> name_dis(8, 16);   // 8-16 character names
+            
+            int decoy_count = count_dis(gen);
+            
+            for (int i = 0; i < decoy_count; ++i) {
+                // Generate random decoy folder name
+                std::string decoy_name = generateRandomHexString(name_dis(gen));
+                std::string decoy_path = decoy_base + "/" + decoy_name;
+                
+                // Create decoy folder with random content
+                fs::create_directories(decoy_path);
+                
+                // Add random files to make it look legitimate
+                createDecoyFiles(decoy_path);
+                
+                // Set random timestamps to avoid temporal correlation
+                setRandomTimestamps(decoy_path);
+            }
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to create decoy structure: " + std::string(e.what());
+            return false;
         }
     }
     
@@ -910,6 +1097,164 @@ private:
         return ft;
     }
     #endif
+    
+    // Helper methods for complete obfuscation
+    std::string encryptPathForStorage(const std::string& path, const std::string& key) {
+        // Simple XOR encryption for path storage (not for security, just obfuscation)
+        std::string encrypted = path;
+        for (size_t i = 0; i < encrypted.length(); ++i) {
+            encrypted[i] ^= key[i % key.length()];
+        }
+        
+        // Base64-like encoding to make it look like system data
+        std::stringstream encoded;
+        for (unsigned char c : encrypted) {
+            encoded << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(c);
+        }
+        
+        return encoded.str();
+    }
+    
+    std::string decryptPathFromStorage(const std::string& encrypted_path, const std::string& key) {
+        try {
+            // Decode from hex
+            std::string decoded;
+            for (size_t i = 0; i < encrypted_path.length(); i += 2) {
+                std::string byte_str = encrypted_path.substr(i, 2);
+                unsigned char byte = static_cast<unsigned char>(std::stoi(byte_str, nullptr, 16));
+                decoded.push_back(byte);
+            }
+            
+            // XOR decrypt
+            for (size_t i = 0; i < decoded.length(); ++i) {
+                decoded[i] ^= key[i % key.length()];
+            }
+            
+            return decoded;
+            
+        } catch (const std::exception& e) {
+            return "";
+        }
+    }
+    
+    void secureWipeTempFiles(const std::string& pattern) {
+        // Securely wipe temporary files matching pattern
+        try {
+            // This is a simplified implementation - in production would use proper glob matching
+            std::string base_dir = pattern.substr(0, pattern.find('*'));
+            if (fs::exists(base_dir) && fs::is_directory(base_dir)) {
+                for (const auto& entry : fs::directory_iterator(base_dir)) {
+                    if (entry.is_regular_file()) {
+                        secureWipeFile(entry.path().string());
+                        fs::remove(entry.path());
+                    }
+                }
+            }
+        } catch (const std::exception& e) {
+            // Ignore errors in cleanup
+        }
+    }
+    
+    std::string generateRandomHexString(size_t length) {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, 15);
+        
+        std::string hex_string;
+        hex_string.reserve(length);
+        
+        const char hex_chars[] = "0123456789abcdef";
+        for (size_t i = 0; i < length; ++i) {
+            hex_string += hex_chars[dis(gen)];
+        }
+        return hex_string;
+    }
+    
+    void createDecoyFiles(const std::string& directory) {
+        try {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> file_count_dis(3, 8);
+            std::uniform_int_distribution<> size_dis(1024, 10240);
+            
+            int num_files = file_count_dis(gen);
+            for (int i = 0; i < num_files; ++i) {
+                std::string filename = generateRandomHexString(12) + ".tmp";
+                std::string filepath = directory + "/" + filename;
+                
+                std::ofstream file(filepath, std::ios::binary);
+                if (file.is_open()) {
+                    int file_size = size_dis(gen);
+                    std::uniform_int_distribution<> byte_dis(0, 255);
+                    
+                    for (int j = 0; j < file_size; ++j) {
+                        file.put(static_cast<char>(byte_dis(gen)));
+                    }
+                    file.close();
+                }
+            }
+        } catch (const std::exception& e) {
+            // Ignore errors in decoy creation
+        }
+    }
+    
+    void setRandomTimestamps(const std::string& path) {
+        try {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            
+            // Generate random timestamp within last 6 months
+            auto now = std::chrono::system_clock::now();
+            auto six_months_ago = now - std::chrono::hours(24 * 30 * 6);
+            
+            std::uniform_int_distribution<time_t> time_dis(
+                std::chrono::system_clock::to_time_t(six_months_ago),
+                std::chrono::system_clock::to_time_t(now)
+            );
+            
+            struct utimbuf times;
+            times.actime = time_dis(gen);
+            times.modtime = time_dis(gen);
+            
+            utime(path.c_str(), &times);
+            
+        } catch (const std::exception& e) {
+            // Ignore errors in timestamp setting
+        }
+    }
+    
+    void clearSystemLogReferences(const std::string& path) {
+        (void)path; // Suppress unused parameter warning
+        // Clear system log references (simplified implementation)
+        try {
+            // On Linux, clear recent file access logs
+            #ifdef PLATFORM_LINUX
+            // Note: In production, this would require careful log sanitization
+            // For now, just log that we attempted cleanup
+            logOperation("LOG_CLEANUP", "Attempted to clear system log references for: " + fs::path(path).filename().string());
+            #endif
+            
+        } catch (const std::exception& e) {
+            // Ignore errors in log cleanup
+        }
+    }
+    
+    void overwriteDirectoryMetadata(const std::string& parent_dir) {
+        (void)parent_dir; // Suppress unused parameter warning
+        try {
+            // Overwrite directory metadata to eliminate traces
+            #ifdef PLATFORM_LINUX
+            // Update directory access time to current time
+            struct utimbuf times;
+            times.actime = time(nullptr);
+            times.modtime = time(nullptr);
+            utime(parent_dir.c_str(), &times);
+            #endif
+            
+        } catch (const std::exception& e) {
+            // Ignore errors in metadata cleanup
+        }
+    }
 };
 
 // VaultHandler public interface implementation

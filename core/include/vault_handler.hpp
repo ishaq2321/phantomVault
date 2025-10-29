@@ -14,6 +14,8 @@ namespace phantomvault {
  */
 struct FolderMetadata {
     std::string original_path;
+    std::string obfuscated_identifier;
+    std::string encrypted_path_hash;
     std::string owner;
     std::string group;
     uint32_t permissions;
@@ -23,6 +25,8 @@ struct FolderMetadata {
     std::unordered_map<std::string, std::string> extended_attributes;
     bool was_hidden;
     std::string original_location;
+    std::vector<std::string> decoy_paths;
+    std::string obfuscation_salt;
 };
 
 /**
@@ -50,6 +54,8 @@ struct HidingResult {
     std::string message;
     std::string error_details;
     std::string backup_location;
+    std::string obfuscated_identifier;
+    std::vector<std::string> decoy_locations;
     FolderMetadata preserved_metadata;
 };
 
@@ -114,6 +120,13 @@ public:
     bool validateVaultIntegrity(const std::string& vault_id);
     bool repairVaultStructure(const std::string& vault_id);
     bool compactVault(const std::string& vault_id);
+    
+    // Complete folder obfuscation (OSINT-resistant)
+    std::string generateObfuscatedIdentifier(const std::string& folder_path, const std::string& vault_id);
+    bool createObfuscatedMapping(const std::string& vault_id, const std::string& original_path, const std::string& obfuscated_id);
+    std::string resolveObfuscatedPath(const std::string& vault_id, const std::string& obfuscated_id);
+    bool eliminatePathTraces(const std::string& original_path);
+    bool createDecoyStructure(const std::string& vault_id, const std::string& obfuscated_id);
     
     // Platform-specific operations
     bool setFolderHidden(const std::string& folder_path, bool hidden);
