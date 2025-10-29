@@ -137,6 +137,24 @@ public:
     std::string getLastError() const;
     std::vector<std::string> getOperationLog() const;
     
+    // Hash-based indexing system for O(1) folder access
+    void enableHashBasedIndexing();
+    void disableHashBasedIndexing();
+    bool isHashBasedIndexingEnabled() const;
+    void buildFolderIndex(const std::string& vault_id);
+    void rebuildFolderIndex(const std::string& vault_id);
+    
+    // Ultra-fast folder lookup operations
+    std::optional<FolderMetadata> getFolderMetadataFast(const std::string& vault_id, const std::string& folder_identifier) const;
+    bool isFolderIndexed(const std::string& vault_id, const std::string& folder_identifier) const;
+    void invalidateFolderIndex(const std::string& vault_id);
+    size_t getIndexedFolderCount(const std::string& vault_id) const;
+    
+    // Memory optimization
+    void optimizeMemoryUsage();
+    size_t getIndexMemoryUsage() const;
+    void compactIndexes();
+    
 private:
     class Implementation;
     std::unique_ptr<Implementation> pimpl;

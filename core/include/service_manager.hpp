@@ -59,6 +59,19 @@ public:
     void disableProcessProtection();
     bool isProcessProtected() const;
     void setTerminationCallback(std::function<void()> callback);
+    
+    // Cache warming and preloading system
+    void enableCacheWarming();
+    void disableCacheWarming();
+    bool isCacheWarmingEnabled() const;
+    void preloadAllCaches();
+    void warmupComponentCaches();
+    
+    // Memory optimization and monitoring
+    void optimizeMemoryUsage();
+    size_t getTotalCacheSize() const;
+    double getCacheEfficiency() const;
+    void compactAllCaches();
 
 private:
     class Implementation;

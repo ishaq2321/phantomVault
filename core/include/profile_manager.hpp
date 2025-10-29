@@ -105,6 +105,19 @@ public:
 
     // Error handling
     std::string getLastError() const;
+    
+    // Pre-computed lookup system for ultra-fast access
+    void enableMemoryMappedLookup();
+    void disableMemoryMappedLookup();
+    bool isMemoryMappedLookupEnabled() const;
+    void preloadProfileCache();
+    void warmupLookupTables();
+    
+    // O(1) profile access optimizations
+    std::optional<Profile> getProfileFast(const std::string& profileId) const;
+    bool isProfileCached(const std::string& profileId) const;
+    void invalidateProfileCache(const std::string& profileId);
+    size_t getCacheHitRate() const;
 
 private:
     class Implementation;

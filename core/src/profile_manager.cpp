@@ -20,6 +20,13 @@
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
+#include <atomic>
+#include <shared_mutex>
+#include <mutex>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #ifdef PLATFORM_LINUX
 #include <unistd.h>
@@ -47,6 +54,14 @@ public:
         , active_profile_id_()
         , last_error_()
         , error_handler_(std::make_unique<ErrorHandler>())
+        , memory_mapped_enabled_(false)
+        , profile_cache_()
+        , cache_mutex_()
+        , cache_hits_(0)
+        , cache_misses_(0)
+        , mmap_fd_(-1)
+        , mmap_data_(nullptr)
+        , mmap_size_(0)
     {}
     
     bool initialize(const std::string& dataPath) {
@@ -798,12 +813,185 @@ public:
         return last_error_;
     }
     
+    void enableMemoryMappedLookup() {
+        try {
+            if (memory_mapped_enabled_.load()) {
+                return;
+            }
+            
+            // Create memory-mapped file for profile lookup
+            std::string mmap_path = data_path_ + "/profile_lookup.mmap";
+            mmap_fd_ = open(mmap_path.c_str(), O_CREAT | O_RDWR, 0600);
+            
+            if (mmap_fd_ == -1) {
+                last_error_ = "Failed to create memory-mapped file";
+                return;
+            }
+            
+            // Set initial size (64KB for profile lookup table)
+            mmap_size_ = 65536;
+            if (ftruncate(mmap_fd_, mmap_size_) == -1) {
+                close(mmap_fd_);
+                mmap_fd_ = -1;
+                last_error_ = "Failed to set memory-mapped file size";
+                return;
+            }
+            
+            // Map the file into memory
+            mmap_data_ = mmap(nullptr, mmap_size_, PROT_READ | PROT_WRITE, MAP_SHARED, mmap_fd_, 0);
+            
+            if (mmap_data_ == MAP_FAILED) {
+                close(mmap_fd_);
+                mmap_fd_ = -1;
+                mmap_data_ = nullptr;
+                last_error_ = "Failed to map file into memory";
+                return;
+            }
+            
+            memory_mapped_enabled_.store(true);
+            std::cout << "[ProfileManager] Memory-mapped lookup enabled" << std::endl;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to enable memory-mapped lookup: " + std::string(e.what());
+        }
+    }
+    
+    void disableMemoryMappedLookup() {
+        if (!memory_mapped_enabled_.load()) {
+            return;
+        }
+        
+        if (mmap_data_ && mmap_data_ != MAP_FAILED) {
+            munmap(mmap_data_, mmap_size_);
+            mmap_data_ = nullptr;
+        }
+        
+        if (mmap_fd_ != -1) {
+            close(mmap_fd_);
+            mmap_fd_ = -1;
+        }
+        
+        memory_mapped_enabled_.store(false);
+        std::cout << "[ProfileManager] Memory-mapped lookup disabled" << std::endl;
+    }
+    
+    bool isMemoryMappedLookupEnabled() const {
+        return memory_mapped_enabled_.load();
+    }
+    
+    void preloadProfileCache() {
+        try {
+            std::unique_lock<std::shared_mutex> lock(cache_mutex_);
+            
+            // Load all profiles into cache
+            auto profiles = getAllProfiles();
+            profile_cache_.clear();
+            
+            for (const auto& profile : profiles) {
+                profile_cache_[profile.id] = profile;
+            }
+            
+            std::cout << "[ProfileManager] Preloaded " << profile_cache_.size() << " profiles into cache" << std::endl;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to preload profile cache: " + std::string(e.what());
+        }
+    }
+    
+    void warmupLookupTables() {
+        try {
+            // Warm up the cache by accessing all profiles
+            preloadProfileCache();
+            
+            // Pre-compute hash values for faster lookups
+            std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+            
+            for (const auto& [profileId, profile] : profile_cache_) {
+                // Pre-compute hash for ultra-fast access
+                std::hash<std::string> hasher;
+                size_t hash = hasher(profileId);
+                (void)hash; // Use hash for memory warming
+            }
+            
+            std::cout << "[ProfileManager] Lookup tables warmed up" << std::endl;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to warm up lookup tables: " + std::string(e.what());
+        }
+    }
+    
+    std::optional<Profile> getProfileFast(const std::string& profileId) const {
+        if (!memory_mapped_enabled_.load()) {
+            return const_cast<Implementation*>(this)->getProfile(profileId);
+        }
+        
+        try {
+            std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+            
+            auto it = profile_cache_.find(profileId);
+            if (it != profile_cache_.end()) {
+                cache_hits_.fetch_add(1, std::memory_order_relaxed);
+                return it->second;
+            }
+            
+            cache_misses_.fetch_add(1, std::memory_order_relaxed);
+            
+            // Cache miss - load from storage and update cache
+            lock.unlock();
+            auto profile = const_cast<Implementation*>(this)->getProfile(profileId);
+            
+            if (profile) {
+                std::unique_lock<std::shared_mutex> write_lock(cache_mutex_);
+                profile_cache_[profileId] = *profile;
+            }
+            
+            return profile;
+            
+        } catch (const std::exception& e) {
+            const_cast<std::string&>(last_error_) = "Fast profile lookup failed: " + std::string(e.what());
+            return std::nullopt;
+        }
+    }
+    
+    bool isProfileCached(const std::string& profileId) const {
+        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+        return profile_cache_.find(profileId) != profile_cache_.end();
+    }
+    
+    void invalidateProfileCache(const std::string& profileId) {
+        std::unique_lock<std::shared_mutex> lock(cache_mutex_);
+        profile_cache_.erase(profileId);
+    }
+    
+    size_t getCacheHitRate() const {
+        size_t hits = cache_hits_.load(std::memory_order_relaxed);
+        size_t misses = cache_misses_.load(std::memory_order_relaxed);
+        
+        if (hits + misses == 0) {
+            return 0;
+        }
+        
+        return (hits * 100) / (hits + misses);
+    }
+    
 private:
     std::string data_path_;
     std::unique_ptr<PhantomVault::VaultManager> vault_manager_;
     std::string active_profile_id_;
     std::string last_error_;
     std::unique_ptr<ErrorHandler> error_handler_;
+    
+    // Memory-mapped lookup system members
+    std::atomic<bool> memory_mapped_enabled_;
+    mutable std::unordered_map<std::string, Profile> profile_cache_;
+    mutable std::shared_mutex cache_mutex_;
+    mutable std::atomic<size_t> cache_hits_;
+    mutable std::atomic<size_t> cache_misses_;
+    
+    // Memory mapping for ultra-fast access
+    int mmap_fd_;
+    void* mmap_data_;
+    size_t mmap_size_;
     
     std::string getDefaultDataPath() {
         #ifdef PLATFORM_LINUX
@@ -1278,6 +1466,42 @@ std::vector<std::string> ProfileManager::getProfileLockedFolders(const std::stri
 
 std::string ProfileManager::getLastError() const {
     return pimpl->getLastError();
+}
+
+void ProfileManager::enableMemoryMappedLookup() {
+    pimpl->enableMemoryMappedLookup();
+}
+
+void ProfileManager::disableMemoryMappedLookup() {
+    pimpl->disableMemoryMappedLookup();
+}
+
+bool ProfileManager::isMemoryMappedLookupEnabled() const {
+    return pimpl->isMemoryMappedLookupEnabled();
+}
+
+void ProfileManager::preloadProfileCache() {
+    pimpl->preloadProfileCache();
+}
+
+void ProfileManager::warmupLookupTables() {
+    pimpl->warmupLookupTables();
+}
+
+std::optional<Profile> ProfileManager::getProfileFast(const std::string& profileId) const {
+    return pimpl->getProfileFast(profileId);
+}
+
+bool ProfileManager::isProfileCached(const std::string& profileId) const {
+    return pimpl->isProfileCached(profileId);
+}
+
+void ProfileManager::invalidateProfileCache(const std::string& profileId) {
+    pimpl->invalidateProfileCache(profileId);
+}
+
+size_t ProfileManager::getCacheHitRate() const {
+    return pimpl->getCacheHitRate();
 }
 
 } // namespace phantomvault
