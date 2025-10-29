@@ -139,6 +139,13 @@ public:
     void setLogRetentionPeriod(std::chrono::hours retentionHours);
     void enableRealTimeAlerts(bool enabled);
     
+    // Configuration protection
+    bool protectConfigurationFiles(const std::vector<std::string>& configPaths);
+    bool validateConfigurationIntegrity() const;
+    void enableConfigurationMonitoring();
+    void disableConfigurationMonitoring();
+    bool isConfigurationProtected() const;
+    
     // Error handling
     std::string getLastError() const;
 

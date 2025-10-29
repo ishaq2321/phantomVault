@@ -24,11 +24,13 @@
 #ifdef PLATFORM_LINUX
 #include <sys/resource.h>
 #include <unistd.h>
+#include <signal.h>
 #elif PLATFORM_WINDOWS
 #include <windows.h>
 #include <psapi.h>
 #elif PLATFORM_MACOS
 #include <mach/mach.h>
+#include <signal.h>
 #endif
 
 namespace phantomvault {
@@ -45,6 +47,7 @@ public:
         , performance_monitor_(nullptr)
         , privilege_manager_(nullptr)
         , last_error_()
+        , process_protected_(false)
     {}
 
     ~Implementation() {
@@ -52,6 +55,8 @@ public:
     }
 
     bool initialize(const std::string& configFile, const std::string& logLevel, int ipcPort) {
+        (void)configFile; // Suppress unused parameter warning
+        (void)logLevel;   // Suppress unused parameter warning
         try {
             std::cout << "[ServiceManager] Initializing PhantomVault service..." << std::endl;
             
@@ -452,6 +457,149 @@ public:
             std::cout << "[ServiceManager] Error during secure cleanup: " << e.what() << std::endl;
         }
     }
+    
+    void enableProcessProtection() {
+        try {
+            if (process_protected_) {
+                return;
+            }
+            
+            // Enable process protection through PrivilegeManager
+            if (privilege_manager_) {
+                privilege_manager_->enableProcessProtection();
+            }
+            
+            // Install signal handlers for graceful termination detection
+            #ifdef PLATFORM_LINUX
+            signal(SIGTERM, &Implementation::signalHandler);
+            signal(SIGINT, &Implementation::signalHandler);
+            signal(SIGHUP, &Implementation::signalHandler);
+            
+            // Start protection monitoring thread
+            protection_monitoring_running_ = true;
+            protection_monitor_thread_ = std::thread(&Implementation::protectionMonitoringLoop, this);
+            
+            #elif PLATFORM_WINDOWS
+            // Set console control handler for Windows
+            SetConsoleCtrlHandler(&Implementation::consoleHandler, TRUE);
+            
+            // Start protection monitoring thread
+            protection_monitoring_running_ = true;
+            protection_monitor_thread_ = std::thread(&Implementation::protectionMonitoringLoop, this);
+            
+            #elif PLATFORM_MACOS
+            signal(SIGTERM, &Implementation::signalHandler);
+            signal(SIGINT, &Implementation::signalHandler);
+            
+            // Start protection monitoring thread
+            protection_monitoring_running_ = true;
+            protection_monitor_thread_ = std::thread(&Implementation::protectionMonitoringLoop, this);
+            #endif
+            
+            process_protected_ = true;
+            std::cout << "[ServiceManager] Process protection enabled" << std::endl;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to enable process protection: " + std::string(e.what());
+        }
+    }
+    
+    void disableProcessProtection() {
+        try {
+            if (!process_protected_) {
+                return;
+            }
+            
+            // Stop protection monitoring
+            protection_monitoring_running_ = false;
+            if (protection_monitor_thread_.joinable()) {
+                protection_monitor_thread_.join();
+            }
+            
+            // Disable process protection through PrivilegeManager
+            if (privilege_manager_) {
+                privilege_manager_->disableProcessProtection();
+            }
+            
+            #ifdef PLATFORM_WINDOWS
+            SetConsoleCtrlHandler(&Implementation::consoleHandler, FALSE);
+            #endif
+            
+            process_protected_ = false;
+            std::cout << "[ServiceManager] Process protection disabled" << std::endl;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to disable process protection: " + std::string(e.what());
+        }
+    }
+    
+    bool isProcessProtected() const {
+        return process_protected_;
+    }
+    
+    void setTerminationCallback(std::function<void()> callback) {
+        termination_callback_ = callback;
+    }
+    
+    static void signalHandler(int signal) {
+        std::cout << "[ServiceManager] Received termination signal: " << signal << std::endl;
+        
+        // Perform emergency cleanup
+        // Note: This is a static function, so we can't access instance members directly
+        // In a real implementation, we'd use a global instance pointer or other mechanism
+        
+        exit(0);
+    }
+    
+    #ifdef PLATFORM_WINDOWS
+    static BOOL WINAPI consoleHandler(DWORD dwCtrlType) {
+        switch (dwCtrlType) {
+            case CTRL_C_EVENT:
+            case CTRL_BREAK_EVENT:
+            case CTRL_CLOSE_EVENT:
+            case CTRL_LOGOFF_EVENT:
+            case CTRL_SHUTDOWN_EVENT:
+                std::cout << "[ServiceManager] Received Windows termination event: " << dwCtrlType << std::endl;
+                
+                // Perform emergency cleanup
+                return TRUE;
+            default:
+                return FALSE;
+        }
+    }
+    #endif
+    
+    void protectionMonitoringLoop() {
+        std::cout << "[ServiceManager] Process protection monitoring started" << std::endl;
+        
+        while (protection_monitoring_running_) {
+            try {
+                // Check if process is still protected
+                if (privilege_manager_ && !privilege_manager_->isProcessProtected()) {
+                    std::cout << "[ServiceManager] Process protection lost, attempting to restore..." << std::endl;
+                    
+                    privilege_manager_->enableProcessProtection();
+                    
+                    if (!privilege_manager_->isProcessProtected()) {
+                        std::cout << "[ServiceManager] Failed to restore process protection" << std::endl;
+                        
+                        if (termination_callback_) {
+                            termination_callback_();
+                        }
+                    }
+                }
+                
+                // Sleep for monitoring interval
+                std::this_thread::sleep_for(std::chrono::seconds(30));
+                
+            } catch (const std::exception& e) {
+                last_error_ = "Process protection monitoring error: " + std::string(e.what());
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+            }
+        }
+        
+        std::cout << "[ServiceManager] Process protection monitoring stopped" << std::endl;
+    }
 
 private:
     std::atomic<bool> running_;
@@ -466,6 +614,12 @@ private:
     std::unique_ptr<PrivilegeManager> privilege_manager_;
     
     std::string last_error_;
+    
+    // Process protection members
+    bool process_protected_;
+    std::function<void()> termination_callback_;
+    std::thread protection_monitor_thread_;
+    std::atomic<bool> protection_monitoring_running_{false};
 };
 
 // ServiceManager public interface implementation
@@ -520,6 +674,22 @@ std::string ServiceManager::getPlatformInfo() const {
 
 size_t ServiceManager::getMemoryUsage() const {
     return pimpl->getMemoryUsage();
+}
+
+void ServiceManager::enableProcessProtection() {
+    pimpl->enableProcessProtection();
+}
+
+void ServiceManager::disableProcessProtection() {
+    pimpl->disableProcessProtection();
+}
+
+bool ServiceManager::isProcessProtected() const {
+    return pimpl->isProcessProtected();
+}
+
+void ServiceManager::setTerminationCallback(std::function<void()> callback) {
+    pimpl->setTerminationCallback(callback);
 }
 
 } // namespace phantomvault

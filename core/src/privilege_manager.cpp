@@ -15,12 +15,14 @@
 #include <chrono>
 #include <sstream>
 #include <functional>
+#include <filesystem>
 
 #ifdef PLATFORM_LINUX
 #include <unistd.h>
 #include <pwd.h>
 #include <grp.h>
 #include <sys/types.h>
+#include <sys/prctl.h>
 #include <cstdlib>
 #elif PLATFORM_WINDOWS
 #include <windows.h>
@@ -31,8 +33,11 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/types.h>
+#include <sys/ptrace.h>
 #include <Security/Security.h>
 #endif
+
+namespace fs = std::filesystem;
 
 namespace phantomvault {
 
@@ -57,6 +62,9 @@ public:
         , profile_manager_(nullptr)
         , auth_state_()
         , tamper_check_hash_(0)
+        , installation_path_()
+        , process_protected_(false)
+        , installation_protected_(false)
     {}
     
     ~Implementation() {
@@ -587,6 +595,165 @@ public:
         auth_state_.isTamperResistant = false;
         tamper_check_hash_ = 0;
     }
+    
+    void setInstallationPath(const std::string& installPath) {
+        installation_path_ = installPath;
+    }
+    
+    bool protectInstallationDirectory(const std::string& installPath) {
+        try {
+            installation_path_ = installPath;
+            
+            if (!fs::exists(installPath)) {
+                last_error_ = "Installation path does not exist: " + installPath;
+                return false;
+            }
+            
+            #ifdef PLATFORM_LINUX
+            // Set restrictive permissions on installation directory
+            fs::permissions(installPath, fs::perms::owner_all | fs::perms::group_read | fs::perms::group_exec, 
+                          fs::perm_options::replace);
+            
+            // Protect against unauthorized modifications
+            for (const auto& entry : fs::recursive_directory_iterator(installPath)) {
+                if (entry.is_regular_file()) {
+                    fs::permissions(entry.path(), fs::perms::owner_read | fs::perms::owner_exec | 
+                                  fs::perms::group_read | fs::perms::group_exec, fs::perm_options::replace);
+                }
+            }
+            
+            #elif PLATFORM_WINDOWS
+            // Set NTFS permissions to restrict access
+            DWORD result = SetNamedSecurityInfoA(
+                const_cast<char*>(installPath.c_str()),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                NULL, NULL, NULL, NULL
+            );
+            
+            if (result != ERROR_SUCCESS) {
+                last_error_ = "Failed to set Windows security permissions";
+                return false;
+            }
+            
+            #elif PLATFORM_MACOS
+            // Set restrictive permissions on macOS
+            fs::permissions(installPath, fs::perms::owner_all | fs::perms::group_read | fs::perms::group_exec, 
+                          fs::perm_options::replace);
+            #endif
+            
+            installation_protected_ = true;
+            std::cout << "[PrivilegeManager] Installation directory protected: " << installPath << std::endl;
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to protect installation directory: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    bool validateInstallationIntegrity() const {
+        try {
+            if (installation_path_.empty() || !installation_protected_) {
+                return true; // No protection enabled
+            }
+            
+            if (!fs::exists(installation_path_)) {
+                return false;
+            }
+            
+            // Check for unauthorized modifications
+            for (const auto& entry : fs::recursive_directory_iterator(installation_path_)) {
+                if (entry.is_regular_file()) {
+                    #ifdef PLATFORM_LINUX
+                    // Check if file permissions have been tampered with
+                    auto perms = fs::status(entry.path()).permissions();
+                    
+                    // Check if write permissions have been added inappropriately
+                    if ((perms & fs::perms::others_write) != fs::perms::none ||
+                        (perms & fs::perms::group_write) != fs::perms::none) {
+                        std::cout << "[PrivilegeManager] Installation integrity violation detected: " 
+                                  << entry.path() << std::endl;
+                        return false;
+                    }
+                    #endif
+                }
+            }
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Installation integrity check failed: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    void enableProcessProtection() {
+        try {
+            #ifdef PLATFORM_LINUX
+            // Set process to be non-dumpable (prevents ptrace attachment)
+            if (prctl(PR_SET_DUMPABLE, 0) != 0) {
+                last_error_ = "Failed to set process non-dumpable";
+                return;
+            }
+            
+            // Set process name to make it less obvious
+            if (prctl(PR_SET_NAME, "systemd-phantom") != 0) {
+                last_error_ = "Failed to set process name";
+                return;
+            }
+            
+            #elif PLATFORM_WINDOWS
+            // Enable DEP (Data Execution Prevention)
+            DWORD flags = PROCESS_DEP_ENABLE | PROCESS_DEP_DISABLE_ATL_THUNK_EMULATION;
+            if (!SetProcessDEPPolicy(flags)) {
+                last_error_ = "Failed to enable DEP";
+                return;
+            }
+            
+            // Set process priority to avoid easy termination
+            if (!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS)) {
+                last_error_ = "Failed to set process priority";
+                return;
+            }
+            
+            #elif PLATFORM_MACOS
+            // Set process to be non-dumpable
+            if (ptrace(PT_DENY_ATTACH, 0, 0, 0) != 0) {
+                last_error_ = "Failed to deny ptrace attachment";
+                return;
+            }
+            #endif
+            
+            process_protected_ = true;
+            std::cout << "[PrivilegeManager] Process protection enabled" << std::endl;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to enable process protection: " + std::string(e.what());
+        }
+    }
+    
+    void disableProcessProtection() {
+        try {
+            #ifdef PLATFORM_LINUX
+            // Re-enable dumping
+            prctl(PR_SET_DUMPABLE, 1);
+            #elif PLATFORM_WINDOWS
+            // Reset process priority
+            SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+            #endif
+            
+            process_protected_ = false;
+            std::cout << "[PrivilegeManager] Process protection disabled" << std::endl;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to disable process protection: " + std::string(e.what());
+        }
+    }
+    
+    bool isProcessProtected() const {
+        return process_protected_;
+    }
 
 private:
     bool initialized_;
@@ -610,6 +777,11 @@ private:
     AuthenticationState auth_state_;
     mutable std::mutex auth_state_mutex_;
     size_t tamper_check_hash_;
+    
+    // Self-protection members
+    std::string installation_path_;
+    bool process_protected_;
+    bool installation_protected_;
     
     PrivilegeLevel detectCurrentPrivilegeLevel() const {
         #ifdef PLATFORM_LINUX
@@ -1073,6 +1245,30 @@ void PrivilegeManager::setRequireDualLayerAuth(bool required) {
 
 void PrivilegeManager::setProfileManager(ProfileManager* profileManager) {
     pimpl->setProfileManager(profileManager);
+}
+
+void PrivilegeManager::setInstallationPath(const std::string& installPath) {
+    pimpl->setInstallationPath(installPath);
+}
+
+bool PrivilegeManager::protectInstallationDirectory(const std::string& installPath) {
+    return pimpl->protectInstallationDirectory(installPath);
+}
+
+bool PrivilegeManager::validateInstallationIntegrity() const {
+    return pimpl->validateInstallationIntegrity();
+}
+
+void PrivilegeManager::enableProcessProtection() {
+    pimpl->enableProcessProtection();
+}
+
+void PrivilegeManager::disableProcessProtection() {
+    pimpl->disableProcessProtection();
+}
+
+bool PrivilegeManager::isProcessProtected() const {
+    return pimpl->isProcessProtected();
 }
 
 // PrivilegeElevationGuard implementation

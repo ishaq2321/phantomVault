@@ -10,6 +10,7 @@
 #include <string>
 #include <memory>
 #include <atomic>
+#include <functional>
 
 namespace phantomvault {
 
@@ -52,6 +53,12 @@ public:
     std::string getVersion() const;
     std::string getPlatformInfo() const;
     size_t getMemoryUsage() const;
+    
+    // Process protection
+    void enableProcessProtection();
+    void disableProcessProtection();
+    bool isProcessProtected() const;
+    void setTerminationCallback(std::function<void()> callback);
 
 private:
     class Implementation;

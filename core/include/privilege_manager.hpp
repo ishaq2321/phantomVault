@@ -142,6 +142,13 @@ public:
     void enableTamperResistance();
     void disableTamperResistance();
     
+    // Self-protection mechanisms
+    bool protectInstallationDirectory(const std::string& installPath);
+    bool validateInstallationIntegrity() const;
+    void enableProcessProtection();
+    void disableProcessProtection();
+    bool isProcessProtected() const;
+    
     // Operation-specific validation
     bool validateVaultAccess() const;
     bool validateFolderHiding() const;
@@ -174,6 +181,7 @@ public:
     void setSessionTimeout(std::chrono::minutes timeout);
     void setRequireDualLayerAuth(bool required);
     void setProfileManager(class ProfileManager* profileManager);
+    void setInstallationPath(const std::string& installPath);
     
     // Information
     std::string getPlatformInfo() const;

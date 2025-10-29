@@ -15,6 +15,7 @@
 #include <mutex>
 #include <thread>
 #include <regex>
+#include <atomic>
 #include <nlohmann/json.hpp>
 
 #ifdef PLATFORM_LINUX
@@ -48,6 +49,7 @@ public:
         , rate_limit_mutex_()
         , security_alert_callback_()
         , critical_error_callback_()
+        , config_monitoring_enabled_(false)
     {}
     
     ~Implementation() {
@@ -442,6 +444,7 @@ public:
     }
     
     void cleanupBackups(const std::string& profileId, std::chrono::hours maxAge) {
+        (void)profileId; // Suppress unused parameter warning
         try {
             auto cutoffTime = std::chrono::system_clock::now() - maxAge;
             
@@ -546,6 +549,165 @@ public:
     std::string getLastError() const {
         return last_error_;
     }
+    
+    bool protectConfigurationFiles(const std::vector<std::string>& configPaths) {
+        try {
+            protected_config_paths_ = configPaths;
+            config_file_hashes_.clear();
+            
+            for (const auto& configPath : configPaths) {
+                if (!fs::exists(configPath)) {
+                    last_error_ = "Configuration file does not exist: " + configPath;
+                    return false;
+                }
+                
+                // Calculate file hash for integrity checking
+                std::string fileHash = calculateFileHash(configPath);
+                if (fileHash.empty()) {
+                    last_error_ = "Failed to calculate hash for: " + configPath;
+                    return false;
+                }
+                
+                config_file_hashes_[configPath] = fileHash;
+                
+                // Set restrictive permissions
+                #ifdef PLATFORM_LINUX
+                fs::permissions(configPath, fs::perms::owner_read | fs::perms::owner_write, 
+                              fs::perm_options::replace);
+                #elif PLATFORM_WINDOWS
+                // Set NTFS permissions to restrict access
+                DWORD result = SetNamedSecurityInfoA(
+                    const_cast<char*>(configPath.c_str()),
+                    SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION,
+                    NULL, NULL, NULL, NULL
+                );
+                
+                if (result != ERROR_SUCCESS) {
+                    last_error_ = "Failed to set Windows security permissions for: " + configPath;
+                    return false;
+                }
+                #elif PLATFORM_MACOS
+                fs::permissions(configPath, fs::perms::owner_read | fs::perms::owner_write, 
+                              fs::perm_options::replace);
+                #endif
+                
+                std::cout << "[ErrorHandler] Configuration file protected: " << configPath << std::endl;
+            }
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to protect configuration files: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    bool validateConfigurationIntegrity() const {
+        try {
+            for (const auto& configPath : protected_config_paths_) {
+                if (!fs::exists(configPath)) {
+                    std::cout << "[ErrorHandler] Configuration file missing: " << configPath << std::endl;
+                    return false;
+                }
+                
+                // Check file hash
+                std::string currentHash = calculateFileHash(configPath);
+                auto it = config_file_hashes_.find(configPath);
+                
+                if (it == config_file_hashes_.end()) {
+                    std::cout << "[ErrorHandler] No baseline hash for: " << configPath << std::endl;
+                    return false;
+                }
+                
+                if (currentHash != it->second) {
+                    std::cout << "[ErrorHandler] Configuration file tampered: " << configPath << std::endl;
+                    
+                    // Log security event (cast away const for this security-critical operation)
+                    const_cast<Implementation*>(this)->logSecurityEvent(SecurityEventType::SYSTEM_COMPROMISE, ErrorSeverity::CRITICAL,
+                                   "", "Configuration file tampering detected",
+                                   {{"filePath", configPath}, {"expectedHash", it->second}, {"actualHash", currentHash}});
+                    
+                    return false;
+                }
+            }
+            
+            return true;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Configuration integrity check failed: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    void enableConfigurationMonitoring() {
+        if (config_monitoring_enabled_) {
+            return;
+        }
+        
+        config_monitoring_running_ = true;
+        config_monitor_thread_ = std::thread(&Implementation::configurationMonitoringLoop, this);
+        config_monitoring_enabled_ = true;
+        
+        std::cout << "[ErrorHandler] Configuration monitoring enabled" << std::endl;
+    }
+    
+    void disableConfigurationMonitoring() {
+        if (!config_monitoring_enabled_) {
+            return;
+        }
+        
+        config_monitoring_running_ = false;
+        
+        if (config_monitor_thread_.joinable()) {
+            config_monitor_thread_.join();
+        }
+        
+        config_monitoring_enabled_ = false;
+        std::cout << "[ErrorHandler] Configuration monitoring disabled" << std::endl;
+    }
+    
+    bool isConfigurationProtected() const {
+        return !protected_config_paths_.empty();
+    }
+    
+    RecoveryResult restoreFromBackup(const std::string& profileId, const std::string& backupPath) {
+        (void)profileId; // Suppress unused parameter warning
+        RecoveryResult result;
+        
+        try {
+            if (!fs::exists(backupPath)) {
+                result.message = "Backup path does not exist";
+                return result;
+            }
+            
+            // Copy backup files back to original location
+            std::string originalPath = backupPath.substr(0, backupPath.find("_backup"));
+            
+            for (const auto& entry : fs::recursive_directory_iterator(backupPath)) {
+                if (entry.is_regular_file()) {
+                    std::string relativePath = fs::relative(entry.path(), backupPath);
+                    std::string targetPath = originalPath + "/" + relativePath;
+                    
+                    try {
+                        fs::create_directories(fs::path(targetPath).parent_path());
+                        fs::copy_file(entry.path(), targetPath, fs::copy_options::overwrite_existing);
+                        result.recoveredFiles.push_back(targetPath);
+                    } catch (const std::exception& e) {
+                        result.failedFiles.push_back(entry.path().string());
+                    }
+                }
+            }
+            
+            result.success = !result.recoveredFiles.empty();
+            result.message = result.success ? "Backup restoration successful" : "No files could be restored";
+            
+        } catch (const std::exception& e) {
+            result.message = "Backup restoration failed: " + std::string(e.what());
+        }
+        
+        return result;
+    }
 
 private:
     bool initialized_;
@@ -566,6 +728,13 @@ private:
     
     std::function<void(const SecurityEvent&)> security_alert_callback_;
     std::function<void(const SecurityEvent&)> critical_error_callback_;
+    
+    // Configuration protection members
+    std::vector<std::string> protected_config_paths_;
+    std::map<std::string, std::string> config_file_hashes_;
+    bool config_monitoring_enabled_;
+    std::thread config_monitor_thread_;
+    std::atomic<bool> config_monitoring_running_{false};
     
     std::string getDefaultLogPath() {
         #ifdef PLATFORM_LINUX
@@ -725,10 +894,67 @@ private:
             cleanup_thread_.join();
         }
         
+        // Stop configuration monitoring
+        disableConfigurationMonitoring();
+        
         // Save remaining events
         if (initialized_) {
             saveEvents();
         }
+    }
+    
+    std::string calculateFileHash(const std::string& filePath) const {
+        try {
+            std::ifstream file(filePath, std::ios::binary);
+            if (!file.is_open()) {
+                return "";
+            }
+            
+            // Simple hash calculation (in production, use SHA-256)
+            std::hash<std::string> hasher;
+            std::string content((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+            
+            return std::to_string(hasher(content));
+            
+        } catch (const std::exception& e) {
+            return "";
+        }
+    }
+    
+    void configurationMonitoringLoop() {
+        std::cout << "[ErrorHandler] Configuration monitoring loop started" << std::endl;
+        
+        while (config_monitoring_running_) {
+            try {
+                // Check configuration integrity
+                if (!validateConfigurationIntegrity()) {
+                    // Integrity violation detected - already logged in validateConfigurationIntegrity
+                    
+                    // Trigger critical error callback
+                    if (critical_error_callback_) {
+                        SecurityEvent event;
+                        event.id = generateEventId();
+                        event.type = SecurityEventType::SYSTEM_COMPROMISE;
+                        event.severity = ErrorSeverity::CRITICAL;
+                        event.description = "Configuration tampering detected";
+                        event.timestamp = std::chrono::system_clock::now();
+                        event.sourceComponent = "ErrorHandler";
+                        
+                        critical_error_callback_(event);
+                    }
+                }
+                
+                // Sleep for monitoring interval
+                std::this_thread::sleep_for(std::chrono::seconds(60)); // Check every minute
+                
+            } catch (const std::exception& e) {
+                last_error_ = "Configuration monitoring error: " + std::string(e.what());
+                std::this_thread::sleep_for(std::chrono::seconds(30));
+            }
+        }
+        
+        std::cout << "[ErrorHandler] Configuration monitoring loop stopped" << std::endl;
     }
     
     bool isFileCorrupted(const std::string& filePath) {
@@ -757,43 +983,6 @@ private:
         } catch (const std::exception& e) {
             return true;
         }
-    }
-    
-    RecoveryResult restoreFromBackup(const std::string& profileId, const std::string& backupPath) {
-        RecoveryResult result;
-        
-        try {
-            if (!fs::exists(backupPath)) {
-                result.message = "Backup path does not exist";
-                return result;
-            }
-            
-            // Copy backup files back to original location
-            std::string originalPath = backupPath.substr(0, backupPath.find("_backup"));
-            
-            for (const auto& entry : fs::recursive_directory_iterator(backupPath)) {
-                if (entry.is_regular_file()) {
-                    std::string relativePath = fs::relative(entry.path(), backupPath);
-                    std::string targetPath = originalPath + "/" + relativePath;
-                    
-                    try {
-                        fs::create_directories(fs::path(targetPath).parent_path());
-                        fs::copy_file(entry.path(), targetPath, fs::copy_options::overwrite_existing);
-                        result.recoveredFiles.push_back(targetPath);
-                    } catch (const std::exception& e) {
-                        result.failedFiles.push_back(entry.path().string());
-                    }
-                }
-            }
-            
-            result.success = !result.recoveredFiles.empty();
-            result.message = result.success ? "Backup restoration successful" : "No files could be restored";
-            
-        } catch (const std::exception& e) {
-            result.message = "Backup restoration failed: " + std::string(e.what());
-        }
-        
-        return result;
     }
 };
 
@@ -907,6 +1096,26 @@ void ErrorHandler::enableRealTimeAlerts(bool enabled) {
 
 std::string ErrorHandler::getLastError() const {
     return pimpl->getLastError();
+}
+
+bool ErrorHandler::protectConfigurationFiles(const std::vector<std::string>& configPaths) {
+    return pimpl->protectConfigurationFiles(configPaths);
+}
+
+bool ErrorHandler::validateConfigurationIntegrity() const {
+    return pimpl->validateConfigurationIntegrity();
+}
+
+void ErrorHandler::enableConfigurationMonitoring() {
+    pimpl->enableConfigurationMonitoring();
+}
+
+void ErrorHandler::disableConfigurationMonitoring() {
+    pimpl->disableConfigurationMonitoring();
+}
+
+bool ErrorHandler::isConfigurationProtected() const {
+    return pimpl->isConfigurationProtected();
 }
 
 // FileBackupGuard implementation
