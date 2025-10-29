@@ -28,14 +28,16 @@ struct Profile {
 };
 
 /**
- * Profile creation result
+ * Profile operation result structure
  */
 struct ProfileResult {
     bool success = false;
     std::string profileId;
-    std::string recoveryKey;  // Only provided on creation
+    std::string recoveryKey;
+    std::string new_recovery_key;
     std::string message;
     std::string error;
+    std::string error_message;
 };
 
 /**
@@ -81,6 +83,10 @@ public:
     std::string recoverMasterKey(const std::string& recoveryKey);
     std::optional<std::string> getProfileIdFromRecoveryKey(const std::string& recoveryKey);
     std::optional<std::string> recoverMasterKeyFromRecoveryKey(const std::string& recoveryKey);
+    
+    // Enhanced recovery operations
+    std::string generateRecoveryKey(const std::string& profileId);
+    std::string getCurrentRecoveryKey(const std::string& profileId);
 
     // Session management
     void setActiveProfile(const std::string& profileId);

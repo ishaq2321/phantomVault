@@ -1,5 +1,7 @@
 # PhantomVault
 
+**⚠️ UNDER DEVELOPMENT - DO NOT TRY YET ⚠️**
+
 **Invisible Folder Security with Profile-Based Management**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

@@ -52,19 +52,23 @@ endif()
 # Include directories
 include_directories(include)
 
-# Source files
+# Source files (main.cpp removed - using unified entry point from src/main.cpp)
 set(CORE_SOURCES
-    src/main.cpp
     src/service_manager.cpp
     src/profile_manager.cpp
     src/folder_security_manager.cpp
     src/keyboard_sequence_detector.cpp
+    src/enhanced_keyboard_detector.cpp
     src/analytics_engine.cpp
     src/ipc_server.cpp
     src/memory_manager.cpp
     src/performance_monitor.cpp
     src/encryption_engine.cpp
     src/profile_vault.cpp
+    src/vault_handler.cpp
+    src/error_handler.cpp
+    src/privilege_manager.cpp
+    src/platform_adapter.cpp
 )
 
 # Platform-specific sources (will be added in later phases)

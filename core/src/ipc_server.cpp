@@ -376,6 +376,20 @@ private:
         }
     }
     
+    std::string extractQueryParam(const std::string& path, const std::string& param_name) {
+        size_t query_pos = path.find('?');
+        if (query_pos == std::string::npos) {
+            return "";
+        }
+        
+        std::string query = path.substr(query_pos + 1);
+        std::map<std::string, std::string> params;
+        parseQueryParams(query, params);
+        
+        auto it = params.find(param_name);
+        return (it != params.end()) ? it->second : "";
+    }
+    
     HttpResponse handleRoute(const HttpRequest& request) {
         std::lock_guard<std::mutex> lock(routes_mutex_);
         
@@ -386,10 +400,21 @@ private:
             return it->second(request);
         }
         
+        // Check for profile-specific routes (simple pattern matching)
+        if (request.method == "POST" && request.path.find("/api/profiles/") == 0 && 
+            request.path.find("/authenticate") != std::string::npos) {
+            return handleAuthenticateProfile(request);
+        }
+        
+        // Check for vault folder routes
+        if (request.method == "GET" && request.path.find("/api/vault/folders") == 0) {
+            return handleGetVaultFolders(request);
+        }
+        
         // Route not found
         HttpResponse response;
         response.status_code = 404;
-        response.body = R"({"success": false, "error": "Route not found"})";
+        response.body = R"({"success": false, "error": "Route not found: )" + request.method + " " + request.path + R"("})";
         return response;
     }
     
@@ -450,6 +475,9 @@ private:
         registerRoute("POST", "/api/profiles/authenticate", [this](const HttpRequest& req) -> HttpResponse {
             return handleAuthenticateProfile(req);
         });
+        
+        // Add a catch-all route handler for profile-specific routes
+        // This is a temporary solution - in production we'd implement proper path parameter routing
         
         // Folder routes
         registerRoute("GET", "/api/folders", [this](const HttpRequest& req) -> HttpResponse {

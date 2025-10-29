@@ -31,7 +31,7 @@ ProfileVault::ProfileVault(const std::string& profile_id, const std::string& vau
     , metadata_file_(vault_path_ + "/vault_metadata.json")
     , temp_unlock_file_(vault_path_ + "/temp_unlock.json")
     , encryption_engine_(std::make_unique<EncryptionEngine>())
-    , error_handler_(std::make_unique<ErrorHandler>())
+    , error_handler_(std::make_unique<phantomvault::ErrorHandler>())
     , vault_handler_(std::make_unique<phantomvault::VaultHandler>()) {
     clearError();
 }

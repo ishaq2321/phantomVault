@@ -76,6 +76,7 @@ interface VaultStats {
 const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [isProfileAuthenticated, setIsProfileAuthenticated] = useState<boolean>(false);
   const [folders, setFolders] = useState<SecuredFolder[]>([]);
   const [vaultStats, setVaultStats] = useState<VaultStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -94,6 +95,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   const [masterKey, setMasterKey] = useState('');
   const [confirmKey, setConfirmKey] = useState('');
   const [authKey, setAuthKey] = useState('');
+  const [authenticatedMasterKey, setAuthenticatedMasterKey] = useState('');
   const [selectedFolderPath, setSelectedFolderPath] = useState('');
 
   // Load profiles on component mount
@@ -103,10 +105,14 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
 
   // Load folders when profile is selected
   useEffect(() => {
-    if (selectedProfile) {
+    if (selectedProfile && isProfileAuthenticated) {
       loadFolders(selectedProfile.id);
+    } else if (selectedProfile && !isProfileAuthenticated) {
+      // Clear folders when profile is selected but not authenticated
+      setFolders([]);
+      setVaultStats(null);
     }
-  }, [selectedProfile]);
+  }, [selectedProfile, isProfileAuthenticated]);
 
   const loadProfiles = async () => {
     try {
@@ -179,7 +185,9 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   };
 
   const handleAuthenticateProfile = async (profile: Profile) => {
+    // Set the profile but mark as not authenticated
     setSelectedProfile(profile);
+    setIsProfileAuthenticated(false);
     setAuthDialog(true);
   };
 
@@ -194,16 +202,28 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       const response = await window.phantomVault.ipc.authenticateProfile(selectedProfile.id, authKey);
       if (response.success) {
         setAuthDialog(false);
-        setAuthKey('');
-        // Profile is now authenticated and folders will load
-        loadFolders(selectedProfile.id);
+        // Profile is now properly authenticated
+        setIsProfileAuthenticated(true);
+        // Store the authenticated master key for future operations
+        setAuthenticatedMasterKey(authKey);
+        // loadFolders will be called automatically by useEffect
+        setSuccess(`Profile "${selectedProfile.name}" authenticated successfully`);
       } else {
         setError('Authentication failed: ' + response.error);
+        // Clear selection on failed authentication
+        setSelectedProfile(null);
+        setIsProfileAuthenticated(false);
+        setAuthenticatedMasterKey('');
       }
     } catch (err) {
       setError('Authentication failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      // Clear selection on failed authentication
+      setSelectedProfile(null);
+      setIsProfileAuthenticated(false);
+      setAuthenticatedMasterKey('');
     } finally {
       setLoading(false);
+      setAuthKey(''); // Clear the input field
     }
   };
 
@@ -219,7 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       const response = await window.phantomVault.ipc.lockFolder(
         selectedProfile.id, 
         selectedFolderPath, 
-        authKey || masterKey
+        authenticatedMasterKey
       );
       
       if (response.success) {
@@ -238,7 +258,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   };
 
   const handleUnlockFolders = async (permanent: boolean = false) => {
-    if (!selectedProfile || !authKey) {
+    if (!selectedProfile || !authenticatedMasterKey) {
       setError('Please authenticate profile first');
       return;
     }
@@ -247,8 +267,8 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       setLoading(true);
       // Call the appropriate unlock API endpoint
       const response = permanent 
-        ? await window.phantomVault.ipc.unlockFoldersPermanent(selectedProfile.id, authKey, [])
-        : await window.phantomVault.ipc.unlockFoldersTemporary(selectedProfile.id, authKey);
+        ? await window.phantomVault.ipc.unlockFoldersPermanent(selectedProfile.id, authenticatedMasterKey, [])
+        : await window.phantomVault.ipc.unlockFoldersTemporary(selectedProfile.id, authenticatedMasterKey);
       
       if (response.success) {
         loadFolders(selectedProfile.id);

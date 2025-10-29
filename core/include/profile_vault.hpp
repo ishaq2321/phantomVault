@@ -1,6 +1,8 @@
 #pragma once
 
 #include "encryption_engine.hpp"
+#include "error_handler.hpp"
+#include "vault_handler.hpp"
 #include <string>
 #include <vector>
 #include <memory>
@@ -98,8 +100,8 @@ private:
     mutable std::string last_error_;
     
     std::unique_ptr<EncryptionEngine> encryption_engine_;
-    std::unique_ptr<class ErrorHandler> error_handler_;
-    std::unique_ptr<class phantomvault::VaultHandler> vault_handler_;
+    std::unique_ptr<phantomvault::ErrorHandler> error_handler_;
+    std::unique_ptr<phantomvault::VaultHandler> vault_handler_;
     
     // Internal folder operations
     VaultOperationResult encryptAndStoreFolder(const std::string& folder_path, const std::string& master_key);

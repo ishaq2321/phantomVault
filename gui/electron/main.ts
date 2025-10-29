@@ -12,7 +12,7 @@ import { existsSync } from 'fs';
 
 // Development mode detection
 // Check if we're in a proper development environment (not just unpackaged)
-const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production' && existsSync(join(__dirname, '../../src'));
+const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production' && existsSync(join(__dirname, '../src'));
 const isPackaged = app.isPackaged;
 
 // Service process reference
@@ -45,7 +45,7 @@ function createMainWindow(): void {
     mainWindow.webContents.openDevTools();
   } else {
     // In production, load the built renderer files
-    const rendererPath = join(__dirname, '../renderer/index.html');
+    const rendererPath = join(__dirname, 'renderer/index.html');
     console.log('[Main] Loading renderer from:', rendererPath);
     mainWindow.loadFile(rendererPath);
   }
@@ -76,8 +76,20 @@ function createMainWindow(): void {
  * Start the PhantomVault service
  */
 function startService(): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     try {
+      // First check if a service is already running
+      try {
+        const response = await fetch('http://127.0.0.1:9876/api/platform');
+        if (response.ok) {
+          console.log('[Main] Service already running, using existing service');
+          resolve(true);
+          return;
+        }
+      } catch (e) {
+        // Service not running, continue with startup
+      }
+      
       // Determine service executable path
       let servicePath: string;
       

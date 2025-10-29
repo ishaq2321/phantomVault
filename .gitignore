@@ -128,3 +128,6 @@ test_vaults/
 # Development files
 dev_notes.md
 TODO.md
+
+# Kiro IDE specifications and workspace files
+.kiro/
