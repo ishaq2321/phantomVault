@@ -83,6 +83,18 @@ public:
     size_t getDetectionCount() const;
     std::chrono::system_clock::time_point getLastDetectionTime() const;
     
+    // Ultra-fast performance enhancements
+    void enableHardwareLevelMonitoring();
+    void disableHardwareLevelMonitoring();
+    void setRealTimePriority(bool enabled);
+    void enableLockFreeProcessing();
+    void disableLockFreeProcessing();
+    
+    // Performance metrics
+    std::chrono::nanoseconds getAverageResponseTime() const;
+    std::chrono::nanoseconds getLastResponseTime() const;
+    size_t getProcessedEventsPerSecond() const;
+    
     // Error handling
     std::string getLastError() const;
 
