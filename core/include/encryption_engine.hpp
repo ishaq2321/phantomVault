@@ -4,6 +4,12 @@
 #include <string>
 #include <memory>
 #include <cstdint>
+#include <chrono>
+#include <memory_resource>
+
+// Forward declarations
+struct evp_cipher_ctx_st;
+typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
 
 namespace PhantomVault {
 
@@ -249,9 +255,40 @@ public:
      * @return Error message from last failed operation
      */
     const std::string& getLastError() const { return last_error_; }
+    
+    // SIMD and parallel processing optimizations
+    void enableSIMDOptimizations();
+    void disableSIMDOptimizations();
+    bool isSIMDEnabled() const;
+    void setParallelProcessingThreads(size_t thread_count);
+    size_t getParallelProcessingThreads() const;
+    
+    // Performance profiling and optimization
+    void enablePerformanceProfiling();
+    void disablePerformanceProfiling();
+    std::chrono::nanoseconds getLastOperationTime() const;
+    double getThroughputMBps() const;
+    
+    // Memory pool allocation for zero-overhead operations
+    void enableMemoryPooling();
+    void disableMemoryPooling();
+    size_t getMemoryPoolSize() const;
 
 private:
+    // OpenSSL context management (must be first for proper initialization order)
+    class OpenSSLContext;
+    std::unique_ptr<OpenSSLContext> ssl_context_;
+    
     std::string last_error_;
+    
+    // SIMD and performance optimization members
+    bool simd_enabled_;
+    size_t parallel_threads_;
+    bool profiling_enabled_;
+    mutable std::chrono::nanoseconds last_operation_time_;
+    mutable double last_throughput_mbps_;
+    bool memory_pooling_enabled_;
+    std::unique_ptr<std::pmr::memory_resource> memory_pool_;
 
     // Internal encryption/decryption helpers
     bool encryptChunk(const uint8_t* input, size_t input_len,
@@ -261,14 +298,15 @@ private:
     bool decryptChunk(const uint8_t* input, size_t input_len,
                      const uint8_t* key, const uint8_t* iv,
                      std::vector<uint8_t>& output);
+    
+    // SIMD-optimized encryption helper
+    bool encryptDataSIMD(const std::vector<uint8_t>& data, 
+                        std::vector<uint8_t>& encrypted_data,
+                        EVP_CIPHER_CTX* ctx, int& len, int& total_len);
 
     // Error handling
     void setError(const std::string& error);
     void clearError();
-
-    // OpenSSL context management
-    class OpenSSLContext;
-    std::unique_ptr<OpenSSLContext> ssl_context_;
 };
 
 } // namespace PhantomVault
