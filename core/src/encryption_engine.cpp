@@ -739,6 +739,12 @@ void EncryptionEngine::clearError() {
 bool EncryptionEngine::encryptDataSIMD(const std::vector<uint8_t>& data, 
                                       std::vector<uint8_t>& encrypted_data,
                                       EVP_CIPHER_CTX* ctx, int& len, int& total_len) {
+    (void)data;           // Suppress unused parameter warning
+    (void)encrypted_data; // Suppress unused parameter warning
+    (void)ctx;            // Suppress unused parameter warning
+    (void)len;            // Suppress unused parameter warning
+    (void)total_len;      // Suppress unused parameter warning
+    
     try {
         #ifdef __AVX2__
         // Use AVX2 for parallel processing of multiple blocks
