@@ -82,6 +82,7 @@ endif()
 
 # Include directories
 include_directories(include)
+include_directories(../src)
 if(ARGON2_INCLUDE_DIRS)
     include_directories(${ARGON2_INCLUDE_DIRS})
 endif()
@@ -89,7 +90,7 @@ if(ZSTD_INCLUDE_DIRS)
     include_directories(${ZSTD_INCLUDE_DIRS})
 endif()
 
-# Source files (main.cpp removed - using unified entry point from src/main.cpp)
+# Source files
 set(CORE_SOURCES
     src/service_manager.cpp
     src/profile_manager.cpp
@@ -108,11 +109,14 @@ set(CORE_SOURCES
     src/platform_adapter.cpp
 )
 
-# Platform-specific sources (will be added in later phases)
-# For now, platform-specific code is included in the main implementations
+# Add main application files from src directory
+set(APP_SOURCES
+    ../src/main.cpp
+    ../src/phantomvault_application.cpp
+)
 
-# Create executable
-add_executable(phantomvault-service ${CORE_SOURCES})
+# Create executable with both core and app sources
+add_executable(phantomvault-service ${CORE_SOURCES} ${APP_SOURCES})
 
 # Link libraries
 target_link_libraries(phantomvault-service
@@ -135,6 +139,7 @@ if(PLATFORM_LINUX)
     target_link_libraries(phantomvault-service
         X11
         Xext
+        Xtst
         stdc++fs
     )
 elseif(PLATFORM_MACOS)

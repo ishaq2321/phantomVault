@@ -1,0 +1,114 @@
+{
+  "application": {
+    "name": "PhantomVault",
+    "displayName": "PhantomVault - Invisible Folder Security",
+    "version": "1.0.0",
+    "description": "Military-grade folder security with profile-based management",
+    "homepage": "https://github.com/ishaq2321/phantomVault",
+    "author": "PhantomVault Team",
+    "email": "support@phantomvault.com",
+    "license": "MIT"
+  },
+  "service": {
+    "name": "phantomvault",
+    "displayName": "PhantomVault Service",
+    "description": "Invisible Folder Security Service",
+    "port": 9876,
+    "logLevel": "INFO",
+    "autoStart": true,
+    "restartOnFailure": true
+  },
+  "installation": {
+    "requiresAdmin": true,
+    "installLocation": {
+      "linux": "/opt/phantomvault",
+      "windows": "%PROGRAMFILES%\\PhantomVault",
+      "macos": "/usr/local"
+    },
+    "dataLocation": {
+      "linux": "/var/lib/phantomvault",
+      "windows": "%PROGRAMDATA%\\PhantomVault",
+      "macos": "/usr/local/var/phantomvault"
+    },
+    "logLocation": {
+      "linux": "/var/log/phantomvault",
+      "windows": "%PROGRAMDATA%\\PhantomVault\\logs",
+      "macos": "/usr/local/var/log"
+    }
+  },
+  "dependencies": {
+    "linux": {
+      "debian": [
+        "libssl3",
+        "libx11-6",
+        "libxtst6",
+        "libgtk-3-0",
+        "systemd",
+        "polkitd"
+      ],
+      "redhat": [
+        "openssl",
+        "libX11",
+        "libXtst",
+        "gtk3",
+        "systemd",
+        "polkit"
+      ],
+      "arch": [
+        "openssl",
+        "libx11",
+        "libxtst",
+        "gtk3",
+        "systemd",
+        "polkit"
+      ]
+    },
+    "windows": [
+      "Microsoft Visual C++ Redistributable",
+      ".NET Framework 4.7.2"
+    ],
+    "macos": [
+      "macOS 10.12 or later"
+    ]
+  },
+  "features": {
+    "gui": {
+      "enabled": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "registerFileAssociations": true
+    },
+    "cli": {
+      "enabled": true,
+      "addToPath": true,
+      "createSymlinks": true
+    },
+    "service": {
+      "enabled": true,
+      "autoStart": true,
+      "runAsSystem": true,
+      "createFirewallException": true
+    },
+    "uninstaller": {
+      "enabled": true,
+      "preserveUserData": true,
+      "cleanRegistry": true
+    }
+  },
+  "security": {
+    "codeSigningRequired": false,
+    "checksumVerification": true,
+    "digitalSignature": true,
+    "encryptedInstaller": false
+  },
+  "branding": {
+    "companyName": "PhantomVault Team",
+    "copyright": "Copyright © 2024 PhantomVault Team",
+    "trademark": "PhantomVault™",
+    "colors": {
+      "primary": "#2563eb",
+      "secondary": "#1e40af",
+      "accent": "#3b82f6"
+    }
+  }
+}

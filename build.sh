@@ -95,6 +95,31 @@ else
 fi
 
 print_success "Build complete!"
+
+# Create installer packages if requested
+if [[ "$1" == "--installer" || "$1" == "--package" ]]; then
+    print_status "Creating installer packages..."
+    
+    # Detect platform and create appropriate installer
+    case "$(uname -s)" in
+        Linux*)
+            print_status "Creating Linux packages (DEB/RPM)..."
+            ./installer/scripts/build-linux-packages.sh
+            ;;
+        Darwin*)
+            print_status "Creating macOS installer (DMG)..."
+            ./installer/scripts/build-macos-installer.sh
+            ;;
+        CYGWIN*|MINGW32*|MSYS*|MINGW*)
+            print_status "Creating Windows installer (MSI)..."
+            ./installer/scripts/build-windows-installer.sh
+            ;;
+        *)
+            print_warning "Unknown platform - skipping installer creation"
+            ;;
+    esac
+fi
+
 print_status "To test the service:"
 print_status "  ./core/build/bin/phantomvault-service --help"
 print_status "  ./core/build/bin/phantomvault-service"
@@ -103,3 +128,6 @@ if command -v node &> /dev/null; then
     print_status "To test the GUI:"
     print_status "  cd gui && npm run dev"
 fi
+
+print_status "To create installers:"
+print_status "  ./build.sh --installer"
