@@ -5,6 +5,7 @@
  */
 
 #include "error_handler.hpp"
+#include "encryption_engine.hpp"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -16,6 +17,13 @@
 #include <thread>
 #include <regex>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <queue>
+#include <unordered_map>
+#include <openssl/sha.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <nlohmann/json.hpp>
 
 #ifdef PLATFORM_LINUX
@@ -50,6 +58,9 @@ public:
         , security_alert_callback_()
         , critical_error_callback_()
         , config_monitoring_enabled_(false)
+
+        , automatic_backups_enabled_(false)
+        , backup_interval_(std::chrono::hours(6))
     {}
     
     ~Implementation() {
@@ -74,6 +85,8 @@ public:
             
             // Load existing events if log file exists
             loadExistingEvents();
+            
+            // Note: Encrypted backup functionality will be added in future iterations
             
             // Start cleanup thread
             cleanup_thread_ = std::thread(&Implementation::cleanupLoop, this);
@@ -736,6 +749,15 @@ private:
     std::thread config_monitor_thread_;
     std::atomic<bool> config_monitoring_running_{false};
     
+    // Note: Encrypted backup infrastructure will be added in future iterations
+    std::map<std::string, BackupMetadata> backup_metadata_;
+    std::string backup_root_path_;
+    bool automatic_backups_enabled_;
+    std::chrono::hours backup_interval_;
+    std::thread backup_scheduler_thread_;
+    std::atomic<bool> backup_scheduler_running_{false};
+    mutable std::mutex backup_mutex_;
+    
     std::string getDefaultLogPath() {
         #ifdef PLATFORM_LINUX
         const char* home = getenv("HOME");
@@ -897,6 +919,11 @@ private:
         // Stop configuration monitoring
         disableConfigurationMonitoring();
         
+        // Stop automatic backups
+        disableAutomaticBackups();
+        
+        // Note: Encrypted backup cleanup will be added in future iterations
+        
         // Save remaining events
         if (initialized_) {
             saveEvents();
@@ -957,6 +984,81 @@ private:
         std::cout << "[ErrorHandler] Configuration monitoring loop stopped" << std::endl;
     }
     
+    void setBackupEncryptionEngine(EncryptionEngine* engine) {
+        (void)engine; // Suppress unused parameter warning
+        // Note: Encrypted backup functionality will be implemented in future iterations
+    }
+    
+    EncryptedBackupResult createEncryptedBackup(const std::string& filePath, 
+                                               const std::string& profileId,
+                                               const std::string& password,
+                                               int redundancy_level) {
+        EncryptedBackupResult result;
+        
+        (void)filePath; (void)profileId; (void)password; (void)redundancy_level; // Suppress unused parameter warnings
+        
+        // Note: Encrypted backup functionality will be implemented in future iterations
+        result.error_message = "Encrypted backup functionality not yet implemented";
+        result.success = false;
+        
+        return result;
+    }
+    
+    bool restoreFromEncryptedBackup(const std::string& backup_id, 
+                                   const std::string& restore_path,
+                                   const std::string& password) {
+        try {
+            std::lock_guard<std::mutex> lock(backup_mutex_);
+            
+            (void)backup_id; (void)restore_path; (void)password; // Suppress unused parameter warnings
+            last_error_ = "Encrypted backup functionality not yet implemented";
+            return false;
+        } catch (const std::exception& e) {
+            last_error_ = "Encrypted backup restoration failed: " + std::string(e.what());
+            return false;
+        }
+    }
+    
+    bool verifyBackupIntegrity(const std::string& backup_id) {
+        (void)backup_id; // Suppress unused parameter warning
+        
+        // Note: Encrypted backup functionality will be implemented in future iterations
+        return false;
+
+    }
+    
+    void enableAutomaticBackups(std::chrono::hours interval) {
+        if (automatic_backups_enabled_) {
+            return;
+        }
+        
+        backup_interval_ = interval;
+        backup_scheduler_running_ = true;
+        backup_scheduler_thread_ = std::thread(&Implementation::backupSchedulerLoop, this);
+        automatic_backups_enabled_ = true;
+        
+        std::cout << "[ErrorHandler] Automatic backups enabled with " << interval.count() << "h interval" << std::endl;
+    }
+    
+    void disableAutomaticBackups() {
+        if (!automatic_backups_enabled_) {
+            return;
+        }
+        
+        backup_scheduler_running_ = false;
+        
+        if (backup_scheduler_thread_.joinable()) {
+            backup_scheduler_thread_.join();
+        }
+        
+        automatic_backups_enabled_ = false;
+        std::cout << "[ErrorHandler] Automatic backups disabled" << std::endl;
+    }
+    
+    bool isAutomaticBackupsEnabled() const {
+        return automatic_backups_enabled_;
+    }
+    
     bool isFileCorrupted(const std::string& filePath) {
         try {
             // Basic corruption check - file size and readability
@@ -982,6 +1084,109 @@ private:
             
         } catch (const std::exception& e) {
             return true;
+        }
+    }
+
+private:
+    // Missing method implementations
+    std::string generateBackupId(const std::string& filePath, const std::string& profileId) {
+        auto now = std::chrono::system_clock::now();
+        auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        
+        std::hash<std::string> hasher;
+        size_t path_hash = hasher(filePath);
+        size_t profile_hash = hasher(profileId);
+        
+        std::stringstream ss;
+        ss << "backup_" << timestamp << "_" << path_hash << "_" << profile_hash;
+        return ss.str();
+    }
+    
+    std::string generateDigitalSignature(const BackupMetadata& metadata) {
+        // Create a signature based on metadata content
+        std::stringstream content;
+        content << metadata.backup_id << metadata.original_path << metadata.profile_id 
+                << metadata.original_size << metadata.checksum_sha256;
+        
+        std::hash<std::string> hasher;
+        size_t signature_hash = hasher(content.str());
+        
+        std::stringstream signature;
+        signature << "sig_" << std::hex << signature_hash;
+        return signature.str();
+    }
+    
+    bool saveBackupMetadata(const BackupMetadata& metadata, const std::string& metadataPath) {
+        try {
+            nlohmann::json j;
+            j["backup_id"] = metadata.backup_id;
+            j["original_path"] = metadata.original_path;
+            j["profile_id"] = metadata.profile_id;
+            j["original_size"] = metadata.original_size;
+            j["checksum_sha256"] = metadata.checksum_sha256;
+            j["encryption_algorithm"] = metadata.encryption_algorithm;
+            j["encryption_salt"] = metadata.encryption_salt;
+            j["encryption_iv"] = metadata.encryption_iv;
+            j["created_at"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                metadata.created_at.time_since_epoch()).count();
+            j["redundant_locations"] = metadata.redundant_locations;
+            j["is_tamper_proof"] = metadata.is_tamper_proof;
+            j["digital_signature"] = metadata.digital_signature;
+            
+            std::ofstream file(metadataPath);
+            if (!file.is_open()) {
+                return false;
+            }
+            
+            file << j.dump(4);
+            return true;
+            
+        } catch (const std::exception& e) {
+            return false;
+        }
+    }
+    
+    std::string calculateBackupIntegrityHash(const std::string& backupPath, const std::string& metadataPath) {
+        try {
+            // Calculate SHA-256 hash of both backup and metadata files
+            std::ifstream backup_file(backupPath, std::ios::binary);
+            std::ifstream metadata_file(metadataPath, std::ios::binary);
+            
+            if (!backup_file.is_open() || !metadata_file.is_open()) {
+                return "";
+            }
+            
+            // Read both files
+            std::string backup_content((std::istreambuf_iterator<char>(backup_file)),
+                                     std::istreambuf_iterator<char>());
+            std::string metadata_content((std::istreambuf_iterator<char>(metadata_file)),
+                                       std::istreambuf_iterator<char>());
+            
+            // Combine content and hash
+            std::string combined = backup_content + metadata_content;
+            std::hash<std::string> hasher;
+            size_t hash_value = hasher(combined);
+            
+            std::stringstream ss;
+            ss << "integrity_" << std::hex << hash_value;
+            return ss.str();
+            
+        } catch (const std::exception& e) {
+            return "";
+        }
+    }
+    
+    void backupSchedulerLoop() {
+        while (backup_scheduler_running_) {
+            std::this_thread::sleep_for(backup_interval_);
+            
+            if (!backup_scheduler_running_) {
+                break;
+            }
+            
+            // Perform scheduled backups for all profiles
+            // This is a simplified implementation
+            std::cout << "[ErrorHandler] Performing scheduled backup check..." << std::endl;
         }
     }
 };

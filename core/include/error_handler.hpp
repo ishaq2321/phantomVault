@@ -9,6 +9,11 @@
 
 namespace phantomvault {
 
+// Forward declarations
+namespace PhantomVault {
+    class EncryptionEngine;
+}
+
 /**
  * @brief Error severity levels for security events
  */
@@ -145,6 +150,52 @@ public:
     void enableConfigurationMonitoring();
     void disableConfigurationMonitoring();
     bool isConfigurationProtected() const;
+    
+    // Encrypted backup infrastructure
+    struct EncryptedBackupResult {
+        bool success;
+        std::string backup_id;
+        std::string encrypted_backup_path;
+        std::string metadata_path;
+        std::vector<std::string> redundant_copies;
+        std::string integrity_hash;
+        std::chrono::system_clock::time_point created_at;
+        std::string error_message;
+        
+        EncryptedBackupResult() : success(false) {}
+    };
+    
+    struct BackupMetadata {
+        std::string backup_id;
+        std::string original_path;
+        std::string profile_id;
+        size_t original_size;
+        std::string checksum_sha256;
+        std::string encryption_algorithm;
+        std::vector<uint8_t> encryption_salt;
+        std::vector<uint8_t> encryption_iv;
+        std::chrono::system_clock::time_point created_at;
+        std::vector<std::string> redundant_locations;
+        bool is_tamper_proof;
+        std::string digital_signature;
+    };
+    
+    EncryptedBackupResult createEncryptedBackup(const std::string& filePath, 
+                                               const std::string& profileId,
+                                               const std::string& password,
+                                               int redundancy_level = 3);
+    bool restoreFromEncryptedBackup(const std::string& backup_id, 
+                                   const std::string& restore_path,
+                                   const std::string& password);
+    bool verifyBackupIntegrity(const std::string& backup_id);
+    std::vector<BackupMetadata> listEncryptedBackups(const std::string& profileId = "") const;
+    
+    // Automatic backup scheduling
+    void enableAutomaticBackups(std::chrono::hours interval = std::chrono::hours(6));
+    void disableAutomaticBackups();
+    bool isAutomaticBackupsEnabled() const;
+    void scheduleBackup(const std::string& filePath, const std::string& profileId);
+    void setBackupEncryptionEngine(class EncryptionEngine* engine);
     
     // Error handling
     std::string getLastError() const;
