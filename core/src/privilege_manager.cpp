@@ -923,8 +923,6 @@ private:
     }
     
     #ifdef PLATFORM_LINUX
-    bool tryGUIElevation(const std::string& reason, ElevationResult& result);
-    
     ElevationResult requestLinuxElevation(const std::string& reason) {
         ElevationResult result;
         

@@ -1497,15 +1497,15 @@ private:
                 return response;
             }
             
-            auto result = profile_manager_->generateRecoveryKey(profile_id);
+            auto recovery_key = profile_manager_->generateRecoveryKey(profile_id);
             
             json result_json = {
-                {"success", result.success},
-                {"recoveryKey", result.recovery_key}
+                {"success", !recovery_key.empty()},
+                {"recoveryKey", recovery_key}
             };
             
-            if (!result.success) {
-                result_json["error"] = result.error_message;
+            if (recovery_key.empty()) {
+                result_json["error"] = "Failed to generate recovery key";
                 response.status_code = 400;
             }
             
@@ -1541,15 +1541,15 @@ private:
                 return response;
             }
             
-            auto result = profile_manager_->getCurrentRecoveryKey(profile_id);
+            auto recovery_key = profile_manager_->getCurrentRecoveryKey(profile_id);
             
             json result_json = {
-                {"success", result.success},
-                {"recoveryKey", result.recovery_key}
+                {"success", !recovery_key.empty()},
+                {"recoveryKey", recovery_key}
             };
             
-            if (!result.success) {
-                result_json["error"] = result.error_message;
+            if (recovery_key.empty()) {
+                result_json["error"] = "Failed to get current recovery key";
                 response.status_code = 400;
             }
             

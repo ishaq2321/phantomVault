@@ -110,6 +110,7 @@ if(PLATFORM_LINUX)
     target_link_libraries(phantomvault
         X11
         Xext
+        Xtst
         stdc++fs
     )
 elseif(PLATFORM_MACOS)

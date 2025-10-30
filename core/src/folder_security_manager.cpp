@@ -63,7 +63,7 @@ public:
             
             // Initialize VaultManager with vaults subdirectory
             std::string vault_root = data_path_ + "/vaults";
-            vault_manager_ = std::make_unique<PhantomVault::VaultManager>(vault_root);
+            vault_manager_ = std::make_unique<::PhantomVault::VaultManager>(vault_root);
             
             if (!vault_manager_->initializeVaultSystem()) {
                 last_error_ = "Failed to initialize vault system: " + vault_manager_->getLastError();
@@ -373,7 +373,7 @@ public:
     
 private:
     std::string data_path_;
-    std::unique_ptr<PhantomVault::VaultManager> vault_manager_;
+    std::unique_ptr<::PhantomVault::VaultManager> vault_manager_;
     std::unordered_map<std::string, std::string> temporary_unlocks_; // folderId -> originalPath
     std::string last_error_;
     std::unique_ptr<PrivilegeManager> privilege_manager_;
@@ -423,8 +423,8 @@ private:
             
             for (const auto& vault_folder : locked_folders) {
                 // Convert ProfileVault unlock mode
-                PhantomVault::UnlockMode vault_mode = (mode == UnlockMode::TEMPORARY) ? 
-                    PhantomVault::UnlockMode::TEMPORARY : PhantomVault::UnlockMode::PERMANENT;
+                ::PhantomVault::UnlockMode vault_mode = (mode == UnlockMode::TEMPORARY) ? 
+                    ::PhantomVault::UnlockMode::TEMPORARY : ::PhantomVault::UnlockMode::PERMANENT;
                 
                 // Use ProfileVault to unlock with real decryption
                 auto vault_result = profile_vault->unlockFolder(vault_folder.original_path, masterKey, vault_mode);

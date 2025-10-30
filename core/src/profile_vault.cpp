@@ -731,8 +731,8 @@ bool ProfileVault::decryptFile(const std::string& vault_file_path, const std::st
             // Restore file timestamps
             #ifdef PLATFORM_LINUX
             struct utimbuf times;
-            times.actime = metadata.accessed_timestamp;
-            times.modtime = metadata.modified_timestamp;
+            times.actime = metadata["accessed_timestamp"];
+            times.modtime = metadata["modified_timestamp"];
             utime(output_path.c_str(), &times);
             #elif PLATFORM_WINDOWS
             HANDLE hFile = CreateFileA(output_path.c_str(), FILE_WRITE_ATTRIBUTES, 0, NULL, OPEN_EXISTING, 0, NULL);
