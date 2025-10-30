@@ -6,7 +6,6 @@
  */
 
 #include "profile_manager.hpp"
-#include "profile_vault.hpp"
 #include "error_handler.hpp"
 #include <iostream>
 #include <fstream>
@@ -50,7 +49,6 @@ class ProfileManager::Implementation {
 public:
     Implementation() 
         : data_path_()
-        , vault_manager_()
         , active_profile_id_()
         , last_error_()
         , error_handler_(std::make_unique<ErrorHandler>())
@@ -63,6 +61,10 @@ public:
         , mmap_data_(nullptr)
         , mmap_size_(0)
     {}
+    
+    ~Implementation() {
+        disableMemoryMappedLookup();
+    }
     
     bool initialize(const std::string& dataPath) {
         try {
@@ -86,14 +88,6 @@ public:
                 fs::permissions(profiles_dir, fs::perms::owner_all, fs::perm_options::replace);
             }
             
-            // Initialize VaultManager with vaults subdirectory
-            std::string vault_root = data_path_ + "/vaults";
-            // Note: VaultManager integration will be completed in future iterations
-            // vault_manager_ = std::make_unique<PhantomVault::VaultManager>(vault_root);
-            
-            // Note: Vault system initialization will be implemented in future iterations
-            std::cout << "[ProfileManager] Vault system initialization deferred to future implementation" << std::endl;
-            
             // Initialize error handler
             std::string error_log_path = data_path_ + "/logs/profile_security.log";
             if (!error_handler_->initialize(error_log_path)) {
@@ -102,7 +96,6 @@ public:
             }
             
             std::cout << "[ProfileManager] Initialized with data path: " << data_path_ << std::endl;
-            std::cout << "[ProfileManager] Vault system initialized: " << vault_root << std::endl;
             std::cout << "[ProfileManager] Error handler initialized: " << error_log_path << std::endl;
             std::cout << "[ProfileManager] Admin mode: " << (isRunningAsAdmin() ? "Yes" : "No") << std::endl;
             
@@ -181,9 +174,6 @@ public:
             profileData["createdAt"] = getCurrentTimestamp();
             profileData["lastAccess"] = getCurrentTimestamp();
             
-            // Note: ProfileVault creation will be implemented in future iterations
-            std::cout << "[ProfileManager] ProfileVault creation deferred for profile: " << profileId << std::endl;
-            
             // Save profile
             fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
             std::ofstream file(profileFile);
@@ -204,9 +194,9 @@ public:
             result.success = true;
             result.profileId = profileId;
             result.recoveryKey = recoveryKey;
-            result.message = "Profile and encrypted vault created successfully";
+            result.message = "Profile created successfully";
             
-            std::cout << "[ProfileManager] Created profile with vault: " << name << " (ID: " << profileId << ")" << std::endl;
+            std::cout << "[ProfileManager] Created profile: " << name << " (ID: " << profileId << ")" << std::endl;
             
             return result;
             
@@ -214,10 +204,10 @@ public:
             result.error = "Failed to create profile: " + std::string(e.what());
             return result;
         }
-    }
-    
-    std::vector<Profile> getAllProfiles() {
-        std::vector<Profile> profiles;
+    } 
+   
+    std::vector<phantomvault::Profile> getAllProfiles() {
+        std::vector<phantomvault::Profile> profiles;
         
         try {
             fs::path profiles_dir = fs::path(data_path_) / "profiles";
@@ -247,7 +237,7 @@ public:
         return profiles;
     }
     
-    std::optional<Profile> getProfile(const std::string& profileId) {
+    std::optional<phantomvault::Profile> getProfile(const std::string& profileId) {
         try {
             fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
             return loadProfile(profileFile);
@@ -265,9 +255,6 @@ public:
                 return false;
             }
             
-            // Note: ProfileVault deletion will be implemented in future iterations
-            std::cout << "[ProfileManager] ProfileVault deletion deferred for profile: " << profileId << std::endl;
-            
             // Remove profile file
             fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
             if (fs::exists(profileFile)) {
@@ -282,7 +269,7 @@ public:
             // Update profiles index
             updateProfilesIndex();
             
-            std::cout << "[ProfileManager] Deleted profile and vault: " << profileId << std::endl;
+            std::cout << "[ProfileManager] Deleted profile: " << profileId << std::endl;
             return true;
             
         } catch (const std::exception& e) {
@@ -373,33 +360,6 @@ public:
                 return result;
             }
             
-            // Note: ProfileVault password change will be implemented in future iterations
-            std::cout << "[ProfileManager] ProfileVault password change deferred for profile: " << profileId << std::endl;
-            // Get all locked folders (stubbed for now)
-                auto locked_folders = profile_vault->getLockedFolders();
-                
-                // Temporarily unlock all folders with old key
-                std::vector<std::string> temp_unlocked_paths;
-                for (const auto& folder : locked_folders) {
-                    // Note: Folder unlocking will be implemented in future iterations
-                    (void)folder; (void)oldKey; // Suppress unused parameter warnings
-                    phantomvault::VaultResult unlock_result;
-                    unlock_result.success = false; // Stubbed for now
-                    if (unlock_result.success) {
-                        temp_unlocked_paths.push_back(folder.original_path);
-                    }
-                }
-                
-                // Re-lock all folders with new key
-                for (const auto& folder_path : temp_unlocked_paths) {
-                    auto lock_result = profile_vault->lockFolder(folder_path, newKey);
-                    if (!lock_result.success) {
-                        result.error = "Failed to re-encrypt vault data with new key";
-                        return result;
-                    }
-                }
-            }
-            
             // Generate new recovery key
             std::string newRecoveryKey = generateRecoveryKey();
             
@@ -435,9 +395,9 @@ public:
             result.success = true;
             result.profileId = profileId;
             result.recoveryKey = newRecoveryKey;
-            result.message = "Password changed successfully and vault data re-encrypted";
+            result.message = "Password changed successfully";
             
-            std::cout << "[ProfileManager] Changed password and re-encrypted vault for profile: " << profileId << std::endl;
+            std::cout << "[ProfileManager] Changed password for profile: " << profileId << std::endl;
             
             return result;
             
@@ -445,9 +405,9 @@ public:
             result.error = "Failed to change password: " + std::string(e.what());
             return result;
         }
-    }
-    
-    std::string recoverMasterKey(const std::string& recoveryKey) {
+    }    
+ 
+   std::string recoverMasterKey(const std::string& recoveryKey) {
         try {
             // Search all profiles for matching recovery key
             auto profiles = getAllProfiles();
@@ -501,19 +461,16 @@ public:
             json profileData;
             file >> profileData;
             
-            if (!profileData.contains("encryptedRecoveryKey")) {
+            if (!profileData.contains("masterKeyEncryptedWithRecovery")) {
                 return std::nullopt;
             }
             
-            // The recovery key itself is stored encrypted with the master key
-            // For recovery, we need a different approach: store the master key encrypted with recovery key
-            if (profileData.contains("masterKeyEncryptedWithRecovery")) {
-                std::string encryptedMasterKey = profileData["masterKeyEncryptedWithRecovery"];
-                std::string decryptedMasterKey = decryptMasterKeyWithRecoveryKey(encryptedMasterKey, recoveryKey);
-                
-                if (!decryptedMasterKey.empty()) {
-                    return decryptedMasterKey;
-                }
+            // Decrypt master key using recovery key
+            std::string encryptedMasterKey = profileData["masterKeyEncryptedWithRecovery"];
+            std::string decryptedMasterKey = decryptMasterKeyWithRecoveryKey(encryptedMasterKey, recoveryKey);
+            
+            if (!decryptedMasterKey.empty()) {
+                return decryptedMasterKey;
             }
             
             return std::nullopt;
@@ -524,176 +481,12 @@ public:
         }
     }
     
-    std::string decryptMasterKeyWithRecoveryKey(const std::string& encryptedData, const std::string& recoveryKey) {
-        try {
-            // Parse encrypted data: salt:iv:encrypted_data (same format as recovery key encryption)
-            std::vector<std::string> parts;
-            std::stringstream ss(encryptedData);
-            std::string part;
-            
-            while (std::getline(ss, part, ':')) {
-                parts.push_back(part);
-            }
-            
-            if (parts.size() != 3) {
-                return ""; // Invalid format
-            }
-            
-            // Convert hex parts to bytes
-            unsigned char salt[16], iv[16];
-            
-            // Parse salt
-            if (parts[0].length() != 32) return "";
-            for (int i = 0; i < 16; ++i) {
-                std::string byteStr = parts[0].substr(i * 2, 2);
-                salt[i] = (unsigned char)std::stoi(byteStr, nullptr, 16);
-            }
-            
-            // Parse IV
-            if (parts[1].length() != 32) return "";
-            for (int i = 0; i < 16; ++i) {
-                std::string byteStr = parts[1].substr(i * 2, 2);
-                iv[i] = (unsigned char)std::stoi(byteStr, nullptr, 16);
-            }
-            
-            // Parse encrypted data
-            std::vector<unsigned char> encrypted_bytes;
-            for (size_t i = 0; i < parts[2].length(); i += 2) {
-                std::string byteStr = parts[2].substr(i, 2);
-                encrypted_bytes.push_back((unsigned char)std::stoi(byteStr, nullptr, 16));
-            }
-            
-            // Derive decryption key from recovery key
-            unsigned char derived_key[32];
-            if (PKCS5_PBKDF2_HMAC(recoveryKey.c_str(), recoveryKey.length(), salt, sizeof(salt),
-                                 50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
-                return "";
-            }
-            
-            // Decrypt using AES-256-CBC
-            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-            if (!ctx) {
-                return "";
-            }
-            
-            std::string decrypted_data;
-            
-            if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, derived_key, iv) == 1) {
-                unsigned char decrypted[1024];
-                int len = 0, total_len = 0;
-                
-                if (EVP_DecryptUpdate(ctx, decrypted, &len, encrypted_bytes.data(), encrypted_bytes.size()) == 1) {
-                    total_len += len;
-                    
-                    if (EVP_DecryptFinal_ex(ctx, decrypted + total_len, &len) == 1) {
-                        total_len += len;
-                        decrypted_data = std::string(reinterpret_cast<char*>(decrypted), total_len);
-                    }
-                }
-            }
-            
-            EVP_CIPHER_CTX_free(ctx);
-            
-            // Secure cleanup
-            memset(derived_key, 0, sizeof(derived_key));
-            
-            return decrypted_data;
-            
-        } catch (const std::exception& e) {
-            return "";
-        }
-    }
-    
-    std::string encryptMasterKeyWithRecoveryKey(const std::string& masterKey, const std::string& recoveryKey) {
-        try {
-            // Generate a unique salt for this encryption
-            unsigned char salt[16];
-            if (RAND_bytes(salt, sizeof(salt)) != 1) {
-                throw std::runtime_error("Failed to generate salt for master key encryption");
-            }
-            
-            // Derive encryption key from recovery key using PBKDF2
-            unsigned char derived_key[32];
-            if (PKCS5_PBKDF2_HMAC(recoveryKey.c_str(), recoveryKey.length(), salt, sizeof(salt),
-                                 50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
-                throw std::runtime_error("Failed to derive key for master key encryption");
-            }
-            
-            // Generate IV for AES encryption
-            unsigned char iv[16];
-            if (RAND_bytes(iv, sizeof(iv)) != 1) {
-                throw std::runtime_error("Failed to generate IV for master key encryption");
-            }
-            
-            // Encrypt master key using AES-256-CBC
-            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-            if (!ctx) {
-                throw std::runtime_error("Failed to create cipher context for master key");
-            }
-            
-            std::string encrypted_data;
-            
-            if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, derived_key, iv) == 1) {
-                unsigned char encrypted[1024];
-                int len = 0, total_len = 0;
-                
-                if (EVP_EncryptUpdate(ctx, encrypted, &len, 
-                                    reinterpret_cast<const unsigned char*>(masterKey.c_str()), 
-                                    masterKey.length()) == 1) {
-                    total_len += len;
-                    
-                    if (EVP_EncryptFinal_ex(ctx, encrypted + total_len, &len) == 1) {
-                        total_len += len;
-                        
-                        // Create final encrypted package: salt + iv + encrypted_data
-                        std::stringstream ss;
-                        
-                        // Add salt (hex)
-                        for (int i = 0; i < 16; ++i) {
-                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)salt[i];
-                        }
-                        ss << ":";
-                        
-                        // Add IV (hex)
-                        for (int i = 0; i < 16; ++i) {
-                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)iv[i];
-                        }
-                        ss << ":";
-                        
-                        // Add encrypted data (hex)
-                        for (int i = 0; i < total_len; ++i) {
-                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)encrypted[i];
-                        }
-                        
-                        encrypted_data = ss.str();
-                    }
-                }
-            }
-            
-            EVP_CIPHER_CTX_free(ctx);
-            
-            // Secure cleanup
-            memset(derived_key, 0, sizeof(derived_key));
-            memset(iv, 0, sizeof(iv));
-            memset(salt, 0, sizeof(salt));
-            
-            if (encrypted_data.empty()) {
-                throw std::runtime_error("Master key encryption failed");
-            }
-            
-            return encrypted_data;
-            
-        } catch (const std::exception& e) {
-            throw std::runtime_error("Master key encryption error: " + std::string(e.what()));
-        }
-    }
-    
     void setActiveProfile(const std::string& profileId) {
         active_profile_id_ = profileId;
         std::cout << "[ProfileManager] Set active profile: " << profileId << std::endl;
     }
     
-    std::optional<Profile> getActiveProfile() {
+    std::optional<phantomvault::Profile> getActiveProfile() {
         if (active_profile_id_.empty()) {
             return std::nullopt;
         }
@@ -737,13 +530,10 @@ public:
                 return 0;
             }
             
-            // Create a temporary non-const instance for vault access
-            ProfileManager::Implementation* non_const_this = const_cast<ProfileManager::Implementation*>(this);
-            // Note: ProfileVault size calculation will be implemented in future iterations
+            // For now, return 0 as vault integration is not yet implemented
             (void)profileId; // Suppress unused parameter warning
             return 0;
         } catch (const std::exception& e) {
-            // Can't modify last_error_ in const method, just return 0
             return 0;
         }
     }
@@ -754,20 +544,17 @@ public:
                 return false;
             }
             
-            // Create a temporary non-const instance for vault access
-            ProfileManager::Implementation* non_const_this = const_cast<ProfileManager::Implementation*>(this);
-            // Note: ProfileVault validation will be implemented in future iterations
+            // For now, return false as vault integration is not yet implemented
             (void)profileId; // Suppress unused parameter warning
             return false;
         } catch (const std::exception& e) {
-            // Can't modify last_error_ in const method, just return false
             return false;
         }
     }
     
     bool performProfileVaultMaintenance(const std::string& profileId) {
         try {
-            // Note: ProfileVault maintenance will be implemented in future iterations
+            // For now, return false as vault integration is not yet implemented
             (void)profileId; // Suppress unused parameter warning
             return false;
         } catch (const std::exception& e) {
@@ -783,26 +570,91 @@ public:
                 return folder_paths;
             }
             
-            // Create a temporary non-const instance for vault access
-            ProfileManager::Implementation* non_const_this = const_cast<ProfileManager::Implementation*>(this);
-            // Note: ProfileVault locked folders retrieval will be implemented in future iterations
+            // For now, return empty vector as vault integration is not yet implemented
             (void)profileId; // Suppress unused parameter warning
-            std::vector<std::string> locked_folders; // Empty for now
-                for (const auto& folder : locked_folders) {
-                    folder_paths.push_back(folder.original_path);
-                }
-            }
+            return folder_paths;
         } catch (const std::exception& e) {
-            // Can't modify last_error_ in const method, just return empty vector
+            return folder_paths;
         }
-        return folder_paths;
     }
-
+    
     std::string getLastError() const {
         return last_error_;
     }
     
-    void enableMemoryMappedLookup() {
+    std::string generateRecoveryKey(const std::string& profileId) {
+        try {
+            // Verify profile exists
+            auto profile = getProfile(profileId);
+            if (!profile) {
+                last_error_ = "Profile not found";
+                return "";
+            }
+            
+            // Generate new recovery key
+            std::string newRecoveryKey = generateRecoveryKey();
+            
+            // Load current profile data
+            fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
+            std::ifstream inFile(profileFile);
+            json profileData;
+            inFile >> profileData;
+            inFile.close();
+            
+            // Hash new recovery key for validation
+            std::string newRecoveryKeyHash = hashRecoveryKey(newRecoveryKey);
+            
+            // Update profile with new recovery key hash
+            profileData["recoveryKeyHash"] = newRecoveryKeyHash;
+            profileData["lastAccess"] = getCurrentTimestamp();
+            
+            std::ofstream outFile(profileFile);
+            outFile << profileData.dump(2);
+            outFile.close();
+            
+            std::cout << "[ProfileManager] Generated new recovery key for profile: " << profileId << std::endl;
+            return newRecoveryKey;
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to generate recovery key: " + std::string(e.what());
+            return "";
+        }
+    }
+    
+    std::string getCurrentRecoveryKey(const std::string& profileId) {
+        try {
+            // Note: For security reasons, we cannot retrieve the actual recovery key
+            // as it's stored encrypted. This method would typically be used to 
+            // display recovery key information or metadata.
+            
+            auto profile = getProfile(profileId);
+            if (!profile) {
+                last_error_ = "Profile not found";
+                return "";
+            }
+            
+            // Load profile data to check if recovery key exists
+            fs::path profileFile = fs::path(data_path_) / "profiles" / (profileId + ".json");
+            std::ifstream file(profileFile);
+            json profileData;
+            file >> profileData;
+            
+            if (profileData.contains("recoveryKeyHash") && !profileData["recoveryKeyHash"].empty()) {
+                // Recovery key exists but cannot be retrieved for security reasons
+                last_error_ = "Recovery key exists but cannot be retrieved for security reasons";
+                return "RECOVERY_KEY_EXISTS_BUT_ENCRYPTED";
+            } else {
+                last_error_ = "No recovery key found for this profile";
+                return "";
+            }
+            
+        } catch (const std::exception& e) {
+            last_error_ = "Failed to check recovery key: " + std::string(e.what());
+            return "";
+        }
+    }
+ 
+   void enableMemoryMappedLookup() {
         try {
             if (memory_mapped_enabled_.load()) {
                 return;
@@ -909,7 +761,7 @@ public:
         }
     }
     
-    std::optional<Profile> getProfileFast(const std::string& profileId) const {
+    std::optional<phantomvault::Profile> getProfileFast(const std::string& profileId) const {
         if (!memory_mapped_enabled_.load()) {
             return const_cast<Implementation*>(this)->getProfile(profileId);
         }
@@ -962,18 +814,16 @@ public:
         
         return (hits * 100) / (hits + misses);
     }
-    
-private:
+private
+:
     std::string data_path_;
-    // Note: VaultManager integration will be completed in future iterations
-    // std::unique_ptr<PhantomVault::VaultManager> vault_manager_;
     std::string active_profile_id_;
     std::string last_error_;
-    std::unique_ptr<ErrorHandler> error_handler_;
+    std::unique_ptr<phantomvault::ErrorHandler> error_handler_;
     
     // Memory-mapped lookup system members
     std::atomic<bool> memory_mapped_enabled_;
-    mutable std::unordered_map<std::string, Profile> profile_cache_;
+    mutable std::unordered_map<std::string, phantomvault::Profile> profile_cache_;
     mutable std::shared_mutex cache_mutex_;
     mutable std::atomic<size_t> cache_hits_;
     mutable std::atomic<size_t> cache_misses_;
@@ -1132,9 +982,9 @@ private:
         } catch (const std::exception& e) {
             return false;
         }
-    }
-    
-    std::string encryptRecoveryKey(const std::string& recoveryKey, const std::string& masterKey) {
+    }    
+  
+  std::string encryptRecoveryKey(const std::string& recoveryKey, const std::string& masterKey) {
         try {
             // Use proper AES encryption for recovery key storage
             // Generate a unique salt for this recovery key
@@ -1219,9 +1069,93 @@ private:
         }
     }
     
-    std::string decryptRecoveryKey(const std::string& encryptedData, const std::string& masterKey) {
+    std::string encryptMasterKeyWithRecoveryKey(const std::string& masterKey, const std::string& recoveryKey) {
         try {
-            // Parse encrypted data: salt:iv:encrypted_data
+            // Generate a unique salt for this encryption
+            unsigned char salt[16];
+            if (RAND_bytes(salt, sizeof(salt)) != 1) {
+                throw std::runtime_error("Failed to generate salt for master key encryption");
+            }
+            
+            // Derive encryption key from recovery key using PBKDF2
+            unsigned char derived_key[32];
+            if (PKCS5_PBKDF2_HMAC(recoveryKey.c_str(), recoveryKey.length(), salt, sizeof(salt),
+                                 50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
+                throw std::runtime_error("Failed to derive key for master key encryption");
+            }
+            
+            // Generate IV for AES encryption
+            unsigned char iv[16];
+            if (RAND_bytes(iv, sizeof(iv)) != 1) {
+                throw std::runtime_error("Failed to generate IV for master key encryption");
+            }
+            
+            // Encrypt master key using AES-256-CBC
+            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+            if (!ctx) {
+                throw std::runtime_error("Failed to create cipher context for master key");
+            }
+            
+            std::string encrypted_data;
+            
+            if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, derived_key, iv) == 1) {
+                unsigned char encrypted[1024];
+                int len = 0, total_len = 0;
+                
+                if (EVP_EncryptUpdate(ctx, encrypted, &len, 
+                                    reinterpret_cast<const unsigned char*>(masterKey.c_str()), 
+                                    masterKey.length()) == 1) {
+                    total_len += len;
+                    
+                    if (EVP_EncryptFinal_ex(ctx, encrypted + total_len, &len) == 1) {
+                        total_len += len;
+                        
+                        // Create final encrypted package: salt + iv + encrypted_data
+                        std::stringstream ss;
+                        
+                        // Add salt (hex)
+                        for (int i = 0; i < 16; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)salt[i];
+                        }
+                        ss << ":";
+                        
+                        // Add IV (hex)
+                        for (int i = 0; i < 16; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)iv[i];
+                        }
+                        ss << ":";
+                        
+                        // Add encrypted data (hex)
+                        for (int i = 0; i < total_len; ++i) {
+                            ss << std::hex << std::setw(2) << std::setfill('0') << (int)encrypted[i];
+                        }
+                        
+                        encrypted_data = ss.str();
+                    }
+                }
+            }
+            
+            EVP_CIPHER_CTX_free(ctx);
+            
+            // Secure cleanup
+            memset(derived_key, 0, sizeof(derived_key));
+            memset(iv, 0, sizeof(iv));
+            memset(salt, 0, sizeof(salt));
+            
+            if (encrypted_data.empty()) {
+                throw std::runtime_error("Master key encryption failed");
+            }
+            
+            return encrypted_data;
+            
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Master key encryption error: " + std::string(e.what()));
+        }
+    }
+    
+    std::string decryptMasterKeyWithRecoveryKey(const std::string& encryptedData, const std::string& recoveryKey) {
+        try {
+            // Parse encrypted data: salt:iv:encrypted_data (same format as recovery key encryption)
             std::vector<std::string> parts;
             std::stringstream ss(encryptedData);
             std::string part;
@@ -1258,9 +1192,9 @@ private:
                 encrypted_bytes.push_back((unsigned char)std::stoi(byteStr, nullptr, 16));
             }
             
-            // Derive decryption key from master key
+            // Derive decryption key from recovery key
             unsigned char derived_key[32];
-            if (PKCS5_PBKDF2_HMAC(masterKey.c_str(), masterKey.length(), salt, sizeof(salt),
+            if (PKCS5_PBKDF2_HMAC(recoveryKey.c_str(), recoveryKey.length(), salt, sizeof(salt),
                                  50000, EVP_sha256(), sizeof(derived_key), derived_key) != 1) {
                 return "";
             }
@@ -1297,14 +1231,14 @@ private:
         } catch (const std::exception& e) {
             return "";
         }
-    }
-    
+    }    
+
     int64_t getCurrentTimestamp() {
         return std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
     }
     
-    std::optional<Profile> loadProfile(const fs::path& profileFile) {
+    std::optional<phantomvault::Profile> loadProfile(const fs::path& profileFile) {
         try {
             if (!fs::exists(profileFile)) {
                 return std::nullopt;
@@ -1314,7 +1248,7 @@ private:
             json profileData;
             file >> profileData;
             
-            Profile profile;
+            phantomvault::Profile profile;
             profile.id = profileData["id"];
             profile.name = profileData["name"];
             int64_t createdAtMs = profileData["createdAt"];
@@ -1323,17 +1257,8 @@ private:
             profile.lastAccess = std::chrono::system_clock::from_time_t(lastAccessMs / 1000);
             profile.isActive = (profile.id == active_profile_id_);
             
-            // Get folder count from ProfileVault
+            // Get folder count (for now, set to 0 as vault integration is not yet implemented)
             profile.folderCount = 0;
-            try {
-                // Note: ProfileVault folder count will be implemented in future iterations
-                std::vector<std::string> locked_folders; // Empty for now
-                    profile.folderCount = locked_folders.size();
-                }
-            } catch (const std::exception& e) {
-                // Non-critical error, just use 0
-                profile.folderCount = 0;
-            }
             
             return profile;
             
@@ -1377,15 +1302,15 @@ bool ProfileManager::initialize(const std::string& dataPath) {
     return pimpl->initialize(dataPath);
 }
 
-ProfileResult ProfileManager::createProfile(const std::string& name, const std::string& masterKey) {
+phantomvault::ProfileResult ProfileManager::createProfile(const std::string& name, const std::string& masterKey) {
     return pimpl->createProfile(name, masterKey);
 }
 
-std::vector<Profile> ProfileManager::getAllProfiles() {
+std::vector<phantomvault::Profile> ProfileManager::getAllProfiles() {
     return pimpl->getAllProfiles();
 }
 
-std::optional<Profile> ProfileManager::getProfile(const std::string& profileId) {
+std::optional<phantomvault::Profile> ProfileManager::getProfile(const std::string& profileId) {
     return pimpl->getProfile(profileId);
 }
 
@@ -1393,7 +1318,7 @@ bool ProfileManager::deleteProfile(const std::string& profileId, const std::stri
     return pimpl->deleteProfile(profileId, masterKey);
 }
 
-AuthResult ProfileManager::authenticateProfile(const std::string& profileId, const std::string& masterKey) {
+phantomvault::AuthResult ProfileManager::authenticateProfile(const std::string& profileId, const std::string& masterKey) {
     return pimpl->authenticateProfile(profileId, masterKey);
 }
 
@@ -1401,7 +1326,7 @@ bool ProfileManager::verifyMasterKey(const std::string& profileId, const std::st
     return pimpl->verifyMasterKey(profileId, masterKey);
 }
 
-ProfileResult ProfileManager::changeProfilePassword(const std::string& profileId, const std::string& oldKey, const std::string& newKey) {
+phantomvault::ProfileResult ProfileManager::changeProfilePassword(const std::string& profileId, const std::string& oldKey, const std::string& newKey) {
     return pimpl->changeProfilePassword(profileId, oldKey, newKey);
 }
 
@@ -1421,7 +1346,7 @@ void ProfileManager::setActiveProfile(const std::string& profileId) {
     pimpl->setActiveProfile(profileId);
 }
 
-std::optional<Profile> ProfileManager::getActiveProfile() {
+std::optional<phantomvault::Profile> ProfileManager::getActiveProfile() {
     return pimpl->getActiveProfile();
 }
 
@@ -1477,7 +1402,7 @@ void ProfileManager::warmupLookupTables() {
     pimpl->warmupLookupTables();
 }
 
-std::optional<Profile> ProfileManager::getProfileFast(const std::string& profileId) const {
+std::optional<phantomvault::Profile> ProfileManager::getProfileFast(const std::string& profileId) const {
     return pimpl->getProfileFast(profileId);
 }
 
@@ -1491,6 +1416,14 @@ void ProfileManager::invalidateProfileCache(const std::string& profileId) {
 
 size_t ProfileManager::getCacheHitRate() const {
     return pimpl->getCacheHitRate();
+}
+
+std::string ProfileManager::generateRecoveryKey(const std::string& profileId) {
+    return pimpl->generateRecoveryKey(profileId);
+}
+
+std::string ProfileManager::getCurrentRecoveryKey(const std::string& profileId) {
+    return pimpl->getCurrentRecoveryKey(profileId);
 }
 
 } // namespace phantomvault
