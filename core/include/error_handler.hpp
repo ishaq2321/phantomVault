@@ -127,9 +127,12 @@ public:
                                                 std::chrono::hours timeRange = std::chrono::hours(24)) const;
     void exportAuditLog(const std::string& filePath, const std::string& profileId = "") const;
     
-    // Error message sanitization
+    // Error message sanitization and user-friendly messages
     std::string sanitizeErrorMessage(const std::string& rawError) const;
     std::string getSecureErrorMessage(SecurityEventType type) const;
+    std::string getUserFriendlyErrorMessage(const std::string& component, const std::string& operation, 
+                                           ErrorSeverity severity) const;
+    std::string getRecoveryGuidance(SecurityEventType type, ErrorSeverity severity) const;
     
     // Callbacks
     void setSecurityAlertCallback(std::function<void(const SecurityEvent&)> callback);
@@ -139,10 +142,12 @@ public:
     size_t getEventCount(SecurityEventType type = SecurityEventType::AUTHENTICATION_FAILURE) const;
     std::map<SecurityEventType, size_t> getEventStatistics() const;
     
-    // Configuration
+    // Configuration and log management
     void setMaxLogSize(size_t maxSizeBytes);
     void setLogRetentionPeriod(std::chrono::hours retentionHours);
     void enableRealTimeAlerts(bool enabled);
+    void rotateLogFile();
+    bool verifyLogIntegrity() const;
     
     // Configuration protection
     bool protectConfigurationFiles(const std::vector<std::string>& configPaths);
@@ -196,6 +201,24 @@ public:
     bool isAutomaticBackupsEnabled() const;
     void scheduleBackup(const std::string& filePath, const std::string& profileId);
     void setBackupEncryptionEngine(class EncryptionEngine* engine);
+    
+    // Enhanced categorized error handling
+    void handleSystemError(const std::string& component, const std::string& error, 
+                          ErrorSeverity severity = ErrorSeverity::ERROR);
+    void handleNetworkError(const std::string& operation, const std::string& endpoint, 
+                           const std::string& error);
+    void handleFileSystemError(const std::string& operation, const std::string& path, 
+                              const std::string& error);
+    void handleMemoryError(const std::string& component, size_t requested_size, 
+                          const std::string& error);
+    
+    // Fail-safe and recovery methods
+    void initiateEmergencyProtocol(const std::string& component, const std::string& error);
+    void attemptAutomaticRecovery(const std::string& component, const std::string& error);
+    void enableSafeMode();
+    void enableOfflineMode();
+    
+
     
     // Error handling
     std::string getLastError() const;
