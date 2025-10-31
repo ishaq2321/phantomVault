@@ -435,21 +435,19 @@ EOF
     print_success "Windows scripts created"
 }
 
-# Create installer images (placeholder)
+# Create installer images
 create_installer_images() {
     print_status "Creating installer images..."
     
-    # Create simple banner (BMP format required by WiX)
-    # This is a placeholder - in production, use proper graphics tools
-    cat > "$PACKAGE_DIR/staging/banner.bmp" << 'EOF'
-BM6...  # Placeholder BMP header - replace with actual banner image
-EOF
+    # Create minimal banner and dialog images (BMP format required by WiX)
+    # Note: For production builds, replace with custom branded graphics
     
-    cat > "$PACKAGE_DIR/staging/dialog.bmp" << 'EOF'
-BM6...  # Placeholder BMP header - replace with actual dialog image
-EOF
+    # Create minimal 1x1 pixel BMP files to satisfy WiX requirements
+    printf '\x42\x4D\x3A\x00\x00\x00\x00\x00\x00\x00\x36\x00\x00\x00\x28\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x00\x18\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\x00' > "$PACKAGE_DIR/staging/banner.bmp"
     
-    print_warning "Using placeholder images - replace with proper graphics in production"
+    printf '\x42\x4D\x3A\x00\x00\x00\x00\x00\x00\x00\x36\x00\x00\x00\x28\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x00\x18\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\x00' > "$PACKAGE_DIR/staging/dialog.bmp"
+    
+    print_status "Minimal installer images created (customize for production branding)"
 }
 
 # Build MSI installer

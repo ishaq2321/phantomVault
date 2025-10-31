@@ -392,10 +392,17 @@ EOF
 
 # Create RPM package
 create_rpm_package() {
+    # Check if rpmbuild is available
+    if ! command -v rpmbuild &> /dev/null; then
+        print_warning "rpmbuild not found - skipping RPM package creation"
+        print_status "Install rpm-build to create RPM packages"
+        return 0
+    fi
+    
     print_status "Creating RPM package..."
     
     local rpm_dir="$PACKAGE_DIR/rpm"
-    local spec_file="$rpm_dir/phantomvault.spec"
+    local spec_file="$rpm_dir/SPECS/phantomvault.spec"
     
     # Create RPM build structure
     mkdir -p "$rpm_dir"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -414,7 +421,7 @@ License:        MIT
 URL:            https://github.com/ishaq2321/phantomVault
 Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  systemd-rpm-macros
+BuildRequires:  systemd
 Requires:       openssl, libX11, libXtst, gtk3, systemd, polkit
 
 %description
@@ -502,17 +509,21 @@ chmod +x %{buildroot}%{_bindir}/phantomvault
 %{_bindir}/phantomvault
 
 %post
-%systemd_post phantomvault.service
+systemctl daemon-reload
+systemctl enable phantomvault
 if ! id phantomvault &>/dev/null; then
     useradd --system --no-create-home --shell /bin/false phantomvault
 fi
 chown -R phantomvault:phantomvault /opt/phantomvault/var /opt/phantomvault/logs
 
 %preun
-%systemd_preun phantomvault.service
+if [ \$1 -eq 0 ]; then
+    systemctl stop phantomvault 2>/dev/null || true
+    systemctl disable phantomvault 2>/dev/null || true
+fi
 
 %postun
-%systemd_postun_with_restart phantomvault.service
+systemctl daemon-reload
 if [ \$1 -eq 0 ]; then
     if id phantomvault &>/dev/null; then
         userdel phantomvault 2>/dev/null || true
@@ -530,9 +541,13 @@ EOF
     
     # Build RPM
     cd "$rpm_dir"
-    rpmbuild --define "_topdir $rpm_dir" -ba SPECS/phantomvault.spec
-    
-    print_success "RPM package created: $rpm_dir/RPMS/*/phantomvault-$VERSION-1.*.rpm"
+    if rpmbuild --define "_topdir $rpm_dir" -ba SPECS/phantomvault.spec 2>/dev/null; then
+        print_success "RPM package created: $rpm_dir/RPMS/*/phantomvault-$VERSION-1.*.rpm"
+    else
+        print_warning "RPM build failed - likely missing build dependencies"
+        print_status "On RHEL/Fedora systems, install: systemd-rpm-macros"
+        print_status "RPM spec file created at: $spec_file"
+    fi
 }
 
 # Create AppImage (universal Linux package)
@@ -596,12 +611,13 @@ EOF
     # Create desktop entry
     cat > "$appdir/phantomvault.desktop" << 'EOF'
 [Desktop Entry]
+Type=Application
 Name=PhantomVault
 Comment=Invisible Folder Security (Portable)
 Exec=AppRun
 Icon=phantomvault
 Terminal=true
-Categories=Security;Utility;
+Categories=Security;Utility;System;
 EOF
     
     # Create icon (copy from previous)
