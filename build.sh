@@ -96,28 +96,48 @@ fi
 
 print_success "Build complete!"
 
+# Copy unified executable to bin directory
+print_status "Setting up unified executable..."
+mkdir -p bin
+if [ -f "core/build/bin/phantomvault-service" ]; then
+    cp core/build/bin/phantomvault-service bin/phantomvault
+    chmod +x bin/phantomvault
+    print_success "Unified executable ready: bin/phantomvault"
+else
+    print_warning "Service executable not found, skipping unified setup"
+fi
+
 # Create installer packages if requested
 if [[ "$1" == "--installer" || "$1" == "--package" ]]; then
-    print_status "Creating installer packages..."
+    print_status "Creating complete installer packages with uninstaller..."
+    
+    # Ensure installer directory exists
+    mkdir -p installer/build
     
     # Detect platform and create appropriate installer
     case "$(uname -s)" in
         Linux*)
-            print_status "Creating Linux packages (DEB/RPM)..."
-            ./installer/scripts/build-linux-packages.sh
+            print_status "Creating Linux packages (DEB/RPM) with uninstaller..."
+            ./installer/scripts/build-linux-installer.sh
             ;;
         Darwin*)
-            print_status "Creating macOS installer (DMG)..."
+            print_status "Creating macOS installer (DMG) with uninstaller..."
             ./installer/scripts/build-macos-installer.sh
             ;;
         CYGWIN*|MINGW32*|MSYS*|MINGW*)
-            print_status "Creating Windows installer (MSI)..."
+            print_status "Creating Windows installer (MSI) with uninstaller..."
             ./installer/scripts/build-windows-installer.sh
             ;;
         *)
             print_warning "Unknown platform - skipping installer creation"
             ;;
     esac
+fi
+
+# Create maintenance and diagnostic tools
+if [[ "$1" == "--tools" || "$1" == "--installer" ]]; then
+    print_status "Creating maintenance and diagnostic tools..."
+    ./installer/scripts/build-maintenance-tools.sh
 fi
 
 print_status "To test the service:"

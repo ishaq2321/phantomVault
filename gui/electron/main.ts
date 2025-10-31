@@ -285,6 +285,114 @@ function createSystemIntegration(): void {
 }
 
 /**
+ * Check for application updates
+ */
+async function checkForUpdates(): Promise<any> {
+  try {
+    const currentVersion = app.getVersion();
+    const response = await fetch('https://api.github.com/repos/ishaq2321/phantomVault/releases/latest');
+    
+    if (!response.ok) {
+      throw new Error(`GitHub API error: ${response.status}`);
+    }
+    
+    const release = await response.json();
+    const latestVersion = release.tag_name.replace('v', '');
+    
+    // Simple version comparison
+    const isUpdateAvailable = compareVersions(currentVersion, latestVersion) < 0;
+    
+    return {
+      success: true,
+      currentVersion,
+      latestVersion,
+      isUpdateAvailable,
+      downloadUrl: release.html_url,
+      releaseNotes: release.body,
+      publishedAt: release.published_at,
+    };
+  } catch (error) {
+    console.error('[Main] Update check failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Download application update
+ */
+async function downloadUpdate(version: string): Promise<any> {
+  try {
+    console.log('[Main] Downloading update for version:', version);
+    
+    // In a real implementation, this would download the installer
+    // For now, we'll redirect to the GitHub releases page
+    shell.openExternal(`https://github.com/ishaq2321/phantomVault/releases/tag/v${version}`);
+    
+    return {
+      success: true,
+      message: 'Redirected to download page',
+    };
+  } catch (error) {
+    console.error('[Main] Update download failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Install application update
+ */
+async function installUpdate(packagePath: string): Promise<any> {
+  try {
+    console.log('[Main] Installing update from:', packagePath);
+    
+    // In a real implementation, this would handle the installation process
+    // For now, we'll show a message to the user
+    const result = await dialog.showMessageBox(mainWindow || undefined as any, {
+      type: 'info',
+      title: 'Update Installation',
+      message: 'Update installation requires administrator privileges',
+      detail: 'Please run the downloaded installer as administrator to complete the update.',
+      buttons: ['OK'],
+    });
+    
+    return {
+      success: true,
+      message: 'Update installation initiated',
+    };
+  } catch (error) {
+    console.error('[Main] Update installation failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Compare two version strings
+ */
+function compareVersions(version1: string, version2: string): number {
+  const v1parts = version1.split('.').map(Number);
+  const v2parts = version2.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(v1parts.length, v2parts.length); i++) {
+    const v1part = v1parts[i] || 0;
+    const v2part = v2parts[i] || 0;
+    
+    if (v1part < v2part) return -1;
+    if (v1part > v2part) return 1;
+  }
+  
+  return 0;
+}
+
+/**
  * Handle protocol URLs (phantomvault://action)
  */
 function handleProtocolUrl(url: string): void {
@@ -703,6 +811,19 @@ ipcMain.handle('app:getVersion', () => {
 
 ipcMain.handle('app:isAdmin', () => {
   return checkAdminPrivileges();
+});
+
+// Update management
+ipcMain.handle('app:checkForUpdates', async () => {
+  return await checkForUpdates();
+});
+
+ipcMain.handle('app:downloadUpdate', async (_, version) => {
+  return await downloadUpdate(version);
+});
+
+ipcMain.handle('app:installUpdate', async (_, packagePath) => {
+  return await installUpdate(packagePath);
 });
 
 // Service management

@@ -1,8 +1,7 @@
 /**
  * PhantomVault Settings Component
  * 
- * Comprehensive settings interface with recovery system, platform configuration,
- * and user preferences management.
+ * Application settings including update management, diagnostics, and maintenance.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -11,807 +10,410 @@ import {
   Typography,
   Card,
   CardContent,
-  Switch,
-  FormControlLabel,
-  TextField,
-  Button,
   Grid,
-  Alert,
-  Divider,
-  Stack,
-  Chip,
+  Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
+  LinearProgress,
+  Chip,
+  Stack,
+  Divider,
   List,
   ListItem,
   ListItemText,
-  ListItemIcon,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Slider,
-  Paper,
+  ListItemSecondaryAction,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
-  Palette as PaletteIcon,
+  Update as UpdateIcon,
+  Download as DownloadIcon,
+  Settings as SettingsIcon,
+  Info as InfoIcon,
+  Build as BuildIcon,
   Security as SecurityIcon,
-  Keyboard as KeyboardIcon,
-  Storage as StorageIcon,
-  Notifications as NotificationsIcon,
-  Help as HelpIcon,
-  VpnKey as VpnKeyIcon,
-  Computer as ComputerIcon,
-  Warning as WarningIcon,
+  Refresh as RefreshIcon,
   CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  Error as ErrorIcon,
 } from '@mui/icons-material';
 
 interface SettingsProps {
-  theme: 'light' | 'dark';
+  theme: string;
   onThemeToggle: () => void;
 }
 
-interface PlatformCapabilities {
-  supportsInvisibleLogging: boolean;
-  supportsHotkeys: boolean;
-  requiresPermissions: boolean;
-  requiredPermissions: string[];
-}
-
-interface SystemSettings {
-  dataRetentionDays: number;
-  autoLockTimeout: number;
-  enableAnalytics: boolean;
-  enableNotifications: boolean;
-  unlockMethod: 'keyboard' | 'manual' | 'notification';
+interface UpdateInfo {
+  success: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  isUpdateAvailable: boolean;
+  downloadUrl?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+  error?: string;
 }
 
 const Settings: React.FC<SettingsProps> = ({ theme, onThemeToggle }) => {
-  const [recoveryKey, setRecoveryKey] = useState('');
-  const [newRecoveryKey, setNewRecoveryKey] = useState('');
-  const [currentRecoveryKey, setCurrentRecoveryKey] = useState('');
-  const [recoveryDialog, setRecoveryDialog] = useState(false);
-  const [recoveryKeyDisplayDialog, setRecoveryKeyDisplayDialog] = useState(false);
-  const [passwordChangeDialog, setPasswordChangeDialog] = useState(false);
-  const [helpDialog, setHelpDialog] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
-  // Password change form states
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedProfile, setSelectedProfile] = useState('');
-  
-  const [platformCapabilities, setPlatformCapabilities] = useState<PlatformCapabilities>({
-    supportsInvisibleLogging: true,
-    supportsHotkeys: true,
-    requiresPermissions: false,
-    requiredPermissions: [],
-  });
-  
-  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
-    dataRetentionDays: 30,
-    autoLockTimeout: 300, // 5 minutes
-    enableAnalytics: true,
-    enableNotifications: true,
-    unlockMethod: 'keyboard',
-  });
+  const [updateDialog, setUpdateDialog] = useState(false);
+  const [releaseNotesDialog, setReleaseNotesDialog] = useState(false);
 
+  // Load initial data
   useEffect(() => {
-    loadPlatformCapabilities();
-    loadSystemSettings();
+    loadCurrentVersion();
   }, []);
 
-  const loadPlatformCapabilities = async () => {
+  const loadCurrentVersion = async () => {
     try {
-      const response = await window.phantomVault.ipc.getPlatformInfo();
-      if (response.success) {
-        const capabilities: PlatformCapabilities = {
-          supportsInvisibleLogging: response.capabilities?.supportsInvisibleLogging || true,
-          supportsHotkeys: response.capabilities?.supportsHotkeys || true,
-          requiresPermissions: response.capabilities?.requiresPermissions || false,
-          requiredPermissions: response.capabilities?.requiredPermissions || [],
-        };
-        setPlatformCapabilities(capabilities);
-      } else {
-        setError('Failed to load platform capabilities: ' + response.error);
-      }
+      const version = await window.phantomVault.app.getVersion();
+      setUpdateInfo(prev => ({
+        ...prev,
+        success: true,
+        currentVersion: version,
+        latestVersion: version,
+        isUpdateAvailable: false,
+      } as UpdateInfo));
     } catch (err) {
-      setError('Failed to load platform capabilities: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError('Failed to get current version');
     }
   };
 
-  const loadSystemSettings = async () => {
-    try {
-      // System settings are managed locally in the GUI for now
-      // Future enhancement: Load from service API
-    } catch (err) {
-      setError('Failed to load system settings');
-    }
-  };
-
-  const handleRecoveryKeySubmit = async () => {
-    if (!recoveryKey) {
-      setError('Please enter your recovery key');
-      return;
-    }
-
+  const checkForUpdates = async () => {
     try {
       setLoading(true);
-      const response = await window.phantomVault.ipc.recoverWithKey(recoveryKey);
+      setError(null);
       
-      if (response.success) {
-        setSuccess('Recovery key validated successfully');
-        setRecoveryDialog(false);
-        setRecoveryKey('');
-      } else {
-        setError('Invalid recovery key: ' + response.error);
-      }
-    } catch (err) {
-      setError('Recovery key validation failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generateNewRecoveryKey = async () => {
-    try {
-      setLoading(true);
-      // Call the new recovery key generation API
-      const response = await window.phantomVault.ipc.generateRecoveryKey(selectedProfile);
-      if (response.success) {
-        setNewRecoveryKey(response.recoveryKey);
-        setSuccess('New AES-256 encrypted recovery key generated with PBKDF2 key derivation!');
-      } else {
-        setError('Failed to generate recovery key: ' + response.error);
-      }
-    } catch (err) {
-      setError('Failed to generate new recovery key: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const displayCurrentRecoveryKey = async () => {
-    try {
-      setLoading(true);
-      // Call API to get current recovery key (requires authentication)
-      const response = await window.phantomVault.ipc.getCurrentRecoveryKey(selectedProfile, currentPassword);
-      if (response.success) {
-        setCurrentRecoveryKey(response.recoveryKey);
-        setRecoveryKeyDisplayDialog(true);
-      } else {
-        setError('Failed to retrieve recovery key: ' + response.error);
-      }
-    } catch (err) {
-      setError('Failed to retrieve recovery key: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordChange = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('Please fill all password fields');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError('New passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters long');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      // Call the password change API which will generate new recovery key
-      const response = await window.phantomVault.ipc.changePassword(
-        selectedProfile, 
-        currentPassword, 
-        newPassword
-      );
+      const result = await window.phantomVault.app.checkForUpdates();
       
-      if (response.success) {
-        setPasswordChangeDialog(false);
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setNewRecoveryKey(response.newRecoveryKey);
-        setSuccess('Password changed successfully! New recovery key generated.');
+      if (result.success) {
+        setUpdateInfo(result);
+        if (result.isUpdateAvailable) {
+          setSuccess(`Update available: v${result.latestVersion}`);
+          setUpdateDialog(true);
+        } else {
+          setSuccess('You have the latest version');
+        }
       } else {
-        setError('Failed to change password: ' + response.error);
+        setError('Failed to check for updates: ' + result.error);
       }
     } catch (err) {
-      setError('Failed to change password: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError('Failed to check for updates: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
   };
 
-  const saveSystemSettings = async () => {
+  const downloadUpdate = async () => {
+    if (!updateInfo?.latestVersion) return;
+    
     try {
       setLoading(true);
-      // Save settings locally for now
-      // Future enhancement: Save to service API
-      localStorage.setItem('phantomvault_settings', JSON.stringify(systemSettings));
-      setSuccess('Settings saved successfully');
+      const result = await window.phantomVault.app.downloadUpdate(updateInfo.latestVersion);
+      
+      if (result.success) {
+        setSuccess('Redirected to download page');
+        setUpdateDialog(false);
+      } else {
+        setError('Failed to download update: ' + result.error);
+      }
     } catch (err) {
-      setError('Failed to save settings');
+      setError('Failed to download update: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
   };
 
-  const clearAllData = async () => {
-    if (!window.confirm('Are you sure you want to clear all analytics data? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      // Clear local analytics data
-      localStorage.removeItem('phantomvault_analytics');
-      setSuccess('All analytics data cleared successfully');
-    } catch (err) {
-      setError('Failed to clear analytics data');
-    } finally {
-      setLoading(false);
-    }
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
   };
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h3" sx={{ mb: 3, fontWeight: 600 }}>
-        Settings & Configuration
+        Settings
       </Typography>
-
+      
+      {loading && <LinearProgress sx={{ mb: 2 }} />}
+      
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
-
+      
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
           {success}
         </Alert>
       )}
-
+      
       <Grid container spacing={3}>
+        {/* Application Information */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                <InfoIcon color="primary" />
+                <Typography variant="h6">Application Information</Typography>
+              </Stack>
+              
+              <List>
+                <ListItem>
+                  <ListItemText
+                    primary="Version"
+                    secondary={updateInfo?.currentVersion || 'Loading...'}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText
+                    primary="Platform"
+                    secondary={`${process.platform} ${process.arch}`}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText
+                    primary="Electron Version"
+                    secondary={process.versions.electron}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText
+                    primary="Node.js Version"
+                    secondary={process.versions.node}
+                  />
+                </ListItem>
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Update Management */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                <UpdateIcon color="primary" />
+                <Typography variant="h6">Update Management</Typography>
+              </Stack>
+              
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Current Version: {updateInfo?.currentVersion || 'Unknown'}
+                </Typography>
+                {updateInfo?.latestVersion && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Latest Version: {updateInfo.latestVersion}
+                  </Typography>
+                )}
+                {updateInfo?.isUpdateAvailable !== undefined && (
+                  <Chip
+                    icon={updateInfo.isUpdateAvailable ? <WarningIcon /> : <CheckCircleIcon />}
+                    label={updateInfo.isUpdateAvailable ? 'Update Available' : 'Up to Date'}
+                    color={updateInfo.isUpdateAvailable ? 'warning' : 'success'}
+                    size="small"
+                    sx={{ mb: 2 }}
+                  />
+                )}
+              </Box>
+              
+              <Stack spacing={2}>
+                <Button
+                  variant="contained"
+                  startIcon={<RefreshIcon />}
+                  onClick={checkForUpdates}
+                  disabled={loading}
+                  fullWidth
+                >
+                  Check for Updates
+                </Button>
+                
+                {updateInfo?.isUpdateAvailable && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadIcon />}
+                    onClick={() => setUpdateDialog(true)}
+                    fullWidth
+                  >
+                    Download Update
+                  </Button>
+                )}
+                
+                {updateInfo?.releaseNotes && (
+                  <Button
+                    variant="text"
+                    onClick={() => setReleaseNotesDialog(true)}
+                    fullWidth
+                  >
+                    View Release Notes
+                  </Button>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* Appearance Settings */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                <PaletteIcon color="primary" />
+                <SettingsIcon color="primary" />
                 <Typography variant="h6">Appearance</Typography>
               </Stack>
               
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={theme === 'dark'}
-                    onChange={onThemeToggle}
+              <List>
+                <ListItem>
+                  <ListItemText
+                    primary="Theme"
+                    secondary={`Current: ${theme === 'dark' ? 'Dark' : 'Light'} mode`}
                   />
-                }
-                label="Dark Mode"
-                sx={{ mb: 2 }}
-              />
-              
-              <Typography variant="body2" sx={{ opacity: 0.7 }}>
-                Toggle between light and dark themes for better visibility in different environments.
-              </Typography>
+                  <ListItemSecondaryAction>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={onThemeToggle}
+                    >
+                      Toggle Theme
+                    </Button>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              </List>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Platform Configuration */}
+        {/* Maintenance Tools */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                <ComputerIcon color="primary" />
-                <Typography variant="h6">Platform Configuration</Typography>
+                <BuildIcon color="primary" />
+                <Typography variant="h6">Maintenance Tools</Typography>
               </Stack>
               
-              <Stack spacing={2}>
-                <Box>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    Keyboard Detection
+              <Typography variant="body2" sx={{ mb: 2, opacity: 0.7 }}>
+                Advanced maintenance and diagnostic tools are available via command line:
+              </Typography>
+              
+              <Stack spacing={1}>
+                <Box sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+                  <Typography variant="body2" fontFamily="monospace">
+                    phantomvault-diagnostic --report
                   </Typography>
-                  <Chip
-                    icon={platformCapabilities.supportsInvisibleLogging ? <CheckCircleIcon /> : <WarningIcon />}
-                    label={platformCapabilities.supportsInvisibleLogging ? "Supported" : "Not Supported"}
-                    color={platformCapabilities.supportsInvisibleLogging ? "success" : "warning"}
-                    size="small"
-                  />
                 </Box>
-                
-                <Box>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    Hotkey Support
+                <Box sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+                  <Typography variant="body2" fontFamily="monospace">
+                    phantomvault-maintenance cleanup
                   </Typography>
-                  <Chip
-                    icon={platformCapabilities.supportsHotkeys ? <CheckCircleIcon /> : <WarningIcon />}
-                    label={platformCapabilities.supportsHotkeys ? "Ctrl+Alt+V Available" : "Manual Input Only"}
-                    color={platformCapabilities.supportsHotkeys ? "success" : "warning"}
-                    size="small"
-                  />
                 </Box>
-
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Unlock Method</InputLabel>
-                  <Select
-                    value={systemSettings.unlockMethod}
-                    label="Unlock Method"
-                    onChange={(e) => setSystemSettings(prev => ({ ...prev, unlockMethod: e.target.value as any }))}
-                  >
-                    <MenuItem value="keyboard">Keyboard Detection</MenuItem>
-                    <MenuItem value="manual">Manual Input</MenuItem>
-                    <MenuItem value="notification">Notification Prompt</MenuItem>
-                  </Select>
-                </FormControl>
+                <Box sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+                  <Typography variant="body2" fontFamily="monospace">
+                    phantomvault-updater check
+                  </Typography>
+                </Box>
               </Stack>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Security Settings */}
-        <Grid item xs={12} md={6}>
+        {/* Security Information */}
+        <Grid item xs={12}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
                 <SecurityIcon color="primary" />
-                <Typography variant="h6">Security Settings</Typography>
-              </Stack>
-              
-              <Stack spacing={3}>
-                <Box>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    Auto-lock Timeout (seconds)
-                  </Typography>
-                  <Slider
-                    value={systemSettings.autoLockTimeout}
-                    onChange={(_, value) => setSystemSettings(prev => ({ ...prev, autoLockTimeout: value as number }))}
-                    min={60}
-                    max={3600}
-                    step={60}
-                    marks={[
-                      { value: 60, label: '1m' },
-                      { value: 300, label: '5m' },
-                      { value: 900, label: '15m' },
-                      { value: 3600, label: '1h' },
-                    ]}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(value) => `${Math.floor(value / 60)}m`}
-                  />
-                </Box>
-
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={systemSettings.enableAnalytics}
-                      onChange={(e) => setSystemSettings(prev => ({ ...prev, enableAnalytics: e.target.checked }))}
-                    />
-                  }
-                  label="Enable Analytics Collection"
-                />
-
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={systemSettings.enableNotifications}
-                      onChange={(e) => setSystemSettings(prev => ({ ...prev, enableNotifications: e.target.checked }))}
-                    />
-                  }
-                  label="Enable Security Notifications"
-                />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Data Management */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                <StorageIcon color="primary" />
-                <Typography variant="h6">Data Management</Typography>
-              </Stack>
-              
-              <Stack spacing={3}>
-                <Box>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    Data Retention (days)
-                  </Typography>
-                  <Slider
-                    value={systemSettings.dataRetentionDays}
-                    onChange={(_, value) => setSystemSettings(prev => ({ ...prev, dataRetentionDays: value as number }))}
-                    min={7}
-                    max={365}
-                    step={7}
-                    marks={[
-                      { value: 7, label: '1w' },
-                      { value: 30, label: '1m' },
-                      { value: 90, label: '3m' },
-                      { value: 365, label: '1y' },
-                    ]}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(value) => `${value}d`}
-                  />
-                </Box>
-
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  onClick={clearAllData}
-                  disabled={loading}
-                >
-                  Clear All Analytics Data
-                </Button>
-
-                <Typography variant="body2" sx={{ opacity: 0.7 }}>
-                  Current storage usage: ~2.3 MB
-                </Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Recovery System */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                <VpnKeyIcon color="primary" />
-                <Typography variant="h6">Recovery Key Management</Typography>
-              </Stack>
-              
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="body1" sx={{ mb: 2 }}>
-                    Recovery keys use AES-256-CBC encryption with PBKDF2 key derivation. 
-                    They allow you to regain access to your profiles if you forget your master key.
-                  </Typography>
-                  
-                  <Stack spacing={2}>
-                    <Button
-                      variant="contained"
-                      onClick={() => setRecoveryDialog(true)}
-                    >
-                      Validate Recovery Key
-                    </Button>
-                    
-                    <Button
-                      variant="outlined"
-                      onClick={generateNewRecoveryKey}
-                      disabled={loading}
-                    >
-                      Generate New Recovery Key
-                    </Button>
-                    
-                    <Button
-                      variant="outlined"
-                      color="warning"
-                      onClick={() => setPasswordChangeDialog(true)}
-                    >
-                      Change Master Password
-                    </Button>
-                    
-                    <Button
-                      variant="text"
-                      onClick={() => setRecoveryKeyDisplayDialog(true)}
-                    >
-                      View Current Recovery Key
-                    </Button>
-                  </Stack>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  {newRecoveryKey && (
-                    <Paper sx={{ p: 2, bgcolor: 'success.light', color: 'success.contrastText' }}>
-                      <Typography variant="h6" sx={{ mb: 1 }}>
-                        New Recovery Key (AES-256 Encrypted)
-                      </Typography>
-                      <Typography variant="h5" sx={{ fontFamily: 'monospace', mb: 2, wordBreak: 'break-all' }}>
-                        {newRecoveryKey}
-                      </Typography>
-                      <Alert severity="warning" sx={{ bgcolor: 'warning.main', color: 'warning.contrastText' }}>
-                        Save this key securely! It's encrypted with PBKDF2 and cannot be recovered if lost.
-                      </Alert>
-                      <Box sx={{ mt: 2 }}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          onClick={() => navigator.clipboard.writeText(newRecoveryKey)}
-                        >
-                          Copy to Clipboard
-                        </Button>
-                      </Box>
-                    </Paper>
-                  )}
-                  
-                  <Paper sx={{ p: 2, mt: 2, bgcolor: 'info.light', color: 'info.contrastText' }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Security Features:</Typography>
-                    <List dense>
-                      <ListItem>
-                        <ListItemText primary="AES-256-CBC encryption" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="PBKDF2 key derivation (100,000 iterations)" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Cryptographically secure random generation" />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemText primary="Master key recovery capability" />
-                      </ListItem>
-                    </List>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Help & Support */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                <HelpIcon color="primary" />
-                <Typography variant="h6">Help & Support</Typography>
+                <Typography variant="h6">Security Information</Typography>
               </Stack>
               
               <Grid container spacing={2}>
                 <Grid item xs={12} md={4}>
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => setHelpDialog(true)}
-                  >
-                    Platform Guide
-                  </Button>
+                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                    <Typography variant="h6" color="success.main">AES-256</Typography>
+                    <Typography variant="body2">Encryption Standard</Typography>
+                  </Box>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <Button variant="outlined" fullWidth>
-                    Troubleshooting
-                  </Button>
+                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                    <Typography variant="h6" color="success.main">PBKDF2</Typography>
+                    <Typography variant="body2">Key Derivation</Typography>
+                  </Box>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <Button variant="outlined" fullWidth>
-                    About PhantomVault
-                  </Button>
+                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                    <Typography variant="h6" color="success.main">SHA-256</Typography>
+                    <Typography variant="body2">Hash Algorithm</Typography>
+                  </Box>
                 </Grid>
               </Grid>
+              
+              <Divider sx={{ my: 2 }} />
+              
+              <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                PhantomVault uses military-grade encryption standards to protect your data. 
+                All cryptographic operations are performed using industry-standard libraries 
+                and follow security best practices.
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
-
-        {/* Save Settings */}
-        <Grid item xs={12}>
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={saveSystemSettings}
-              disabled={loading}
-            >
-              Save All Settings
-            </Button>
-          </Box>
-        </Grid>
       </Grid>
 
-      {/* Recovery Key Dialog */}
-      <Dialog open={recoveryDialog} onClose={() => setRecoveryDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Validate Recovery Key</DialogTitle>
+      {/* Update Dialog */}
+      <Dialog open={updateDialog} onClose={() => setUpdateDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Update Available</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Recovery Key"
-            fullWidth
-            variant="outlined"
-            value={recoveryKey}
-            onChange={(e) => setRecoveryKey(e.target.value)}
-            placeholder="PHANTOM-VAULT-XXXXXXXXX"
-          />
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Enter your recovery key to validate it's working correctly.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRecoveryDialog(false)}>Cancel</Button>
-          <Button onClick={handleRecoveryKeySubmit} variant="contained" disabled={loading}>
-            Validate
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Recovery Key Display Dialog */}
-      <Dialog open={recoveryKeyDisplayDialog} onClose={() => setRecoveryKeyDisplayDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Current Recovery Key</DialogTitle>
-        <DialogContent>
-          {currentRecoveryKey ? (
+          {updateInfo && (
             <Box>
               <Typography variant="body1" sx={{ mb: 2 }}>
-                Your current AES-256 encrypted recovery key:
+                A new version of PhantomVault is available!
               </Typography>
-              <Paper sx={{ p: 2, bgcolor: 'grey.100', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                  {currentRecoveryKey}
+              
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  Current Version: {updateInfo.currentVersion}
                 </Typography>
-              </Paper>
-              <Button
-                variant="outlined"
-                onClick={() => navigator.clipboard.writeText(currentRecoveryKey)}
-                fullWidth
-              >
-                Copy to Clipboard
-              </Button>
+                <Typography variant="body2">
+                  Latest Version: {updateInfo.latestVersion}
+                </Typography>
+                {updateInfo.publishedAt && (
+                  <Typography variant="body2">
+                    Released: {formatDate(updateInfo.publishedAt)}
+                  </Typography>
+                )}
+              </Box>
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                The update will be downloaded from GitHub. You'll need administrator 
+                privileges to install the update.
+              </Alert>
             </Box>
-          ) : (
-            <TextField
-              autoFocus
-              margin="dense"
-              label="Current Master Password"
-              type="password"
-              fullWidth
-              variant="outlined"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              helperText="Enter your current password to view the recovery key"
-            />
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRecoveryKeyDisplayDialog(false)}>Close</Button>
-          {!currentRecoveryKey && (
-            <Button onClick={displayCurrentRecoveryKey} variant="contained" disabled={loading}>
-              Show Recovery Key
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-
-      {/* Password Change Dialog */}
-      <Dialog open={passwordChangeDialog} onClose={() => setPasswordChangeDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Change Master Password</DialogTitle>
-        <DialogContent>
-          <FormControl fullWidth margin="dense">
-            <InputLabel>Profile</InputLabel>
-            <Select
-              value={selectedProfile}
-              label="Profile"
-              onChange={(e) => setSelectedProfile(e.target.value)}
-            >
-              <MenuItem value="profile1">Profile 1</MenuItem>
-              <MenuItem value="profile2">Profile 2</MenuItem>
-            </Select>
-          </FormControl>
-          
-          <TextField
-            margin="dense"
-            label="Current Password"
-            type="password"
-            fullWidth
-            variant="outlined"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          
-          <TextField
-            margin="dense"
-            label="New Password"
-            type="password"
-            fullWidth
-            variant="outlined"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          
-          <TextField
-            margin="dense"
-            label="Confirm New Password"
-            type="password"
-            fullWidth
-            variant="outlined"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-          
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Changing your password will generate a new AES-256 encrypted recovery key. 
-            Make sure to save the new recovery key securely!
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPasswordChangeDialog(false)}>Cancel</Button>
-          <Button onClick={handlePasswordChange} variant="contained" disabled={loading}>
-            Change Password
+          <Button onClick={() => setUpdateDialog(false)}>Cancel</Button>
+          <Button onClick={downloadUpdate} variant="contained" disabled={loading}>
+            Download Update
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Help Dialog */}
-      <Dialog open={helpDialog} onClose={() => setHelpDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Platform-Specific Guide</DialogTitle>
+      {/* Release Notes Dialog */}
+      <Dialog open={releaseNotesDialog} onClose={() => setReleaseNotesDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Release Notes</DialogTitle>
         <DialogContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Linux (Current Platform)
-          </Typography>
-          <List>
-            <ListItem>
-              <ListItemIcon>
-                <CheckCircleIcon color="success" />
-              </ListItemIcon>
-              <ListItemText
-                primary="X11 Keyboard Detection"
-                secondary="Full invisible keyboard logging support with real-time sequence detection"
-              />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CheckCircleIcon color="success" />
-              </ListItemIcon>
-              <ListItemText
-                primary="Advanced Folder Hiding"
-                secondary="Platform-specific hiding with elevated privileges and metadata preservation"
-              />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CheckCircleIcon color="success" />
-              </ListItemIcon>
-              <ListItemText
-                primary="AES-256-CBC Encryption"
-                secondary="Industry-standard encryption with PBKDF2 key derivation"
-              />
-            </ListItem>
-            <ListItem>
-              <ListItemIcon>
-                <CheckCircleIcon color="success" />
-              </ListItemIcon>
-              <ListItemText
-                primary="Secure Vault Storage"
-                secondary="Files encrypted and stored in secure vault with complete metadata preservation"
-              />
-            </ListItem>
-          </List>
-          
-          <Typography variant="h6" sx={{ mb: 2, mt: 3 }}>
-            Enhanced Security Features
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            • Real AES-256-CBC encryption (no more fake marker files)
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            • Platform-specific folder hiding with elevated privileges
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            • Complete metadata preservation and restoration
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            • Secure vault management with integrity checking
-          </Typography>
-          <Typography variant="body2">
-            • Comprehensive error handling and audit logging
-          </Typography>
+          <Box sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+            {updateInfo?.releaseNotes || 'No release notes available.'}
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setHelpDialog(false)}>Close</Button>
+          <Button onClick={() => setReleaseNotesDialog(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

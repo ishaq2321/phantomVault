@@ -13,6 +13,9 @@ export interface PhantomVaultAPI {
   app: {
     getVersion(): Promise<string>;
     isAdmin(): Promise<boolean>;
+    checkForUpdates(): Promise<any>;
+    downloadUpdate(version: string): Promise<any>;
+    installUpdate(packagePath: string): Promise<any>;
   };
   
   // Service management
@@ -95,6 +98,9 @@ const phantomVaultAPI: PhantomVaultAPI = {
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
     isAdmin: () => ipcRenderer.invoke('app:isAdmin'),
+    checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
+    downloadUpdate: (version) => ipcRenderer.invoke('app:downloadUpdate', version),
+    installUpdate: (packagePath) => ipcRenderer.invoke('app:installUpdate', packagePath),
   },
   
   // Service management
