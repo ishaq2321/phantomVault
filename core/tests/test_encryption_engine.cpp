@@ -10,8 +10,9 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <set>
 
-using namespace phantomvault;
+using namespace PhantomVault;
 using namespace phantomvault::testing;
 
 namespace fs = std::filesystem;
@@ -67,8 +68,9 @@ private:
         std::string password = "test_password_123";
         std::vector<uint8_t> salt = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
         
-        auto key1 = engine.deriveKey(password, salt, 100000);
-        auto key2 = engine.deriveKey(password, salt, 100000);
+        EncryptionEngine::KeyDerivationConfig config(65536, 3, 4, 32, 64);
+        auto key1 = engine.deriveKey(password, salt, config);
+        auto key2 = engine.deriveKey(password, salt, config);
         
         // Same password and salt should produce same key
         ASSERT_EQ(key1.size(), 32); // AES-256 key size
@@ -76,11 +78,11 @@ private:
         
         // Different salt should produce different key
         std::vector<uint8_t> different_salt = {16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1};
-        auto key3 = engine.deriveKey(password, different_salt, 100000);
+        auto key3 = engine.deriveKey(password, different_salt, EncryptionEngine::KeyDerivationConfig());
         ASSERT_NE(key1, key3);
         
         // Different password should produce different key
-        auto key4 = engine.deriveKey("different_password", salt, 100000);
+        auto key4 = engine.deriveKey("different_password", salt, EncryptionEngine::KeyDerivationConfig());
         ASSERT_NE(key1, key4);
     }
     
@@ -91,28 +93,23 @@ private:
         std::string password = "secure_password_123";
         
         // Encrypt
-        auto encrypted_result = engine.encryptData(
-            std::vector<uint8_t>(plaintext.begin(), plaintext.end()), 
-            password
-        );
+        std::vector<uint8_t> data(plaintext.begin(), plaintext.end());
+        auto salt = engine.generateSalt();
+        auto iv = engine.generateIV();
+        auto key = engine.deriveKey(password, salt, EncryptionEngine::KeyDerivationConfig());
         
-        ASSERT_TRUE(encrypted_result.success);
-        ASSERT_FALSE(encrypted_result.encrypted_data.empty());
-        ASSERT_FALSE(encrypted_result.salt.empty());
-        ASSERT_FALSE(encrypted_result.iv.empty());
+        auto encrypted_data = engine.encryptData(data, key, iv);
+        
+        ASSERT_FALSE(encrypted_data.empty());
+        ASSERT_FALSE(salt.empty());
+        ASSERT_FALSE(iv.empty());
         
         // Decrypt
-        auto decrypted_result = engine.decryptData(
-            encrypted_result.encrypted_data,
-            password,
-            encrypted_result.salt,
-            encrypted_result.iv
-        );
+        auto decrypted_data = engine.decryptData(encrypted_data, key, iv);
         
-        ASSERT_TRUE(decrypted_result.success);
+        ASSERT_FALSE(decrypted_data.empty());
         
-        std::string decrypted_text(decrypted_result.decrypted_data.begin(), 
-                                 decrypted_result.decrypted_data.end());
+        std::string decrypted_text(decrypted_data.begin(), decrypted_data.end());
         ASSERT_EQ(plaintext, decrypted_text);
     }
     
@@ -146,7 +143,7 @@ private:
         auto decrypt_time = timer.elapsed();
         
         ASSERT_TRUE(decrypted_result.success);
-        ASSERT_EQ(large_data, decrypted_result.decrypted_data);
+        ASSERT_VECTOR_EQ(large_data, decrypted_result.decrypted_data);
         
         // Performance check - should complete within reasonable time
         ASSERT_TRUE(encrypt_time.count() < 5000); // Less than 5 seconds
@@ -222,7 +219,7 @@ private:
         );
         
         ASSERT_TRUE(decrypted_result.success);
-        ASSERT_EQ(large_data, decrypted_result.decrypted_data);
+        ASSERT_VECTOR_EQ(large_data, decrypted_result.decrypted_data);
     }
     
     static void testIVUniqueness() {
@@ -324,7 +321,7 @@ private:
         
         ASSERT_TRUE(decrypt1.success);
         ASSERT_TRUE(decrypt2.success);
-        ASSERT_EQ(decrypt1.decrypted_data, decrypt2.decrypted_data);
+        ASSERT_VECTOR_EQ(decrypt1.decrypted_data, decrypt2.decrypted_data);
     }
     
     static void testInvalidKeyHandling() {
@@ -362,10 +359,12 @@ private:
         std::string password = "corruption_test_password";
         
         // Encrypt data
-        auto encrypted_result = engine.encryptData(
-            std::vector<uint8_t>(plaintext.begin(), plaintext.end()),
-            password
-        );
+        std::vector<uint8_t> data(plaintext.begin(), plaintext.end());
+        auto salt = engine.generateSalt();
+        auto iv = engine.generateIV();
+        auto key = engine.deriveKey(password, salt, EncryptionEngine::KeyDerivationConfig());
+        
+        auto encrypted_data = engine.encryptData(data, key, iv);
         
         ASSERT_TRUE(encrypted_result.success);
         
@@ -409,7 +408,7 @@ private:
         );
         
         ASSERT_TRUE(decrypted_result.success);
-        ASSERT_EQ(decrypted_result.decrypted_data, empty_data);
+        ASSERT_VECTOR_EQ(decrypted_result.decrypted_data, empty_data);
     }
     
     static void testEncryptionPerformance() {

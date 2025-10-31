@@ -42,6 +42,7 @@ set(CORE_SOURCES
     ../src/platform_adapter.cpp
     ../src/keyboard_sequence_detector.cpp
     ../src/analytics_engine.cpp
+    ../src/service_manager.cpp
 )
 
 # Test framework sources
@@ -54,7 +55,10 @@ set(TEST_SOURCES
     test_encryption_engine.cpp
     test_profile_vault_integration.cpp
     test_security_compliance.cpp
+    test_security_penetration.cpp
+    test_integration_comprehensive.cpp
     test_performance.cpp
+    test_all_components.cpp
     comprehensive_test_suite.cpp
 )
 
@@ -132,7 +136,10 @@ add_test(NAME ComprehensiveTestSuite COMMAND comprehensive_test_suite)
 add_test(NAME EncryptionEngineTests COMMAND comprehensive_test_suite EncryptionEngine)
 add_test(NAME ProfileVaultTests COMMAND comprehensive_test_suite ProfileVault)
 add_test(NAME SecurityTests COMMAND comprehensive_test_suite Security)
+add_test(NAME SecurityPenetrationTests COMMAND comprehensive_test_suite SecurityPenetration)
+add_test(NAME IntegrationTests COMMAND comprehensive_test_suite Integration)
 add_test(NAME PerformanceTests COMMAND comprehensive_test_suite Performance)
+add_test(NAME AllComponentsTests COMMAND comprehensive_test_suite AllComponents)
 
 # Custom targets for easy testing
 add_custom_target(test_all
@@ -153,7 +160,7 @@ add_custom_target(test_security
     COMMENT "Running security compliance tests"
 )
 
-add_custom_target(test_performance
+add_custom_target(test_perf
     COMMAND comprehensive_test_suite Performance
     DEPENDS comprehensive_test_suite
     COMMENT "Running performance tests"
@@ -176,6 +183,6 @@ message(STATUS "Available test targets:")
 message(STATUS "  make test_all        - Run all tests")
 message(STATUS "  make test_quick      - Run quick tests")
 message(STATUS "  make test_security   - Run security tests")
-message(STATUS "  make test_performance - Run performance tests")
+message(STATUS "  make test_perf       - Run performance tests")
 message(STATUS "")
 message(STATUS "Test executables will be built in: ${CMAKE_BINARY_DIR}")

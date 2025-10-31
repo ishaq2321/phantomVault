@@ -7,6 +7,11 @@
 #include <random>
 #include <cstring>
 #include <iomanip>
+#include <set>
+#include <fstream>
+#include <thread>
+#include <cmath>
+#include <numeric>
 
 namespace phantomvault {
 namespace testing {
@@ -128,7 +133,7 @@ TestResult TestFramework::runSingleTest(const TestInfo& test) {
     return result;
 }
 
-void TestFramework::logTest(const TestResult& result) {
+void TestFramework::logTest(const TestResult& result) const {
     std::string status_str;
     switch (result.status) {
         case TestStatus::PASSED: status_str = "PASS"; break;
@@ -290,7 +295,7 @@ bool SecurityTestUtils::isTimingAttackResistant(std::function<bool(const std::st
                                        std::chrono::nanoseconds(0)) / incorrect_times.size();
     
     // Check if timing difference is within acceptable range (less than 10% difference)
-    auto diff = std::abs(correct_avg.count() - incorrect_avg.count());
+    auto diff = std::abs(static_cast<long long>(correct_avg.count()) - static_cast<long long>(incorrect_avg.count()));
     auto max_time = std::max(correct_avg.count(), incorrect_avg.count());
     
     return (double)diff / max_time < 0.1;
@@ -304,6 +309,392 @@ bool SecurityTestUtils::isMemoryCleared(void* ptr, size_t size) {
         }
     }
     return true;
+}
+
+// BenchmarkStats implementation
+void BenchmarkStats::print() const {
+    std::cout << "Benchmark Statistics:" << std::endl;
+    std::cout << "  Iterations: " << iterations << std::endl;
+    std::cout << "  Min Time: " << min_time.count() << "ns" << std::endl;
+    std::cout << "  Max Time: " << max_time.count() << "ns" << std::endl;
+    std::cout << "  Avg Time: " << avg_time.count() << "ns" << std::endl;
+    std::cout << "  Median Time: " << median_time.count() << "ns" << std::endl;
+    std::cout << "  Std Dev: " << std_dev.count() << "ns" << std::endl;
+}
+
+bool BenchmarkStats::meetsPerformanceTarget(std::chrono::nanoseconds target_time) const {
+    return avg_time <= target_time;
+}
+
+// PerformanceTimer static method implementations
+BenchmarkStats PerformanceTimer::calculateBenchmarkStats(std::vector<std::chrono::nanoseconds>& times) {
+    BenchmarkStats stats;
+    stats.iterations = times.size();
+    
+    if (times.empty()) {
+        return stats;
+    }
+    
+    // Sort for median calculation
+    std::sort(times.begin(), times.end());
+    
+    stats.min_time = times.front();
+    stats.max_time = times.back();
+    stats.median_time = times[times.size() / 2];
+    
+    // Calculate average
+    auto total = std::accumulate(times.begin(), times.end(), std::chrono::nanoseconds(0));
+    stats.avg_time = total / times.size();
+    
+    // Calculate standard deviation
+    double variance = 0.0;
+    for (const auto& time : times) {
+        double diff = time.count() - stats.avg_time.count();
+        variance += diff * diff;
+    }
+    variance /= times.size();
+    stats.std_dev = std::chrono::nanoseconds(static_cast<long long>(std::sqrt(variance)));
+    
+    return stats;
+}
+
+// Enhanced SecurityTestUtils implementation
+double SecurityTestUtils::calculateEntropy(const std::vector<uint8_t>& data) {
+    if (data.empty()) return 0.0;
+    
+    std::array<size_t, 256> counts = {};
+    for (uint8_t byte : data) {
+        counts[byte]++;
+    }
+    
+    double entropy = 0.0;
+    double total = static_cast<double>(data.size());
+    
+    for (size_t count : counts) {
+        if (count > 0) {
+            double probability = count / total;
+            entropy -= probability * std::log2(probability);
+        }
+    }
+    
+    return entropy;
+}
+
+bool SecurityTestUtils::passesChiSquareTest(const std::vector<uint8_t>& data) {
+    if (data.size() < 256) return false;
+    
+    std::array<size_t, 256> observed = {};
+    for (uint8_t byte : data) {
+        observed[byte]++;
+    }
+    
+    double expected = static_cast<double>(data.size()) / 256.0;
+    double chi_square = 0.0;
+    
+    for (size_t count : observed) {
+        double diff = count - expected;
+        chi_square += (diff * diff) / expected;
+    }
+    
+    // Critical value for 255 degrees of freedom at 95% confidence is approximately 293.25
+    return chi_square < 293.25;
+}
+
+bool SecurityTestUtils::passesRunsTest(const std::vector<uint8_t>& data) {
+    if (data.size() < 100) return false;
+    
+    size_t runs = 1;
+    for (size_t i = 1; i < data.size(); ++i) {
+        if ((data[i] >= 128) != (data[i-1] >= 128)) {
+            runs++;
+        }
+    }
+    
+    // Expected runs for random data
+    size_t n = data.size();
+    double expected_runs = (2.0 * n - 1.0) / 3.0;
+    double variance = (16.0 * n - 29.0) / 90.0;
+    double z_score = (runs - expected_runs) / std::sqrt(variance);
+    
+    // Should be within 2 standard deviations
+    return std::abs(z_score) < 2.0;
+}
+
+TimingAnalysisResult SecurityTestUtils::analyzeTimingVulnerability(
+    std::function<bool(const std::string&)> function,
+    const std::vector<std::string>& test_inputs,
+    size_t iterations) {
+    
+    TimingAnalysisResult result;
+    result.vulnerable = false;
+    result.confidence_level = 0.0;
+    result.avg_time_difference = std::chrono::nanoseconds(0);
+    
+    if (test_inputs.size() < 2) {
+        result.analysis_details = "Need at least 2 test inputs";
+        return result;
+    }
+    
+    std::vector<std::vector<std::chrono::nanoseconds>> timing_data(test_inputs.size());
+    
+    // Collect timing data
+    for (size_t i = 0; i < iterations; ++i) {
+        for (size_t j = 0; j < test_inputs.size(); ++j) {
+            auto start = std::chrono::high_resolution_clock::now();
+            function(test_inputs[j]);
+            auto end = std::chrono::high_resolution_clock::now();
+            
+            timing_data[j].push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start));
+        }
+    }
+    
+    // Calculate averages and check for significant differences
+    std::vector<std::chrono::nanoseconds> averages;
+    for (const auto& times : timing_data) {
+        auto total = std::accumulate(times.begin(), times.end(), std::chrono::nanoseconds(0));
+        averages.push_back(total / times.size());
+    }
+    
+    // Find max difference
+    auto min_avg = *std::min_element(averages.begin(), averages.end());
+    auto max_avg = *std::max_element(averages.begin(), averages.end());
+    result.avg_time_difference = max_avg - min_avg;
+    
+    // Calculate confidence level based on statistical significance
+    double relative_difference = static_cast<double>(result.avg_time_difference.count()) / min_avg.count();
+    
+    if (relative_difference > 0.1) { // More than 10% difference
+        result.vulnerable = true;
+        result.confidence_level = std::min(0.99, relative_difference * 5.0);
+        result.analysis_details = "Significant timing differences detected";
+    } else {
+        result.confidence_level = 1.0 - relative_difference * 10.0;
+        result.analysis_details = "No significant timing vulnerabilities detected";
+    }
+    
+    return result;
+}
+
+std::vector<uint8_t> SecurityTestUtils::generateWeakRandomData(size_t size) {
+    std::vector<uint8_t> data(size);
+    // Generate predictable "weak" random data for testing
+    for (size_t i = 0; i < size; ++i) {
+        data[i] = static_cast<uint8_t>(i % 256);
+    }
+    return data;
+}
+
+bool SecurityTestUtils::detectMemoryLeaks(std::function<void()> test_function, size_t iterations) {
+    size_t initial_memory = measureMemoryUsage();
+    
+    for (size_t i = 0; i < iterations; ++i) {
+        test_function();
+    }
+    
+    // Force garbage collection if applicable
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    
+    size_t final_memory = measureMemoryUsage();
+    size_t memory_increase = final_memory > initial_memory ? final_memory - initial_memory : 0;
+    
+    // Allow some memory increase but not excessive
+    return memory_increase < (iterations * 1024); // Less than 1KB per iteration
+}
+
+size_t SecurityTestUtils::measureMemoryUsage() {
+    #ifdef __linux__
+    std::ifstream status_file("/proc/self/status");
+    std::string line;
+    while (std::getline(status_file, line)) {
+        if (line.substr(0, 6) == "VmRSS:") {
+            std::istringstream iss(line);
+            std::string label, value, unit;
+            iss >> label >> value >> unit;
+            return std::stoul(value) * 1024; // Convert KB to bytes
+        }
+    }
+    #endif
+    return 10 * 1024 * 1024; // 10MB fallback
+}
+
+std::vector<std::string> SecurityTestUtils::generateFuzzingInputs(size_t count) {
+    std::vector<std::string> inputs;
+    inputs.reserve(count);
+    
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> char_dis(0, 255);
+    std::uniform_int_distribution<> length_dis(0, 1000);
+    
+    for (size_t i = 0; i < count; ++i) {
+        size_t length = length_dis(gen);
+        std::string input;
+        input.reserve(length);
+        
+        for (size_t j = 0; j < length; ++j) {
+            input += static_cast<char>(char_dis(gen));
+        }
+        
+        inputs.push_back(input);
+    }
+    
+    return inputs;
+}
+
+std::vector<std::vector<uint8_t>> SecurityTestUtils::generateMalformedData(size_t count) {
+    std::vector<std::vector<uint8_t>> data_sets;
+    data_sets.reserve(count);
+    
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    
+    for (size_t i = 0; i < count; ++i) {
+        std::uniform_int_distribution<> size_dis(0, 10000);
+        size_t size = size_dis(gen);
+        
+        auto data = generateRandomData(size);
+        data_sets.push_back(data);
+    }
+    
+    return data_sets;
+}
+
+bool SecurityTestUtils::testBufferOverflow(std::function<void(const std::vector<uint8_t>&)> function) {
+    try {
+        // Test with extremely large buffer
+        std::vector<uint8_t> large_buffer(100000, 0xFF);
+        function(large_buffer);
+        
+        // Test with malformed size
+        std::vector<uint8_t> malformed_buffer;
+        malformed_buffer.resize(SIZE_MAX / 2, 0xAA);
+        function(malformed_buffer);
+        
+        return true; // No crash = good
+    } catch (...) {
+        return true; // Exception handling = good
+    }
+}
+
+bool SecurityTestUtils::testSQLInjection(std::function<bool(const std::string&)> function) {
+    std::vector<std::string> injection_payloads = {
+        "'; DROP TABLE users; --",
+        "admin'--",
+        "' OR '1'='1",
+        "' UNION SELECT * FROM passwords --"
+    };
+    
+    for (const auto& payload : injection_payloads) {
+        bool result = function(payload);
+        if (result) {
+            return false; // Injection succeeded = bad
+        }
+    }
+    
+    return true; // All injections failed = good
+}
+
+bool SecurityTestUtils::testPathTraversal(std::function<bool(const std::string&)> function) {
+    std::vector<std::string> traversal_payloads = {
+        "../../../etc/passwd",
+        "..\\..\\..\\windows\\system32",
+        "/etc/shadow",
+        "../../../../root/.ssh/id_rsa"
+    };
+    
+    for (const auto& payload : traversal_payloads) {
+        bool result = function(payload);
+        if (result) {
+            return false; // Traversal succeeded = bad
+        }
+    }
+    
+    return true; // All traversals failed = good
+}
+
+bool SecurityTestUtils::testPowerAnalysisResistance(std::function<void()> crypto_function) {
+    // Simplified power analysis test - measure timing consistency
+    std::vector<std::chrono::nanoseconds> timings;
+    
+    for (int i = 0; i < 1000; ++i) {
+        auto start = std::chrono::high_resolution_clock::now();
+        crypto_function();
+        auto end = std::chrono::high_resolution_clock::now();
+        
+        timings.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start));
+    }
+    
+    // Calculate coefficient of variation
+    auto total = std::accumulate(timings.begin(), timings.end(), std::chrono::nanoseconds(0));
+    auto mean = total / timings.size();
+    
+    double variance = 0.0;
+    for (const auto& timing : timings) {
+        double diff = timing.count() - mean.count();
+        variance += diff * diff;
+    }
+    variance /= timings.size();
+    
+    double cv = std::sqrt(variance) / mean.count();
+    
+    // Low coefficient of variation indicates consistent timing (good)
+    return cv < 0.1; // Less than 10% variation
+}
+
+bool SecurityTestUtils::testCacheTimingAttacks(std::function<void(const std::string&)> function) {
+    // Test cache timing resistance by measuring timing with different inputs
+    std::vector<std::string> test_inputs = {
+        "cache_test_1", "cache_test_2", "different_input", "another_test"
+    };
+    
+    std::vector<std::chrono::nanoseconds> timings;
+    
+    for (const auto& input : test_inputs) {
+        auto start = std::chrono::high_resolution_clock::now();
+        function(input);
+        auto end = std::chrono::high_resolution_clock::now();
+        
+        timings.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start));
+    }
+    
+    // Check for consistent timing
+    auto min_time = *std::min_element(timings.begin(), timings.end());
+    auto max_time = *std::max_element(timings.begin(), timings.end());
+    
+    double variation = static_cast<double>(max_time.count() - min_time.count()) / min_time.count();
+    
+    // Low variation indicates cache timing resistance
+    return variation < 0.2; // Less than 20% variation
+}
+
+bool SecurityTestUtils::testKeyStrength(const std::vector<uint8_t>& key) {
+    if (key.size() < 32) return false; // At least 256 bits
+    
+    return hasProperEntropy(key) && isRandomDataUniform(key);
+}
+
+bool SecurityTestUtils::testIVUniqueness(std::function<std::vector<uint8_t>()> iv_generator, size_t samples) {
+    std::set<std::vector<uint8_t>> unique_ivs;
+    
+    for (size_t i = 0; i < samples; ++i) {
+        auto iv = iv_generator();
+        unique_ivs.insert(iv);
+    }
+    
+    // Should have very high uniqueness rate
+    return unique_ivs.size() >= (samples * 0.99); // At least 99% unique
+}
+
+bool SecurityTestUtils::testSaltUniqueness(std::function<std::vector<uint8_t>()> salt_generator, size_t samples) {
+    std::set<std::vector<uint8_t>> unique_salts;
+    
+    for (size_t i = 0; i < samples; ++i) {
+        auto salt = salt_generator();
+        unique_salts.insert(salt);
+    }
+    
+    // Should have very high uniqueness rate
+    return unique_salts.size() >= (samples * 0.99); // At least 99% unique
 }
 
 } // namespace testing

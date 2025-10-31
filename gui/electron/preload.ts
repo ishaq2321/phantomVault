@@ -21,6 +21,13 @@ export interface PhantomVaultAPI {
     restart(): Promise<boolean>;
   };
   
+  // System integration
+  system: {
+    hideToTray(): Promise<boolean>;
+    showFromTray(): Promise<boolean>;
+    getTrayStatus(): Promise<{ hasTray: boolean; isVisible: boolean }>;
+  };
+  
   // Dialog operations
   dialog: {
     showMessage(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue>;
@@ -70,6 +77,7 @@ export interface PhantomVaultAPI {
     serviceStatusChanged(callback: (status: any) => void): void;
     folderStatusChanged(callback: (status: any) => void): void;
     securityEvent(callback: (event: any) => void): void;
+    protocolUnlock(callback: (params: string) => void): void;
   };
   
   // Remove event listeners
@@ -77,6 +85,7 @@ export interface PhantomVaultAPI {
     serviceStatusChanged(callback: (status: any) => void): void;
     folderStatusChanged(callback: (status: any) => void): void;
     securityEvent(callback: (event: any) => void): void;
+    protocolUnlock(callback: (params: string) => void): void;
   };
 }
 
@@ -92,6 +101,13 @@ const phantomVaultAPI: PhantomVaultAPI = {
   service: {
     getStatus: () => ipcRenderer.invoke('service:getStatus'),
     restart: () => ipcRenderer.invoke('service:restart'),
+  },
+  
+  // System integration
+  system: {
+    hideToTray: () => ipcRenderer.invoke('system:hideToTray'),
+    showFromTray: () => ipcRenderer.invoke('system:showFromTray'),
+    getTrayStatus: () => ipcRenderer.invoke('system:getTrayStatus'),
   },
   
   // Dialog operations
@@ -171,6 +187,9 @@ const phantomVaultAPI: PhantomVaultAPI = {
     securityEvent: (callback) => {
       ipcRenderer.on('security:event', (_, event) => callback(event));
     },
+    protocolUnlock: (callback) => {
+      ipcRenderer.on('protocol:unlock', (_, params) => callback(params));
+    },
   },
   
   // Remove event listeners
@@ -183,6 +202,9 @@ const phantomVaultAPI: PhantomVaultAPI = {
     },
     securityEvent: (callback) => {
       ipcRenderer.removeListener('security:event', callback);
+    },
+    protocolUnlock: (callback) => {
+      ipcRenderer.removeListener('protocol:unlock', (_, params) => callback(params));
     },
   },
 };

@@ -17,7 +17,8 @@
 #include <chrono>
 #include <set>
 
-using namespace phantomvault;
+using namespace PhantomVault;
+using namespace phantomvault::testing;
 using namespace phantomvault::testing;
 
 namespace fs = std::filesystem;
@@ -61,7 +62,8 @@ private:
         std::string password = "compliance_test_password";
         std::vector<uint8_t> salt = engine.generateSalt();
         
-        auto key = engine.deriveKey(password, salt, 100000);
+        EncryptionEngine::KeyDerivationConfig config;
+        auto key = engine.deriveKey(password, salt, config);
         
         // AES-256 requires 32-byte (256-bit) keys
         ASSERT_EQ(key.size(), 32);
@@ -90,7 +92,7 @@ private:
             );
             
             ASSERT_TRUE(decrypted_result.success);
-            ASSERT_EQ(test_data, decrypted_result.decrypted_data);
+            ASSERT_VECTOR_EQ(test_data, decrypted_result.decrypted_data);
         }
     }
     
@@ -123,8 +125,9 @@ private:
         
         // Different salts should produce different keys
         auto salt2 = engine.generateSalt();
-        auto key1 = engine.deriveKey(password, salt, 100000);
-        auto key2 = engine.deriveKey(password, salt2, 100000);
+        EncryptionEngine::KeyDerivationConfig config;
+        auto key1 = engine.deriveKey(password, salt, config);
+        auto key2 = engine.deriveKey(password, salt2, config);
         ASSERT_NE(key1, key2);
     }
     
@@ -321,8 +324,8 @@ private:
         
         ASSERT_TRUE(decrypt1.success);
         ASSERT_TRUE(decrypt2.success);
-        ASSERT_EQ(decrypt1.decrypted_data, test_data);
-        ASSERT_EQ(decrypt2.decrypted_data, test_data);
+        ASSERT_VECTOR_EQ(decrypt1.decrypted_data, test_data);
+        ASSERT_VECTOR_EQ(decrypt2.decrypted_data, test_data);
         
         // Cross-decryption should fail (wrong IV/salt combination)
         auto cross_decrypt1 = engine.decryptData(result1.encrypted_data, password, result2.salt, result2.iv);
@@ -369,16 +372,16 @@ private:
         
         // Verify that derived key has proper entropy
         auto salt = engine.generateSalt();
-        auto key = engine.deriveKey(password, salt, 100000);
+        auto key = engine.deriveKey(password, salt, EncryptionEngine::KeyDerivationConfig());
         
         ASSERT_TRUE(SecurityTestUtils::hasProperEntropy(key));
         
         // Verify that key derivation is consistent
-        auto key2 = engine.deriveKey(password, salt, 100000);
+        auto key2 = engine.deriveKey(password, salt, EncryptionEngine::KeyDerivationConfig());
         ASSERT_EQ(key, key2);
         
         // Verify that different passwords produce different keys
-        auto key3 = engine.deriveKey("different_password", salt, 100000);
+        auto key3 = engine.deriveKey("different_password", salt, EncryptionEngine::KeyDerivationConfig());
         ASSERT_NE(key, key3);
     }
     
@@ -404,7 +407,7 @@ private:
             );
             
             ASSERT_TRUE(decrypt_result.success);
-            ASSERT_EQ(buffer, decrypt_result.decrypted_data);
+            ASSERT_VECTOR_EQ(buffer, decrypt_result.decrypted_data);
         }
     }
     
@@ -477,9 +480,9 @@ private:
         ASSERT_TRUE(handler.initialize(log_path));
         
         // Generate various security events
-        handler.logSecurityEvent("TEST_EVENT_1", "Test security event 1", ErrorSeverity::INFO);
-        handler.logSecurityEvent("TEST_EVENT_2", "Test security event 2", ErrorSeverity::WARNING);
-        handler.logSecurityEvent("TEST_EVENT_3", "Test security event 3", ErrorSeverity::ERROR);
+        handler.logSecurityEvent(SecurityEventType::SUSPICIOUS_ACTIVITY, ErrorSeverity::INFO, "test_profile", "Test security event 1");
+        handler.logSecurityEvent(SecurityEventType::SUSPICIOUS_ACTIVITY, ErrorSeverity::WARNING, "test_profile", "Test security event 2");
+        handler.logSecurityEvent(SecurityEventType::SUSPICIOUS_ACTIVITY, ErrorSeverity::ERROR, "test_profile", "Test security event 3");
         
         // Verify log file exists and has content
         ASSERT_TRUE(fs::exists(log_path));
@@ -562,7 +565,7 @@ private:
             encrypted_result.iv
         );
         ASSERT_TRUE(original_decrypt.success);
-        ASSERT_EQ(test_data, original_decrypt.decrypted_data);
+        ASSERT_VECTOR_EQ(test_data, original_decrypt.decrypted_data);
     }
     
     static void testMetadataIntegrity() {
@@ -651,7 +654,7 @@ private:
             encrypted_result.iv
         );
         ASSERT_TRUE(original_decrypt.success);
-        ASSERT_EQ(test_data, original_decrypt.decrypted_data);
+        ASSERT_VECTOR_EQ(test_data, original_decrypt.decrypted_data);
     }
 };
 

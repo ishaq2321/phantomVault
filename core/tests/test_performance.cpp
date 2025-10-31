@@ -131,7 +131,7 @@ private:
             auto elapsed = timer.elapsed();
             
             ASSERT_TRUE(decrypted_result.success);
-            ASSERT_EQ(test_data, decrypted_result.decrypted_data);
+            ASSERT_VECTOR_EQ(test_data, decrypted_result.decrypted_data);
             
             // Calculate throughput
             double mb_size = (double)size / (1024 * 1024);
@@ -258,7 +258,7 @@ private:
             );
             
             ASSERT_TRUE(decrypted_result.success);
-            ASSERT_EQ(test_data, decrypted_result.decrypted_data);
+            ASSERT_VECTOR_EQ(test_data, decrypted_result.decrypted_data);
         }
     }
     
@@ -333,7 +333,7 @@ private:
                 );
                 
                 ASSERT_TRUE(decrypted_result.success);
-                ASSERT_EQ(test_data, decrypted_result.decrypted_data);
+                ASSERT_VECTOR_EQ(test_data, decrypted_result.decrypted_data);
             }
         }
         

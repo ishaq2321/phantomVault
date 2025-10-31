@@ -14,9 +14,8 @@
 #include <thread>
 #include <chrono>
 
-using namespace phantomvault;
-using namespace phantomvault::testing;
 using namespace PhantomVault;
+using namespace phantomvault::testing;
 
 namespace fs = std::filesystem;
 

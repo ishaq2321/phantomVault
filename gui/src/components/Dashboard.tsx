@@ -38,6 +38,9 @@ import {
   Security as SecurityIcon,
   Person as PersonIcon,
   Storage as StorageIcon,
+  Minimize as MinimizeIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 
 interface DashboardProps {
@@ -82,6 +85,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [trayStatus, setTrayStatus] = useState<{ hasTray: boolean; isVisible: boolean }>({ hasTray: false, isVisible: true });
   
   // Dialog states
   const [createProfileDialog, setCreateProfileDialog] = useState(false);
@@ -101,6 +105,30 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
   // Load profiles on component mount
   useEffect(() => {
     loadProfiles();
+    loadTrayStatus();
+    
+    // Listen for service status changes
+    const handleServiceStatusChange = (status: any) => {
+      console.log('Service status changed:', status);
+      // Refresh data when service status changes
+      if (status.running && selectedProfile && isProfileAuthenticated) {
+        loadFolders(selectedProfile.id);
+      }
+    };
+    
+    // Listen for protocol unlock events
+    const handleProtocolUnlock = (params: string) => {
+      console.log('Protocol unlock requested:', params);
+      setSuccess('Unlock request received via system protocol');
+    };
+    
+    window.phantomVault.on.serviceStatusChanged(handleServiceStatusChange);
+    window.phantomVault.on.protocolUnlock(handleProtocolUnlock);
+    
+    return () => {
+      window.phantomVault.off.serviceStatusChanged(handleServiceStatusChange);
+      window.phantomVault.off.protocolUnlock(handleProtocolUnlock);
+    };
   }, []);
 
   // Load folders when profile is selected
@@ -156,6 +184,28 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       }
     } catch (err) {
       console.warn('Failed to load vault stats:', err);
+    }
+  };
+
+  const loadTrayStatus = async () => {
+    try {
+      const status = await window.phantomVault.system.getTrayStatus();
+      setTrayStatus(status);
+    } catch (err) {
+      console.warn('Failed to load tray status:', err);
+    }
+  };
+
+  const handleHideToTray = async () => {
+    try {
+      const success = await window.phantomVault.system.hideToTray();
+      if (success) {
+        setSuccess('Application minimized to system tray');
+      } else {
+        setError('Failed to minimize to tray');
+      }
+    } catch (err) {
+      setError('Failed to minimize to tray: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
@@ -372,6 +422,19 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
               <Typography variant="body2" sx={{ opacity: 0.7 }}>
                 Secured folders
               </Typography>
+              {trayStatus.hasTray && (
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={trayStatus.isVisible ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    onClick={handleHideToTray}
+                    fullWidth
+                  >
+                    Hide to Tray
+                  </Button>
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>

@@ -5,7 +5,7 @@
  * Handles window management, service communication, and system integration.
  */
 
-import { app, BrowserWindow, ipcMain, Menu, shell, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, dialog, Tray, nativeImage } from 'electron';
 import { join } from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { existsSync } from 'fs';
@@ -18,6 +18,7 @@ const isPackaged = app.isPackaged;
 // Service process reference
 let serviceProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 
 /**
  * Create the main application window
@@ -64,6 +65,22 @@ function createMainWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  
+  // Handle window close button (hide to tray instead of quit)
+  mainWindow.on('close', (event) => {
+    if (!(app as any).isQuitting && tray) {
+      event.preventDefault();
+      mainWindow?.hide();
+      
+      // Show notification on first hide
+      if (process.platform === 'win32' || process.platform === 'linux') {
+        tray.displayBalloon({
+          title: 'PhantomVault',
+          content: 'Application was minimized to tray. Click the tray icon to restore.',
+        });
+      }
+    }
+  });
 
   // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -73,7 +90,7 @@ function createMainWindow(): void {
 }
 
 /**
- * Start the PhantomVault service
+ * Start the PhantomVault unified service
  */
 function startService(): Promise<boolean> {
   return new Promise(async (resolve) => {
@@ -90,21 +107,21 @@ function startService(): Promise<boolean> {
         // Service not running, continue with startup
       }
       
-      // Determine service executable path
+      // Determine unified service executable path
       let servicePath: string;
       
       if (isDev) {
-        // In development, use absolute path to the service
+        // In development, use the unified phantomvault executable
         const projectRoot = join(__dirname, '../..');
-        servicePath = join(projectRoot, 'core/build/bin/phantomvault-service');
-        console.log('[Main] Development service path:', servicePath);
+        servicePath = join(projectRoot, 'bin/phantomvault');
+        console.log('[Main] Development unified service path:', servicePath);
       } else if (isPackaged) {
         // In packaged app, use resources path
-        servicePath = join(process.resourcesPath, 'bin/phantomvault-service');
+        servicePath = join(process.resourcesPath, 'bin/phantomvault');
       } else {
-        // In installed but unpackaged version (like our Linux installation)
-        servicePath = '/opt/phantomvault/bin/phantomvault-service';
-        console.log('[Main] Using system service path:', servicePath);
+        // In installed but unpackaged version
+        servicePath = '/opt/phantomvault/bin/phantomvault';
+        console.log('[Main] Using system unified service path:', servicePath);
       }
       
       // Add .exe extension on Windows
@@ -112,17 +129,27 @@ function startService(): Promise<boolean> {
         servicePath += '.exe';
       }
       
-      // Check if service executable exists
+      // Check if unified service executable exists
       if (!existsSync(servicePath)) {
-        console.error('[Main] Service executable not found:', servicePath);
-        resolve(false);
-        return;
+        console.error('[Main] Unified service executable not found:', servicePath);
+        // Fallback to old service path for backward compatibility
+        const fallbackPath = isDev 
+          ? join(__dirname, '../..', 'core/build/bin/phantomvault-service')
+          : '/opt/phantomvault/bin/phantomvault-service';
+        
+        if (existsSync(fallbackPath)) {
+          console.log('[Main] Using fallback service path:', fallbackPath);
+          servicePath = fallbackPath;
+        } else {
+          resolve(false);
+          return;
+        }
       }
       
-      console.log('[Main] Starting service:', servicePath);
+      console.log('[Main] Starting unified service:', servicePath);
       
-      // Start service process
-      serviceProcess = spawn(servicePath, ['--log-level', 'INFO'], {
+      // Start unified service in service mode
+      serviceProcess = spawn(servicePath, ['--service', '--log-level', 'INFO', '--port', '9876'], {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
       });
@@ -138,23 +165,64 @@ function startService(): Promise<boolean> {
       
       // Handle service exit
       serviceProcess.on('exit', (code, signal) => {
-        console.log(`[Main] Service exited with code ${code}, signal ${signal}`);
+        console.log(`[Main] Unified service exited with code ${code}, signal ${signal}`);
         serviceProcess = null;
+        
+        // Update tray status
+        updateTrayStatus(false);
+        
+        // Notify renderer about service status change
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('service:statusChanged', { running: false, pid: null });
+        }
       });
       
       serviceProcess.on('error', (error) => {
-        console.error('[Main] Service error:', error);
+        console.error('[Main] Unified service error:', error);
         serviceProcess = null;
         resolve(false);
       });
       
-      // Give service time to start
-      setTimeout(() => {
-        resolve(serviceProcess !== null);
-      }, 2000);
+      // Wait for service to be ready and verify it's responding
+      let attempts = 0;
+      const maxAttempts = 10;
+      const checkService = async () => {
+        try {
+          const response = await fetch('http://127.0.0.1:9876/api/platform');
+          if (response.ok) {
+            console.log('[Main] Unified service is ready and responding');
+            
+            // Update tray status
+            updateTrayStatus(true);
+            
+            // Notify renderer about service status
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('service:statusChanged', { 
+                running: true, 
+                pid: serviceProcess?.pid || null 
+              });
+            }
+            resolve(true);
+            return;
+          }
+        } catch (e) {
+          // Service not ready yet
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts && serviceProcess) {
+          setTimeout(checkService, 500);
+        } else {
+          console.error('[Main] Unified service failed to respond after', maxAttempts, 'attempts');
+          resolve(false);
+        }
+      };
+      
+      // Start checking after initial delay
+      setTimeout(checkService, 1000);
       
     } catch (error) {
-      console.error('[Main] Failed to start service:', error);
+      console.error('[Main] Failed to start unified service:', error);
       resolve(false);
     }
   });
@@ -177,6 +245,233 @@ function stopService(): void {
 function checkAdminPrivileges(): boolean {
   // This is a simplified check - in production, we'd use platform-specific methods
   return process.getuid ? process.getuid() === 0 : true;
+}
+
+/**
+ * Create desktop shortcuts and system integration
+ */
+function createSystemIntegration(): void {
+  try {
+    // Set app user model ID for Windows
+    if (process.platform === 'win32') {
+      app.setAppUserModelId('dev.phantomvault.app');
+    }
+    
+    // Register protocol handler for phantomvault:// URLs
+    if (!app.isDefaultProtocolClient('phantomvault')) {
+      app.setAsDefaultProtocolClient('phantomvault');
+    }
+    
+    // Create desktop shortcut on first run (Windows/Linux)
+    if (!isPackaged && (process.platform === 'win32' || process.platform === 'linux')) {
+      const shortcutCreated = app.getLoginItemSettings().wasOpenedAsHidden;
+      if (!shortcutCreated) {
+        // This would create a desktop shortcut in a real implementation
+        console.log('[Main] Desktop shortcut creation would happen here');
+      }
+    }
+    
+    // Register file associations for .phantomvault files
+    if (process.platform === 'win32') {
+      // Windows file association would be handled by the installer
+      console.log('[Main] File associations handled by installer on Windows');
+    }
+    
+    console.log('[Main] System integration completed');
+    
+  } catch (error) {
+    console.warn('[Main] System integration failed:', error);
+  }
+}
+
+/**
+ * Handle protocol URLs (phantomvault://action)
+ */
+function handleProtocolUrl(url: string): void {
+  console.log('[Main] Handling protocol URL:', url);
+  
+  try {
+    const urlObj = new URL(url);
+    const action = urlObj.pathname;
+    
+    switch (action) {
+      case '/unlock':
+        // Show main window and trigger unlock
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+          mainWindow.webContents.send('protocol:unlock', urlObj.searchParams.toString());
+        }
+        break;
+        
+      case '/show':
+        // Show main window
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createMainWindow();
+        }
+        break;
+        
+      default:
+        console.warn('[Main] Unknown protocol action:', action);
+    }
+  } catch (error) {
+    console.error('[Main] Failed to handle protocol URL:', error);
+  }
+}
+
+/**
+ * Create system tray with service status monitoring
+ */
+function createSystemTray(): void {
+  // Create tray icon
+  const iconPath = join(__dirname, '../assets/icon.png');
+  let trayIcon: Electron.NativeImage;
+  
+  try {
+    trayIcon = nativeImage.createFromPath(iconPath);
+    if (trayIcon.isEmpty()) {
+      // Fallback to a simple icon if the file doesn't exist
+      trayIcon = nativeImage.createEmpty();
+    }
+    // Resize for tray (16x16 on most platforms)
+    trayIcon = trayIcon.resize({ width: 16, height: 16 });
+  } catch (error) {
+    console.warn('[Main] Failed to load tray icon, using empty icon:', error);
+    trayIcon = nativeImage.createEmpty();
+  }
+  
+  tray = new Tray(trayIcon);
+  
+  // Set initial tooltip
+  updateTrayStatus(serviceProcess !== null);
+  
+  // Handle tray click
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    } else {
+      createMainWindow();
+    }
+  });
+  
+  // Create context menu
+  updateTrayMenu();
+}
+
+/**
+ * Update tray status and tooltip
+ */
+function updateTrayStatus(serviceRunning: boolean): void {
+  if (!tray) return;
+  
+  const status = serviceRunning ? 'Running' : 'Stopped';
+  const tooltip = `PhantomVault - Service ${status}`;
+  
+  tray.setToolTip(tooltip);
+  
+  // Update tray menu
+  updateTrayMenu();
+}
+
+/**
+ * Update tray context menu
+ */
+function updateTrayMenu(): void {
+  if (!tray) return;
+  
+  const serviceRunning = serviceProcess !== null;
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'PhantomVault',
+      type: 'normal',
+      enabled: false,
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: `Service: ${serviceRunning ? 'Running' : 'Stopped'}`,
+      type: 'normal',
+      enabled: false,
+    },
+    {
+      label: serviceRunning ? 'Restart Service' : 'Start Service',
+      type: 'normal',
+      click: async () => {
+        if (serviceRunning) {
+          stopService();
+          setTimeout(async () => {
+            const started = await startService();
+            updateTrayStatus(started);
+          }, 1000);
+        } else {
+          const started = await startService();
+          updateTrayStatus(started);
+        }
+      },
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: 'Show Dashboard',
+      type: 'normal',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createMainWindow();
+        }
+      },
+    },
+    {
+      label: 'Hide to Tray',
+      type: 'normal',
+      enabled: mainWindow?.isVisible() || false,
+      click: () => {
+        if (mainWindow) {
+          mainWindow.hide();
+        }
+      },
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: 'About PhantomVault',
+      type: 'normal',
+      click: () => {
+        dialog.showMessageBox(mainWindow || undefined as any, {
+          type: 'info',
+          title: 'About PhantomVault',
+          message: 'PhantomVault v1.0.0',
+          detail: 'Invisible Folder Security with Profile-Based Management\n\nBuilt with Electron and C++\nCopyright © 2025 PhantomVault Team',
+        });
+      },
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: 'Quit PhantomVault',
+      type: 'normal',
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+  
+  tray.setContextMenu(contextMenu);
 }
 
 /**
@@ -284,6 +579,12 @@ app.whenReady().then(async () => {
     );
   }
   
+  // Create system integration
+  createSystemIntegration();
+  
+  // Create system tray
+  createSystemTray();
+  
   // Create main window
   createMainWindow();
   
@@ -300,15 +601,44 @@ app.whenReady().then(async () => {
 
 // Handle all windows closed
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // Don't quit when all windows are closed if we have a tray
+  if (process.platform !== 'darwin' && !tray) {
     app.quit();
   }
 });
 
 // Handle app quit
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  (app as any).isQuitting = true;
   console.log('[Main] App quitting, stopping service...');
   stopService();
+  
+  // Destroy tray
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+});
+
+// Handle protocol URLs
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleProtocolUrl(url);
+});
+
+// Handle protocol URLs on Windows/Linux
+app.on('second-instance', (event, commandLine, workingDirectory) => {
+  // Someone tried to run a second instance, focus our window instead
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+  
+  // Handle protocol URL if present
+  const protocolUrl = commandLine.find(arg => arg.startsWith('phantomvault://'));
+  if (protocolUrl) {
+    handleProtocolUrl(protocolUrl);
+  }
 });
 
 // Security: Prevent new window creation
@@ -481,6 +811,31 @@ ipcMain.handle('ipc:getUnlockMethods', async () => {
 
 ipcMain.handle('ipc:setPreferredUnlockMethod', async (_, { method }) => {
   return await sendServiceRequest('platform/method', { method }, 'PUT');
+});
+
+// System integration
+ipcMain.handle('system:hideToTray', () => {
+  if (mainWindow && tray) {
+    mainWindow.hide();
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('system:showFromTray', () => {
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('system:getTrayStatus', () => {
+  return {
+    hasTray: tray !== null,
+    isVisible: mainWindow?.isVisible() || false,
+  };
 });
 
 // Dialog operations

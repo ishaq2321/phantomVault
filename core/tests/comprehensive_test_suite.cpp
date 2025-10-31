@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <iomanip>
 
 using namespace phantomvault::testing;
 
@@ -19,7 +20,10 @@ using namespace phantomvault::testing;
 void registerEncryptionEngineTests(TestFramework& framework);
 void registerProfileVaultIntegrationTests(TestFramework& framework);
 void registerSecurityComplianceTests(TestFramework& framework);
+void registerSecurityPenetrationTests(TestFramework& framework);
+void registerIntegrationTests(TestFramework& framework);
 void registerPerformanceTests(TestFramework& framework);
+void registerAllComponentsTests(TestFramework& framework);
 
 void printBanner() {
     std::cout << R"(
@@ -47,7 +51,10 @@ void printUsage(const char* program_name) {
     std::cout << "  EncryptionEngine       Unit tests for encryption engine" << std::endl;
     std::cout << "  ProfileVault           Integration tests for profile vault system" << std::endl;
     std::cout << "  Security               Security and cryptographic compliance tests" << std::endl;
+    std::cout << "  SecurityPenetration    Advanced security and penetration tests" << std::endl;
+    std::cout << "  Integration            Comprehensive integration tests" << std::endl;
     std::cout << "  Performance            Performance and system impact tests" << std::endl;
+    std::cout << "  AllComponents          All component tests" << std::endl;
     std::cout << "  all                    Run all test categories (default)" << std::endl;
     std::cout << std::endl;
     std::cout << "Examples:" << std::endl;
@@ -101,8 +108,17 @@ int main(int argc, char* argv[]) {
         registerSecurityComplianceTests(framework);
         std::cout << "✓ Security compliance tests registered" << std::endl;
         
+        registerSecurityPenetrationTests(framework);
+        std::cout << "✓ Security penetration tests registered" << std::endl;
+        
+        registerIntegrationTests(framework);
+        std::cout << "✓ Integration tests registered" << std::endl;
+        
         registerPerformanceTests(framework);
         std::cout << "✓ Performance tests registered" << std::endl;
+        
+        registerAllComponentsTests(framework);
+        std::cout << "✓ All components tests registered" << std::endl;
         
     } catch (const std::exception& e) {
         std::cerr << "Failed to register tests: " << e.what() << std::endl;
@@ -172,22 +188,12 @@ int main(int argc, char* argv[]) {
     }
 }
 
-// Stub implementations for test registration functions
-// These will be linked with the actual test files
-
-void registerEncryptionEngineTests(TestFramework& framework) {
-    // This function is implemented in test_encryption_engine.cpp
-    // The linker will resolve this when all test files are compiled together
-}
-
-void registerProfileVaultIntegrationTests(TestFramework& framework) {
-    // This function is implemented in test_profile_vault_integration.cpp
-}
-
-void registerSecurityComplianceTests(TestFramework& framework) {
-    // This function is implemented in test_security_compliance.cpp
-}
-
-void registerPerformanceTests(TestFramework& framework) {
-    // This function is implemented in test_performance.cpp
-}
+// Test registration functions are implemented in their respective test files:
+// - registerEncryptionEngineTests() in test_encryption_engine.cpp
+// - registerProfileVaultIntegrationTests() in test_profile_vault_integration.cpp  
+// - registerSecurityComplianceTests() in test_security_compliance.cpp
+// - registerSecurityPenetrationTests() in test_security_penetration.cpp
+// - registerIntegrationTests() in test_integration_comprehensive.cpp
+// - registerPerformanceTests() in test_performance.cpp
+// - registerAllComponentsTests() in test_all_components.cpp
+// The linker will resolve these when all test files are compiled together
