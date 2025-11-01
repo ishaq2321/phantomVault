@@ -1,13 +1,17 @@
 # PhantomVault
 
-**🚀 PRODUCTION READY - UNIFIED ARCHITECTURE COMPLETE 🚀**
+**⚠️ DEVELOPMENT VERSION - USE AT YOUR OWN RISK ⚠️**
 
 **Invisible Folder Security with Profile-Based Management**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)](https://github.com/ishaq2321/phantomVault)
-[![Security](https://img.shields.io/badge/Encryption-AES--256-green)](https://github.com/ishaq2321/phantomVault)
-[![Memory](https://img.shields.io/badge/RAM%20Usage-%3C%2010MB-brightgreen)](https://github.com/ishaq2321/phantomVault)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20(Tested)%20%7C%20Windows%20(Untested)%20%7C%20macOS%20(Untested)-orange)](https://github.com/phantomvault/phantomvault)
+[![Security](https://img.shields.io/badge/Encryption-AES--256-green)](https://github.com/phantomvault/phantomvault)
+[![Status](https://img.shields.io/badge/Status-Continuous%20Development-yellow)](https://github.com/phantomvault/phantomvault)
+
+## ⚠️ Important Notice
+
+**This software is in continuous development and has not been fully tested on Windows and Mac platforms. Use at your own risk.**
 
 PhantomVault is a professional-grade security application that makes your sensitive folders completely invisible with military-grade encryption. Perfect for protecting confidential documents, personal files, and sensitive data across all major platforms.
 
@@ -33,37 +37,59 @@ PhantomVault is a professional-grade security application that makes your sensit
 - Performance monitoring with <10MB RAM usage
 - Adaptive resource management and battery optimization
 
-🌐 **Cross-Platform Excellence**
-- Native support for Linux, macOS, and Windows
-- Professional installers (DEB, DMG, MSI, AppImage)
-- Consistent experience across all platforms
+🌐 **Cross-Platform Development**
+- ✅ Linux: Fully tested and supported
+- ⚠️ Windows: Code complete but not yet tested
+- ⚠️ macOS: Code complete but not yet tested
+- Professional Linux installer (DEB package available)
 
 ## 🚀 Quick Start
 
 ### Installation
 
-**Linux (One Command Install)**
+**Linux (Recommended - Tested Platform)**
 ```bash
-wget -qO- https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-linux-installer.sh | sudo bash
+# Download the DEB package
+wget https://github.com/phantomvault/phantomvault/releases/latest/download/phantomvault_1.0.0_amd64.deb
+
+# Install the package
+sudo dpkg -i phantomvault_1.0.0_amd64.deb
+
+# Fix any dependency issues
+sudo apt-get install -f
+
+# Start the service
+sudo systemctl start phantomvault
+sudo systemctl enable phantomvault
 ```
 
-**macOS (One Command Install)**
-```bash
-curl -fsSL https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-macos-installer.sh | bash
-```
-
-**Windows**
+**Windows (⚠️ Untested - Use at Your Own Risk)**
 ```powershell
-# Download and run as Administrator:
-# https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-windows-installer.exe
+# Build from source (Windows support not yet tested)
+git clone https://github.com/phantomvault/phantomvault.git
+cd phantomvault
+# Follow build instructions below
 ```
 
-**Manual Installation**
+**macOS (⚠️ Untested - Use at Your Own Risk)**
 ```bash
-# Download installer for your platform
-wget https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-linux-installer.sh
-chmod +x phantomvault-linux-installer.sh
-sudo ./phantomvault-linux-installer.sh
+# Build from source (macOS support not yet tested)
+git clone https://github.com/phantomvault/phantomvault.git
+cd phantomvault
+# Follow build instructions below
+```
+
+**Build from Source (All Platforms)**
+```bash
+# Clone the repository
+git clone https://github.com/phantomvault/phantomvault.git
+cd phantomvault
+
+# Build the project
+./build.sh
+
+# Create installer (Linux only)
+./build.sh --installer
 ```
 
 ### First Use
@@ -194,18 +220,40 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Get Help:**
 - 📖 **Documentation**: Check docs/ directory
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/ishaq2321/phantomVault/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/ishaq2321/phantomVault/discussions)
-- 🔒 **Security Issues**: Email security@phantomvault.dev
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/phantomvault/phantomvault/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/phantomvault/phantomvault/discussions)
+- 📧 **Contact**: ishaq2321@proton.me
+- 📄 **License**: MIT
+- 🤝 **Contributions**: Welcome!
 
 **Community:**
 - ⭐ Star this repository if you find it useful
 - 🍴 Fork and contribute to the project
 - 📢 Share with others who need folder security
 
-## 🏆 Recognition
+## ⚠️ Important Disclaimers
 
-PhantomVault has been designed with security best practices and has undergone comprehensive security auditing. It implements industry-standard encryption and follows OWASP security guidelines.
+### Development Status
+- **Continuous Development**: This software is actively being developed and improved
+- **Platform Testing**: Only Linux (Ubuntu/Debian) has been thoroughly tested
+- **Windows & macOS**: Code is complete but has not been tested on these platforms
+- **Use at Own Risk**: While designed with security in mind, use this software at your own risk
+
+### Security Notice
+- This software has not undergone professional security audit
+- Always maintain backups of important files before using
+- Test thoroughly in a safe environment before production use
+- The developers are not responsible for any data loss or security issues
+
+### Legal Compliance
+- Users are responsible for compliance with local laws and regulations
+- This software is designed for legitimate security purposes only
+- The developers are not responsible for any misuse of this software
+
+### Support Limitations
+- Support is primarily provided for Linux platforms
+- Windows and macOS support is experimental
+- Community support is available through GitHub issues
 
 ---
 
@@ -213,7 +261,7 @@ PhantomVault has been designed with security best practices and has undergone co
 
 **PhantomVault** - *Your files, invisible until you need them.*
 
-[📥 Download v1.0.0](https://github.com/ishaq2321/phantomVault/releases/tag/v1.0.0) • [📖 Documentation](docs/) • [🐛 Report Issues](https://github.com/ishaq2321/phantomVault/issues)
+[📥 Download v1.0.0](https://github.com/phantomvault/phantomvault/releases/tag/v1.0.0) • [📖 Documentation](docs/) • [🐛 Report Issues](https://github.com/phantomvault/phantomvault/issues) • [📧 Contact](mailto:ishaq2321@proton.me)
 
 Made with ❤️ for privacy and security
 
