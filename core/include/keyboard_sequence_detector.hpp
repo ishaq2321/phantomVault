@@ -13,15 +13,14 @@
 #include <functional>
 #include <chrono>
 
-namespace phantomvault {
-
-// Forward declarations for X11
+// Forward declarations for X11 (outside namespace to match C linkage)
 #ifdef PLATFORM_LINUX
-// Forward declarations to avoid header pollution
-typedef char* XPointer;
-struct XRecordInterceptData;
-void x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
+extern "C" {
+    void x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
+}
 #endif
+
+namespace phantomvault {
 
 /**
  * Detected password pattern
@@ -54,7 +53,7 @@ struct PlatformCapabilities {
 };
 
 class KeyboardSequenceDetector {
-    friend void x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
+    friend void ::x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
 public:
     KeyboardSequenceDetector();
     ~KeyboardSequenceDetector();

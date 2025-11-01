@@ -905,9 +905,9 @@ private:
 
 #ifdef PLATFORM_LINUX
 // X11 keyboard callback function - must match XRecordInterceptProc signature
-void x11KeyboardCallback(::XPointer closure, ::XRecordInterceptData* data) {
-    KeyboardSequenceDetector::Implementation* impl = 
-        reinterpret_cast<KeyboardSequenceDetector::Implementation*>(closure);
+extern "C" void x11KeyboardCallback(::XPointer closure, ::XRecordInterceptData* data) {
+    phantomvault::KeyboardSequenceDetector::Implementation* impl = 
+        reinterpret_cast<phantomvault::KeyboardSequenceDetector::Implementation*>(closure);
     
     if (impl && data) {
         impl->handleX11KeyEvent(data);
