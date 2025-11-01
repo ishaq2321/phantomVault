@@ -64,7 +64,9 @@ public:
     {}
     
     ~Implementation() {
-        cleanup();
+        if (initialized_) {
+            cleanup();
+        }
     }
     
     bool initialize(const std::string& logPath) {
@@ -1224,6 +1226,241 @@ private:
             
         } catch (const std::exception& e) {
             last_error_ = "Failed to save events: " + std::string(e.what());
+        }
+    }
+    
+    // Missing method implementations
+    void cleanup() {
+        try {
+            cleanup_running_ = false;
+            if (cleanup_thread_.joinable()) {
+                cleanup_thread_.join();
+            }
+            
+            config_monitoring_running_ = false;
+            if (config_monitor_thread_.joinable()) {
+                config_monitor_thread_.join();
+            }
+            
+            backup_scheduler_running_ = false;
+            if (backup_scheduler_thread_.joinable()) {
+                backup_scheduler_thread_.join();
+            }
+        } catch (const std::exception& e) {
+            // Ignore cleanup errors
+        }
+    }
+    
+    void cleanupLoop() {
+        while (cleanup_running_) {
+            try {
+                // Clean old events
+                auto now = std::chrono::system_clock::now();
+                auto cutoff = now - retention_period_;
+                
+                std::lock_guard<std::mutex> lock(events_mutex_);
+                security_events_.erase(
+                    std::remove_if(security_events_.begin(), security_events_.end(),
+                        [cutoff](const SecurityEvent& event) {
+                            return event.timestamp < cutoff;
+                        }),
+                    security_events_.end()
+                );
+                
+                // Clean old rate limits
+                std::lock_guard<std::mutex> rate_lock(rate_limit_mutex_);
+                for (auto it = rate_limits_.begin(); it != rate_limits_.end();) {
+                    if (it->second.blockExpiry < now) {
+                        it = rate_limits_.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+                
+            } catch (const std::exception& e) {
+                // Continue cleanup loop even on errors
+            }
+            
+            std::this_thread::sleep_for(std::chrono::minutes(5));
+        }
+    }
+    
+    bool isFileCorrupted(const std::string& filePath) {
+        try {
+            if (!fs::exists(filePath)) {
+                return true;
+            }
+            
+            // Basic corruption check - file size and readability
+            auto fileSize = fs::file_size(filePath);
+            if (fileSize == 0) {
+                return true;
+            }
+            
+            std::ifstream file(filePath, std::ios::binary);
+            if (!file.is_open()) {
+                return true;
+            }
+            
+            // Try to read first and last bytes
+            char first, last;
+            file.read(&first, 1);
+            if (!file.good()) {
+                return true;
+            }
+            
+            file.seekg(-1, std::ios::end);
+            file.read(&last, 1);
+            if (!file.good()) {
+                return true;
+            }
+            
+            return false;
+        } catch (const std::exception& e) {
+            return true;
+        }
+    }
+    
+    std::string calculateFileHash(const std::string& filePath) {
+        try {
+            std::ifstream file(filePath, std::ios::binary);
+            if (!file.is_open()) {
+                return "";
+            }
+            
+            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+            
+            // Use SHA-256 for file hashing
+            unsigned char hash[SHA256_DIGEST_LENGTH];
+            SHA256_CTX sha256;
+            SHA256_Init(&sha256);
+            SHA256_Update(&sha256, content.c_str(), content.size());
+            SHA256_Final(hash, &sha256);
+            
+            std::stringstream ss;
+            for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+                ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+            }
+            
+            return ss.str();
+        } catch (const std::exception& e) {
+            return "";
+        }
+    }
+    
+    void performEmergencyMemoryCleanup() {
+        try {
+            // Clear event cache
+            {
+                std::lock_guard<std::mutex> lock(events_mutex_);
+                security_events_.clear();
+            }
+            
+            // Clear rate limit cache
+            {
+                std::lock_guard<std::mutex> lock(rate_limit_mutex_);
+                rate_limits_.clear();
+            }
+            
+            // Clear backup metadata
+            {
+                std::lock_guard<std::mutex> lock(backup_mutex_);
+                backup_metadata_.clear();
+            }
+            
+        } catch (const std::exception& e) {
+            // Emergency cleanup should not fail
+        }
+    }
+    
+    void secureAllVaults() {
+        // Placeholder for vault securing logic
+        logSecurityEvent(SecurityEventType::SYSTEM_COMPROMISE, ErrorSeverity::CRITICAL, 
+                        "", "Emergency protocol activated - securing all vaults");
+    }
+    
+    void createEmergencyBackup() {
+        try {
+            std::string emergency_backup_path = backup_root_path_ + "/emergency_" + 
+                std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count());
+            
+            fs::create_directories(emergency_backup_path);
+            
+            // Copy critical files
+            if (fs::exists(log_path_)) {
+                fs::copy_file(log_path_, emergency_backup_path + "/security.log");
+            }
+            
+        } catch (const std::exception& e) {
+            // Emergency backup failure should not crash system
+        }
+    }
+    
+    void reinitializeEncryption() {
+        // Placeholder for encryption reinitialization
+        logSecurityEvent(SecurityEventType::ENCRYPTION_FAILURE, ErrorSeverity::WARNING,
+                        "", "Attempting encryption engine reinitialization");
+    }
+    
+    void repairVaultStructures() {
+        // Placeholder for vault repair
+        logSecurityEvent(SecurityEventType::VAULT_CORRUPTION, ErrorSeverity::WARNING,
+                        "", "Attempting vault structure repair");
+    }
+    
+    void reloadProfilesFromBackup() {
+        // Placeholder for profile reload
+        logSecurityEvent(SecurityEventType::VAULT_CORRUPTION, ErrorSeverity::WARNING,
+                        "", "Attempting profile reload from backup");
+    }
+    
+    void performGenericRecovery(const std::string& component) {
+        logSecurityEvent(SecurityEventType::SYSTEM_COMPROMISE, ErrorSeverity::WARNING,
+                        "", "Attempting generic recovery for component: " + component);
+    }
+    
+    std::string sanitizeForLogging(const std::string& input) {
+        std::string sanitized = input;
+        
+        // Remove potential sensitive information
+        std::regex password_pattern(R"(password[=:]\s*\S+)", std::regex_constants::icase);
+        sanitized = std::regex_replace(sanitized, password_pattern, "password=***");
+        
+        std::regex key_pattern(R"(key[=:]\s*\S+)", std::regex_constants::icase);
+        sanitized = std::regex_replace(sanitized, key_pattern, "key=***");
+        
+        // Limit length
+        if (sanitized.length() > 200) {
+            sanitized = sanitized.substr(0, 197) + "...";
+        }
+        
+        return sanitized;
+    }
+    
+    void createLogIntegrityChecksum() {
+        try {
+            std::string checksum = calculateFileHash(log_path_);
+            if (!checksum.empty()) {
+                std::string checksum_file = log_path_ + ".checksum";
+                std::ofstream file(checksum_file);
+                file << checksum;
+                file.close();
+            }
+        } catch (const std::exception& e) {
+            // Checksum creation failure should not crash system
+        }
+    }
+    
+    void configurationMonitoringLoop() {
+        while (config_monitoring_running_) {
+            try {
+                validateConfigurationIntegrity();
+                std::this_thread::sleep_for(std::chrono::seconds(30));
+            } catch (const std::exception& e) {
+                // Continue monitoring even on errors
+            }
         }
     }
     
