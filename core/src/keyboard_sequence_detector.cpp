@@ -50,6 +50,7 @@ void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 #endif
 
 class KeyboardSequenceDetector::Implementation {
+    friend void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 public:
     Implementation()
         : running_(false)
@@ -552,7 +553,7 @@ public:
             return;
         }
         
-        xEvent* event = (xEvent*)data->data;
+        XEvent* event = (XEvent*)data->data;
         
         if (event->u.u.type == KeyPress || event->u.u.type == KeyRelease) {
             KeyCode keycode = event->u.u.detail;
