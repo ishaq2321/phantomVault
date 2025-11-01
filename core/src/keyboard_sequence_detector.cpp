@@ -44,7 +44,10 @@
 
 namespace phantomvault {
 
-
+#ifdef PLATFORM_LINUX
+// Forward declaration for X11 callback (extern C linkage)
+extern "C" void x11KeyboardCallback(::XPointer closure, ::XRecordInterceptData* data);
+#endif
 
 class KeyboardSequenceDetector::Implementation {
 public:
