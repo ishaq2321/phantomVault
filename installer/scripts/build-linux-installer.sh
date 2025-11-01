@@ -89,14 +89,22 @@ EOF
     cat > "$deb_root/etc/systemd/system/phantomvault.service" << EOF
 [Unit]
 Description=PhantomVault Security Service
-After=network.target
+Documentation=https://github.com/phantomvault/phantomvault
+After=network.target graphical-session.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=root
+Group=root
 ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
-Restart=always
-RestartSec=10
+ExecStop=/bin/kill -TERM \$MAINPID
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/%i/.Xauthority
 
 [Install]
 WantedBy=multi-user.target
@@ -270,10 +278,16 @@ detection.
 
 %install
 rm -rf \$RPM_BUILD_ROOT
-mkdir -p \$RPM_BUILD_ROOT/{opt/phantomvault/{bin,gui,docs},usr/{bin,share/{applications,pixmaps}},etc/systemd/system}
+mkdir -p \$RPM_BUILD_ROOT/opt/phantomvault/bin
+mkdir -p \$RPM_BUILD_ROOT/opt/phantomvault/gui
+mkdir -p \$RPM_BUILD_ROOT/opt/phantomvault/docs
+mkdir -p \$RPM_BUILD_ROOT/usr/bin
+mkdir -p \$RPM_BUILD_ROOT/usr/share/applications
+mkdir -p \$RPM_BUILD_ROOT/usr/share/pixmaps
+mkdir -p \$RPM_BUILD_ROOT/etc/systemd/system
 
 # Install binaries
-cp -r bin/* \$RPM_BUILD_ROOT/opt/phantomvault/bin/
+cp bin/phantomvault \$RPM_BUILD_ROOT/opt/phantomvault/bin/
 chmod +x \$RPM_BUILD_ROOT/opt/phantomvault/bin/phantomvault
 
 # Install GUI if available

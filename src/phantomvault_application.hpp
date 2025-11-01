@@ -59,8 +59,10 @@ private:
     int stopService();
     int restartService();
     int listProfiles();
+    int createProfile(const std::string& name, const std::string& password);
     int lockProfile(const std::string& profileId);
     int unlockProfile(const std::string& profileId);
+    int testKeyboard();
 
     // GUI management
     bool launchElectronGUI();

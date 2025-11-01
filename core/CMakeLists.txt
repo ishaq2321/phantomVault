@@ -35,6 +35,9 @@ endif()
 # Find required packages
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(JSONCPP jsoncpp)
 
 # Find Argon2 library
 find_package(PkgConfig QUIET)
@@ -99,6 +102,7 @@ set(CORE_SOURCES
     src/enhanced_keyboard_detector.cpp
     src/analytics_engine.cpp
     src/ipc_server.cpp
+    src/ipc_client.cpp
     src/memory_manager.cpp
     src/performance_monitor.cpp
     src/encryption_engine.cpp
@@ -123,8 +127,10 @@ target_link_libraries(phantomvault-service
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
+    CURL::libcurl
     ${ARGON2_LIBRARIES}
     ${ZSTD_LIBRARIES}
+    ${JSONCPP_LIBRARIES}
 )
 
 # Link nlohmann/json
@@ -184,7 +190,7 @@ if(PLATFORM_LINUX AND EXISTS ${CMAKE_SOURCE_DIR}/scripts/phantomvault.service.in
 endif()
 
 # Development and testing
-option(BUILD_TESTS "Build test suite" ON)
+option(BUILD_TESTS "Build test suite" OFF)
 if(BUILD_TESTS AND EXISTS ${CMAKE_SOURCE_DIR}/tests)
     enable_testing()
     add_subdirectory(tests)

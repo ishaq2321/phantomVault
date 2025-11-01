@@ -10,6 +10,7 @@
 #include "../core/include/privilege_manager.hpp"
 #include "../core/include/profile_manager.hpp"
 #include "../core/include/folder_security_manager.hpp"
+#include "../core/include/ipc_client.hpp"
 #include <iostream>
 #include <cstring>
 #include <signal.h>
@@ -155,8 +156,10 @@ void PhantomVaultApplication::printUsage(const char* program_name) {
     std::cout << "  stop                 Stop the service\n";
     std::cout << "  restart              Restart the service\n";
     std::cout << "  profiles             List available profiles\n";
+    std::cout << "  create-profile NAME PASSWORD  Create new profile\n";
     std::cout << "  lock [profile]       Lock folders for profile\n";
-    std::cout << "  unlock [profile]     Unlock folders for profile\n\n";
+    std::cout << "  unlock [profile]     Unlock folders for profile\n";
+    std::cout << "  test-keyboard        Test keyboard sequence detection\n\n";
     std::cout << "Examples:\n";
     std::cout << "  sudo " << program_name << "                    # Launch GUI with privileges\n";
     std::cout << "  sudo " << program_name << " --service          # Run as background service\n";
@@ -278,11 +281,17 @@ int PhantomVaultApplication::runCLIMode() {
     else if (command == "profiles") {
         return listProfiles();
     }
+    else if (command == "create-profile" && config_.cli_args.size() > 2) {
+        return createProfile(config_.cli_args[1], config_.cli_args[2]);
+    }
     else if (command == "lock" && config_.cli_args.size() > 1) {
         return lockProfile(config_.cli_args[1]);
     }
     else if (command == "unlock" && config_.cli_args.size() > 1) {
         return unlockProfile(config_.cli_args[1]);
+    }
+    else if (command == "test-keyboard") {
+        return testKeyboard();
     }
     else {
         std::cerr << "Error: Unknown command '" << command << "'. Use --help for usage." << std::endl;
@@ -330,17 +339,24 @@ int PhantomVaultApplication::checkServiceStatus() {
     std::cout << "Checking PhantomVault service status..." << std::endl;
     
     // Try to connect to existing service via IPC
-    // For now, we'll create a temporary service manager to check status
-    auto temp_service = std::make_unique<phantomvault::ServiceManager>();
+    phantomvault::IPCClient client("127.0.0.1", config_.ipc_port);
     
-    if (temp_service->isRunning()) {
-        std::cout << "✅ PhantomVault service is running" << std::endl;
-        std::cout << "   Version: " << temp_service->getVersion() << std::endl;
-        std::cout << "   Platform: " << temp_service->getPlatformInfo() << std::endl;
-        std::cout << "   Memory Usage: " << temp_service->getMemoryUsage() << " bytes" << std::endl;
-        return 0;
+    if (client.connect()) {
+        auto response = client.getStatus();
+        if (response.success) {
+            std::cout << "✅ PhantomVault service is running" << std::endl;
+            std::cout << "   " << response.message << std::endl;
+            for (const auto& [key, value] : response.data) {
+                std::cout << "   " << key << ": " << value << std::endl;
+            }
+            return 0;
+        } else {
+            std::cout << "❌ Service responded with error: " << response.message << std::endl;
+            return 1;
+        }
     } else {
         std::cout << "❌ PhantomVault service is not running" << std::endl;
+        std::cout << "   Error: " << client.getLastError() << std::endl;
         return 1;
     }
 }
@@ -533,4 +549,52 @@ bool PhantomVaultApplication::launchElectronGUI() {
     std::this_thread::sleep_for(std::chrono::seconds(2));
     
     return true;
+}// Missing 
+CLI method implementations
+
+int PhantomVaultApplication::createProfile(const std::string& name, const std::string& password) {
+    std::cout << "Creating profile: " << name << std::endl;
+    
+    phantomvault::IPCClient client("127.0.0.1", config_.ipc_port);
+    
+    if (!client.connect()) {
+        std::cout << "❌ Cannot connect to PhantomVault service" << std::endl;
+        std::cout << "   Error: " << client.getLastError() << std::endl;
+        std::cout << "   Make sure the service is running: sudo systemctl start phantomvault" << std::endl;
+        return 1;
+    }
+    
+    auto response = client.createProfile(name, password);
+    if (response.success) {
+        std::cout << "✅ Profile created successfully" << std::endl;
+        std::cout << "   " << response.message << std::endl;
+        return 0;
+    } else {
+        std::cout << "❌ Failed to create profile: " << response.message << std::endl;
+        return 1;
+    }
+}
+
+int PhantomVaultApplication::testKeyboard() {
+    std::cout << "Testing keyboard sequence detection..." << std::endl;
+    std::cout << "Press Ctrl+Alt+V within the next 10 seconds..." << std::endl;
+    
+    phantomvault::IPCClient client("127.0.0.1", config_.ipc_port);
+    
+    if (!client.connect()) {
+        std::cout << "❌ Cannot connect to PhantomVault service" << std::endl;
+        std::cout << "   Error: " << client.getLastError() << std::endl;
+        std::cout << "   Make sure the service is running: sudo systemctl start phantomvault" << std::endl;
+        return 1;
+    }
+    
+    auto response = client.testKeyboard();
+    if (response.success) {
+        std::cout << "✅ Keyboard detection test completed" << std::endl;
+        std::cout << "   " << response.message << std::endl;
+        return 0;
+    } else {
+        std::cout << "❌ Keyboard test failed: " << response.message << std::endl;
+        return 1;
+    }
 }
