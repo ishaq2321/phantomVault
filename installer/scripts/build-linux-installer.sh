@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # PhantomVault Linux Installer Builder
-# Creates DEB and RPM packages with complete uninstaller functionality
+# Creates DEB and RPM packages with complete uninstaller
 
 set -e
 
@@ -10,58 +10,69 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-print_status() {
-    echo -e "${BLUE}[INSTALLER]${NC} $1"
-}
+print_status() { echo -e "${BLUE}[INSTALLER]${NC} $1"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Get version from package.json
-VERSION=$(grep '"version"' gui/package.json | sed 's/.*"version": "\(.*\)".*/\1/')
+# Configuration
 PACKAGE_NAME="phantomvault"
+VERSION="1.0.0"
 MAINTAINER="PhantomVault Team <team@phantomvault.dev>"
 DESCRIPTION="Invisible Folder Security with Profile-Based Management"
+HOMEPAGE="https://github.com/ishaq2321/phantomVault"
 
-print_status "Building Linux installer packages for PhantomVault v$VERSION"
+# Directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BUILD_DIR="$PROJECT_ROOT/installer/build"
+DEB_DIR="$BUILD_DIR/deb"
+RPM_DIR="$BUILD_DIR/rpm"
 
-# Create build directories
-mkdir -p installer/build/linux/{deb,rpm}
-mkdir -p installer/build/linux/deb/DEBIAN
-mkdir -p installer/build/linux/deb/opt/phantomvault/{bin,gui,docs}
-mkdir -p installer/build/linux/deb/usr/share/{applications,pixmaps}
-mkdir -p installer/build/linux/deb/etc/systemd/system
-mkdir -p installer/build/linux/deb/usr/local/bin
+print_status "Building Linux installer packages..."
+print_status "Project root: $PROJECT_ROOT"
+print_status "Build directory: $BUILD_DIR"
 
-# Copy application files
-print_status "Copying application files..."
+# Clean and create build directories
+rm -rf "$DEB_DIR" "$RPM_DIR"
+mkdir -p "$DEB_DIR" "$RPM_DIR"
 
-# Copy unified executable
-cp bin/phantomvault installer/build/linux/deb/opt/phantomvault/bin/
-chmod +x installer/build/linux/deb/opt/phantomvault/bin/phantomvault
-
-# Copy GUI files
-cp -r gui/dist/* installer/build/linux/deb/opt/phantomvault/gui/
-cp gui/package.json installer/build/linux/deb/opt/phantomvault/gui/
-
-# Copy documentation
-cp README.md installer/build/linux/deb/opt/phantomvault/docs/
-cp LICENSE installer/build/linux/deb/opt/phantomvault/docs/
-cp -r docs/* installer/build/linux/deb/opt/phantomvault/docs/ 2>/dev/null || true
-
-# Create desktop entry
-cat > installer/build/linux/deb/usr/share/applications/phantomvault.desktop << EOF
+# Create DEB package structure
+create_deb_package() {
+    print_status "Creating DEB package..."
+    
+    local deb_root="$DEB_DIR/phantomvault_${VERSION}_amd64"
+    mkdir -p "$deb_root"/{DEBIAN,opt/phantomvault/{bin,gui,docs},usr/{bin,share/{applications,pixmaps}},etc/systemd/system}
+    
+    # Copy binaries
+    if [ -f "$PROJECT_ROOT/bin/phantomvault" ]; then
+        cp "$PROJECT_ROOT/bin/phantomvault" "$deb_root/opt/phantomvault/bin/"
+        chmod +x "$deb_root/opt/phantomvault/bin/phantomvault"
+    elif [ -f "$PROJECT_ROOT/core/build/bin/phantomvault-service" ]; then
+        cp "$PROJECT_ROOT/core/build/bin/phantomvault-service" "$deb_root/opt/phantomvault/bin/phantomvault"
+        chmod +x "$deb_root/opt/phantomvault/bin/phantomvault"
+    else
+        print_error "No service executable found!"
+        return 1
+    fi
+    
+    # Copy GUI files if they exist
+    if [ -d "$PROJECT_ROOT/gui/dist" ]; then
+        cp -r "$PROJECT_ROOT/gui/dist"/* "$deb_root/opt/phantomvault/gui/"
+    fi
+    
+    # Copy documentation
+    if [ -f "$PROJECT_ROOT/README.md" ]; then
+        cp "$PROJECT_ROOT/README.md" "$deb_root/opt/phantomvault/docs/"
+    fi
+    
+    # Create symlink in /usr/bin
+    ln -sf "/opt/phantomvault/bin/phantomvault" "$deb_root/usr/bin/phantomvault"
+    
+    # Create desktop entry
+    cat > "$deb_root/usr/share/applications/phantomvault.desktop" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -70,321 +81,475 @@ Comment=Invisible Folder Security with Profile-Based Management
 Exec=/opt/phantomvault/bin/phantomvault --gui
 Icon=phantomvault
 Terminal=false
-StartupNotify=true
-Categories=Security;Utility;FileManager;
-MimeType=application/x-phantomvault-profile;
-Keywords=security;encryption;privacy;folders;vault;
+Categories=Security;Utility;
 StartupWMClass=PhantomVault
 EOF
-
-# Create icon (placeholder - in production would use actual icon)
-cp gui/assets/icon.png installer/build/linux/deb/usr/share/pixmaps/phantomvault.png 2>/dev/null || \
-echo "# PhantomVault Icon Placeholder" > installer/build/linux/deb/usr/share/pixmaps/phantomvault.png
-
-# Create systemd service file
-cat > installer/build/linux/deb/etc/systemd/system/phantomvault.service << EOF
+    
+    # Create systemd service
+    cat > "$deb_root/etc/systemd/system/phantomvault.service" << EOF
 [Unit]
 Description=PhantomVault Security Service
 After=network.target
-Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=/opt/phantomvault/bin/phantomvault --service
-Restart=always
-RestartSec=5
 User=root
-Group=root
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=phantomvault
-
-# Security settings
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/phantomvault /var/lib/phantomvault
-PrivateTmp=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-# Create command-line wrapper
-cat > installer/build/linux/deb/usr/local/bin/phantomvault << 'EOF'
-#!/bin/bash
-# PhantomVault Command Line Wrapper
-exec /opt/phantomvault/bin/phantomvault "$@"
+    
+    # Create control file
+    cat > "$deb_root/DEBIAN/control" << EOF
+Package: $PACKAGE_NAME
+Version: $VERSION
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libc6, libssl3, libstdc++6
+Maintainer: $MAINTAINER
+Description: $DESCRIPTION
+ PhantomVault provides invisible folder security with AES-256 encryption,
+ profile-based management, and cross-platform compatibility. Secure your
+ sensitive files with advanced encryption and invisible keyboard sequence
+ detection.
+Homepage: $HOMEPAGE
 EOF
-chmod +x installer/build/linux/deb/usr/local/bin/phantomvault
+    
+    # Create postinst script
+    cat > "$deb_root/DEBIAN/postinst" << 'EOF'
+#!/bin/bash
+set -e
 
-# Create uninstaller script
-cat > installer/build/linux/deb/opt/phantomvault/bin/uninstall.sh << 'EOF'
+# Enable and start systemd service
+systemctl daemon-reload
+systemctl enable phantomvault.service
+
+# Create phantomvault group and add current user
+groupadd -f phantomvault
+if [ -n "$SUDO_USER" ]; then
+    usermod -a -G phantomvault "$SUDO_USER"
+fi
+
+# Set proper permissions
+chown -R root:phantomvault /opt/phantomvault
+chmod -R 755 /opt/phantomvault
+chmod 4755 /opt/phantomvault/bin/phantomvault
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications
+fi
+
+echo "PhantomVault installed successfully!"
+echo "Start with: sudo systemctl start phantomvault"
+echo "Or run GUI: phantomvault --gui"
+EOF
+    
+    # Create prerm script (uninstaller preparation)
+    cat > "$deb_root/DEBIAN/prerm" << 'EOF'
+#!/bin/bash
+set -e
+
+# Stop and disable service
+systemctl stop phantomvault.service || true
+systemctl disable phantomvault.service || true
+EOF
+    
+    # Create postrm script (complete uninstaller)
+    cat > "$deb_root/DEBIAN/postrm" << 'EOF'
+#!/bin/bash
+set -e
+
+if [ "$1" = "purge" ]; then
+    # Remove systemd service file
+    rm -f /etc/systemd/system/phantomvault.service
+    systemctl daemon-reload
+    
+    # Remove application directory (preserve user data)
+    rm -rf /opt/phantomvault
+    
+    # Remove desktop entry
+    rm -f /usr/share/applications/phantomvault.desktop
+    
+    # Update desktop database
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database /usr/share/applications
+    fi
+    
+    # Remove group (but keep user data)
+    groupdel phantomvault 2>/dev/null || true
+    
+    echo "PhantomVault completely removed."
+    echo "User data preserved in ~/.phantomvault/"
+fi
+EOF
+    
+    # Make scripts executable
+    chmod 755 "$deb_root/DEBIAN"/{postinst,prerm,postrm}
+    
+    # Build DEB package
+    dpkg-deb --build "$deb_root"
+    
+    if [ $? -eq 0 ]; then
+        print_success "DEB package created: $deb_root.deb"
+    else
+        print_error "Failed to create DEB package"
+        return 1
+    fi
+}
+
+# Create RPM package structure
+create_rpm_package() {
+    print_status "Creating RPM package..."
+    
+    # Check if rpmbuild is available
+    if ! command -v rpmbuild &> /dev/null; then
+        print_warning "rpmbuild not found, skipping RPM package creation"
+        print_status "Install with: sudo apt-get install rpm"
+        return 0
+    fi
+    
+    local rpm_root="$RPM_DIR/rpmbuild"
+    mkdir -p "$rpm_root"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+    
+    # Create source tarball
+    local source_dir="$rpm_root/SOURCES/phantomvault-$VERSION"
+    mkdir -p "$source_dir"
+    
+    # Copy files to source directory
+    if [ -f "$PROJECT_ROOT/bin/phantomvault" ]; then
+        mkdir -p "$source_dir/bin"
+        cp "$PROJECT_ROOT/bin/phantomvault" "$source_dir/bin/"
+    elif [ -f "$PROJECT_ROOT/core/build/bin/phantomvault-service" ]; then
+        mkdir -p "$source_dir/bin"
+        cp "$PROJECT_ROOT/core/build/bin/phantomvault-service" "$source_dir/bin/phantomvault"
+    fi
+    
+    if [ -d "$PROJECT_ROOT/gui/dist" ]; then
+        cp -r "$PROJECT_ROOT/gui/dist" "$source_dir/gui"
+    fi
+    
+    if [ -f "$PROJECT_ROOT/README.md" ]; then
+        mkdir -p "$source_dir/docs"
+        cp "$PROJECT_ROOT/README.md" "$source_dir/docs/"
+    fi
+    
+    # Create tarball
+    cd "$rpm_root/SOURCES"
+    tar -czf "phantomvault-$VERSION.tar.gz" "phantomvault-$VERSION"
+    cd - > /dev/null
+    
+    # Create RPM spec file
+    cat > "$rpm_root/SPECS/phantomvault.spec" << EOF
+Name:           phantomvault
+Version:        $VERSION
+Release:        1%{?dist}
+Summary:        $DESCRIPTION
+License:        MIT
+URL:            $HOMEPAGE
+Source0:        %{name}-%{version}.tar.gz
+BuildArch:      x86_64
+
+Requires:       glibc, openssl-libs, libstdc++
+
+%description
+PhantomVault provides invisible folder security with AES-256 encryption,
+profile-based management, and cross-platform compatibility. Secure your
+sensitive files with advanced encryption and invisible keyboard sequence
+detection.
+
+%prep
+%setup -q
+
+%build
+# Nothing to build, binaries are pre-compiled
+
+%install
+rm -rf \$RPM_BUILD_ROOT
+mkdir -p \$RPM_BUILD_ROOT/{opt/phantomvault/{bin,gui,docs},usr/{bin,share/{applications,pixmaps}},etc/systemd/system}
+
+# Install binaries
+cp -r bin/* \$RPM_BUILD_ROOT/opt/phantomvault/bin/
+chmod +x \$RPM_BUILD_ROOT/opt/phantomvault/bin/phantomvault
+
+# Install GUI if available
+if [ -d gui ]; then
+    cp -r gui/* \$RPM_BUILD_ROOT/opt/phantomvault/gui/
+fi
+
+# Install documentation
+if [ -d docs ]; then
+    cp -r docs/* \$RPM_BUILD_ROOT/opt/phantomvault/docs/
+fi
+
+# Create symlink
+ln -sf /opt/phantomvault/bin/phantomvault \$RPM_BUILD_ROOT/usr/bin/phantomvault
+
+# Install desktop entry
+cat > \$RPM_BUILD_ROOT/usr/share/applications/phantomvault.desktop << 'DESKTOP_EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=PhantomVault
+Comment=Invisible Folder Security with Profile-Based Management
+Exec=/opt/phantomvault/bin/phantomvault --gui
+Icon=phantomvault
+Terminal=false
+Categories=Security;Utility;
+StartupWMClass=PhantomVault
+DESKTOP_EOF
+
+# Install systemd service
+cat > \$RPM_BUILD_ROOT/etc/systemd/system/phantomvault.service << 'SERVICE_EOF'
+[Unit]
+Description=PhantomVault Security Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+%files
+/opt/phantomvault/
+/usr/bin/phantomvault
+/usr/share/applications/phantomvault.desktop
+/etc/systemd/system/phantomvault.service
+
+%post
+systemctl daemon-reload
+systemctl enable phantomvault.service
+groupadd -f phantomvault
+chown -R root:phantomvault /opt/phantomvault
+chmod -R 755 /opt/phantomvault
+chmod 4755 /opt/phantomvault/bin/phantomvault
+echo "PhantomVault installed successfully!"
+
+%preun
+systemctl stop phantomvault.service || true
+systemctl disable phantomvault.service || true
+
+%postun
+if [ \$1 -eq 0 ]; then
+    rm -rf /opt/phantomvault
+    systemctl daemon-reload
+    groupdel phantomvault 2>/dev/null || true
+    echo "PhantomVault completely removed."
+fi
+
+%changelog
+* $(date '+%a %b %d %Y') PhantomVault Team <team@phantomvault.dev> - $VERSION-1
+- Initial RPM package release
+- Complete installer with uninstaller
+- Systemd service integration
+EOF
+    
+    # Build RPM package
+    rpmbuild --define "_topdir $rpm_root" -ba "$rpm_root/SPECS/phantomvault.spec"
+    
+    if [ $? -eq 0 ]; then
+        print_success "RPM package created in: $rpm_root/RPMS/"
+        find "$rpm_root/RPMS" -name "*.rpm" -exec ls -la {} \;
+    else
+        print_error "Failed to create RPM package"
+        return 1
+    fi
+}
+
+# Create standalone installer script
+create_standalone_installer() {
+    print_status "Creating standalone installer script..."
+    
+    cat > "$BUILD_DIR/phantomvault-linux-installer.sh" << 'EOF'
 #!/bin/bash
 
-# PhantomVault Uninstaller
-# Safely removes PhantomVault while preserving user data
+# PhantomVault Linux Standalone Installer
+# Self-extracting installer with complete uninstaller
 
 set -e
 
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() {
-    echo -e "${BLUE}[UNINSTALL]${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+print_status() { echo -e "${BLUE}[INSTALLER]${NC} $1"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
-    print_error "Please run uninstaller as root (sudo)"
+    print_error "This installer must be run as root (use sudo)"
+    exit 1
+fi
+
+print_status "PhantomVault Linux Installer v1.0.0"
+print_status "Installing invisible folder security system..."
+
+# Create installation directory
+INSTALL_DIR="/opt/phantomvault"
+mkdir -p "$INSTALL_DIR"/{bin,gui,docs}
+
+# Extract and install files (this would contain the actual binaries)
+print_status "Installing PhantomVault service..."
+
+# Copy service executable (placeholder - would be embedded in real installer)
+if [ -f "./phantomvault" ]; then
+    cp "./phantomvault" "$INSTALL_DIR/bin/"
+    chmod +x "$INSTALL_DIR/bin/phantomvault"
+else
+    print_error "Service executable not found in installer"
+    exit 1
+fi
+
+# Create symlink
+ln -sf "$INSTALL_DIR/bin/phantomvault" "/usr/bin/phantomvault"
+
+# Create systemd service
+cat > "/etc/systemd/system/phantomvault.service" << 'SERVICE_EOF'
+[Unit]
+Description=PhantomVault Security Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+# Create desktop entry
+mkdir -p "/usr/share/applications"
+cat > "/usr/share/applications/phantomvault.desktop" << 'DESKTOP_EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=PhantomVault
+Comment=Invisible Folder Security with Profile-Based Management
+Exec=/opt/phantomvault/bin/phantomvault --gui
+Icon=phantomvault
+Terminal=false
+Categories=Security;Utility;
+StartupWMClass=PhantomVault
+DESKTOP_EOF
+
+# Set up permissions
+groupadd -f phantomvault
+chown -R root:phantomvault "$INSTALL_DIR"
+chmod -R 755 "$INSTALL_DIR"
+chmod 4755 "$INSTALL_DIR/bin/phantomvault"
+
+# Enable systemd service
+systemctl daemon-reload
+systemctl enable phantomvault.service
+
+# Create uninstaller
+cat > "$INSTALL_DIR/uninstall.sh" << 'UNINSTALL_EOF'
+#!/bin/bash
+
+# PhantomVault Uninstaller
+# Completely removes PhantomVault while preserving user data
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+print_status() { echo -e "${YELLOW}[UNINSTALL]${NC} $1"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+if [ "$EUID" -ne 0 ]; then
+    print_error "Uninstaller must be run as root (use sudo)"
     exit 1
 fi
 
 print_status "PhantomVault Uninstaller"
-echo "This will remove PhantomVault from your system."
-echo "User data and profiles will be preserved in ~/.phantomvault/"
-echo ""
-
-# Confirm uninstallation
-read -p "Are you sure you want to uninstall PhantomVault? (y/N): " -n 1 -r
+echo "This will completely remove PhantomVault from your system."
+echo "User data in ~/.phantomvault/ will be preserved."
+read -p "Continue? (y/N): " -n 1 -r
 echo
+
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    print_status "Uninstallation cancelled"
+    echo "Uninstall cancelled."
     exit 0
 fi
 
 print_status "Stopping PhantomVault service..."
-systemctl stop phantomvault 2>/dev/null || true
-systemctl disable phantomvault 2>/dev/null || true
+systemctl stop phantomvault.service || true
+systemctl disable phantomvault.service || true
 
-print_status "Removing application files..."
-rm -rf /opt/phantomvault
-rm -f /usr/local/bin/phantomvault
-rm -f /usr/share/applications/phantomvault.desktop
-rm -f /usr/share/pixmaps/phantomvault.png
+print_status "Removing system files..."
 rm -f /etc/systemd/system/phantomvault.service
+rm -f /usr/bin/phantomvault
+rm -f /usr/share/applications/phantomvault.desktop
+rm -rf /opt/phantomvault
 
-print_status "Reloading systemd..."
+print_status "Cleaning up system..."
 systemctl daemon-reload
-
-print_status "Removing package manager entries..."
-# Remove from dpkg if installed via DEB
-if dpkg -l | grep -q phantomvault; then
-    dpkg --remove phantomvault 2>/dev/null || true
-fi
-
-# Remove from rpm if installed via RPM
-if rpm -qa | grep -q phantomvault; then
-    rpm -e phantomvault 2>/dev/null || true
-fi
-
-print_success "PhantomVault has been successfully uninstalled"
-print_warning "User data preserved in ~/.phantomvault/ directories"
-print_status "To completely remove all data, manually delete ~/.phantomvault/ directories"
-
-EOF
-chmod +x installer/build/linux/deb/opt/phantomvault/bin/uninstall.sh
-
-# Create DEB control file
-cat > installer/build/linux/deb/DEBIAN/control << EOF
-Package: $PACKAGE_NAME
-Version: $VERSION
-Section: utils
-Priority: optional
-Architecture: amd64
-Depends: libc6, libssl3, libstdc++6, systemd
-Maintainer: $MAINTAINER
-Description: $DESCRIPTION
- PhantomVault provides invisible folder security with AES-256 encryption,
- profile-based management, and cross-platform compatibility. Features include:
- .
-  * Military-grade AES-256 encryption
-  * Profile-based folder management
-  * Invisible keyboard sequence detection (Ctrl+Alt+V)
-  * System tray integration
-  * Cross-platform support (Linux, macOS, Windows)
-  * Complete folder obfuscation and trace removal
-Homepage: https://github.com/ishaq2321/phantomVault
-EOF
-
-# Create post-installation script
-cat > installer/build/linux/deb/DEBIAN/postinst << 'EOF'
-#!/bin/bash
-set -e
-
-# Create data directory
-mkdir -p /var/lib/phantomvault
-chmod 700 /var/lib/phantomvault
-
-# Enable and start service
-systemctl daemon-reload
-systemctl enable phantomvault
-systemctl start phantomvault
+groupdel phantomvault 2>/dev/null || true
 
 # Update desktop database
-update-desktop-database /usr/share/applications/ 2>/dev/null || true
-
-# Register protocol handler
-if command -v xdg-mime >/dev/null 2>&1; then
-    xdg-mime default phantomvault.desktop x-scheme-handler/phantomvault 2>/dev/null || true
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications
 fi
 
-echo "PhantomVault has been installed successfully!"
-echo "You can start it from the applications menu or run 'phantomvault --gui'"
-echo "Service is running in the background for global hotkey detection (Ctrl+Alt+V)"
+print_success "PhantomVault has been completely removed."
+print_status "User data preserved in ~/.phantomvault/"
+UNINSTALL_EOF
+
+chmod +x "$INSTALL_DIR/uninstall.sh"
+
+print_success "PhantomVault installed successfully!"
+print_status "Service: sudo systemctl start phantomvault"
+print_status "GUI: phantomvault --gui"
+print_status "Uninstall: sudo $INSTALL_DIR/uninstall.sh"
 
 EOF
-chmod +x installer/build/linux/deb/DEBIAN/postinst
-
-# Create pre-removal script
-cat > installer/build/linux/deb/DEBIAN/prerm << 'EOF'
-#!/bin/bash
-set -e
-
-# Stop service before removal
-systemctl stop phantomvault 2>/dev/null || true
-systemctl disable phantomvault 2>/dev/null || true
-
-EOF
-chmod +x installer/build/linux/deb/DEBIAN/prerm
-
-# Create post-removal script
-cat > installer/build/linux/deb/DEBIAN/postrm << 'EOF'
-#!/bin/bash
-set -e
-
-# Clean up systemd
-systemctl daemon-reload
-
-# Update desktop database
-update-desktop-database /usr/share/applications/ 2>/dev/null || true
-
-# Note: User data is preserved in ~/.phantomvault/
-
-EOF
-chmod +x installer/build/linux/deb/DEBIAN/postrm
-
-# Build DEB package
-print_status "Building DEB package..."
-cd installer/build/linux
-dpkg-deb --build deb "${PACKAGE_NAME}_${VERSION}_amd64.deb"
-
-if [ $? -eq 0 ]; then
-    print_success "DEB package created: installer/build/linux/${PACKAGE_NAME}_${VERSION}_amd64.deb"
-else
-    print_error "Failed to create DEB package"
-    exit 1
-fi
-
-# Create RPM package (if rpmbuild is available)
-if command -v rpmbuild >/dev/null 2>&1; then
-    print_status "Building RPM package..."
     
-    # Create RPM spec file
-    mkdir -p rpm/SPECS rpm/SOURCES rpm/BUILD rpm/RPMS rpm/SRPMS
+    chmod +x "$BUILD_DIR/phantomvault-linux-installer.sh"
+    print_success "Standalone installer created: $BUILD_DIR/phantomvault-linux-installer.sh"
+}
+
+# Main execution
+main() {
+    print_status "Starting Linux installer build process..."
     
-    cat > rpm/SPECS/phantomvault.spec << EOF
-Name:           $PACKAGE_NAME
-Version:        $VERSION
-Release:        1%{?dist}
-Summary:        $DESCRIPTION
-License:        MIT
-URL:            https://github.com/ishaq2321/phantomVault
-Source0:        %{name}-%{version}.tar.gz
-BuildArch:      x86_64
-
-Requires:       glibc, openssl-libs, libstdc++, systemd
-
-%description
-PhantomVault provides invisible folder security with AES-256 encryption,
-profile-based management, and cross-platform compatibility.
-
-%prep
-%setup -q
-
-%build
-# Nothing to build - pre-compiled binaries
-
-%install
-rm -rf %{buildroot}
-mkdir -p %{buildroot}/opt/phantomvault/{bin,gui,docs}
-mkdir -p %{buildroot}/usr/share/{applications,pixmaps}
-mkdir -p %{buildroot}/etc/systemd/system
-mkdir -p %{buildroot}/usr/local/bin
-
-# Copy files from DEB structure
-cp -r ../deb/opt/phantomvault/* %{buildroot}/opt/phantomvault/
-cp ../deb/usr/share/applications/phantomvault.desktop %{buildroot}/usr/share/applications/
-cp ../deb/usr/share/pixmaps/phantomvault.png %{buildroot}/usr/share/pixmaps/
-cp ../deb/etc/systemd/system/phantomvault.service %{buildroot}/etc/systemd/system/
-cp ../deb/usr/local/bin/phantomvault %{buildroot}/usr/local/bin/
-
-%files
-/opt/phantomvault/
-/usr/share/applications/phantomvault.desktop
-/usr/share/pixmaps/phantomvault.png
-/etc/systemd/system/phantomvault.service
-/usr/local/bin/phantomvault
-
-%post
-mkdir -p /var/lib/phantomvault
-chmod 700 /var/lib/phantomvault
-systemctl daemon-reload
-systemctl enable phantomvault
-systemctl start phantomvault
-update-desktop-database /usr/share/applications/ 2>/dev/null || true
-
-%preun
-systemctl stop phantomvault 2>/dev/null || true
-systemctl disable phantomvault 2>/dev/null || true
-
-%postun
-systemctl daemon-reload
-update-desktop-database /usr/share/applications/ 2>/dev/null || true
-
-%changelog
-* $(date '+%a %b %d %Y') PhantomVault Team <team@phantomvault.dev> - $VERSION-1
-- Initial RPM package release
-
-EOF
-
-    # Create source tarball (simplified)
-    tar -czf rpm/SOURCES/${PACKAGE_NAME}-${VERSION}.tar.gz -C ../deb opt usr etc
-    
-    # Build RPM
-    rpmbuild --define "_topdir $(pwd)/rpm" -ba rpm/SPECS/phantomvault.spec
-    
-    if [ $? -eq 0 ]; then
-        cp rpm/RPMS/x86_64/${PACKAGE_NAME}-${VERSION}-1.*.rpm .
-        print_success "RPM package created: installer/build/linux/${PACKAGE_NAME}-${VERSION}-1.*.rpm"
+    # Check dependencies
+    if ! command -v dpkg-deb &> /dev/null; then
+        print_warning "dpkg-deb not found, skipping DEB package creation"
     else
-        print_warning "RPM build failed, but DEB package is available"
+        create_deb_package
     fi
-else
-    print_warning "rpmbuild not found, skipping RPM package creation"
-fi
+    
+    create_rpm_package
+    create_standalone_installer
+    
+    print_success "Linux installer packages created successfully!"
+    print_status "Available packages:"
+    find "$BUILD_DIR" -name "*.deb" -o -name "*.rpm" -o -name "*installer*.sh" | while read file; do
+        print_status "  - $(basename "$file")"
+    done
+}
 
-cd ../../..
-
-print_success "Linux installer packages created successfully!"
-print_status "DEB package: installer/build/linux/${PACKAGE_NAME}_${VERSION}_amd64.deb"
-print_status "Install with: sudo dpkg -i installer/build/linux/${PACKAGE_NAME}_${VERSION}_amd64.deb"
-print_status "Uninstall with: sudo /opt/phantomvault/bin/uninstall.sh"
+# Run main function
+main "$@"

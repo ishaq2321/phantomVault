@@ -111,9 +111,19 @@ function startService(): Promise<boolean> {
       let servicePath: string;
       
       if (isDev) {
-        // In development, use the unified phantomvault executable
+        // In development, use the unified phantomvault executable from build directory
         const projectRoot = join(__dirname, '../..');
-        servicePath = join(projectRoot, 'bin/phantomvault');
+        const buildPath = join(projectRoot, 'build/bin/phantomvault');
+        const altBuildPath = join(projectRoot, 'bin/phantomvault');
+        
+        // Check multiple possible build locations
+        if (existsSync(buildPath)) {
+          servicePath = buildPath;
+        } else if (existsSync(altBuildPath)) {
+          servicePath = altBuildPath;
+        } else {
+          servicePath = join(projectRoot, 'phantomvault');
+        }
         console.log('[Main] Development unified service path:', servicePath);
       } else if (isPackaged) {
         // In packaged app, use resources path
@@ -132,15 +142,29 @@ function startService(): Promise<boolean> {
       // Check if unified service executable exists
       if (!existsSync(servicePath)) {
         console.error('[Main] Unified service executable not found:', servicePath);
-        // Fallback to old service path for backward compatibility
-        const fallbackPath = isDev 
-          ? join(__dirname, '../..', 'core/build/bin/phantomvault-service')
-          : '/opt/phantomvault/bin/phantomvault-service';
         
-        if (existsSync(fallbackPath)) {
-          console.log('[Main] Using fallback service path:', fallbackPath);
-          servicePath = fallbackPath;
+        // Try multiple fallback paths for development
+        const fallbackPaths = [
+          join(__dirname, '../..', 'core/build/bin/phantomvault-service'),
+          join(__dirname, '../..', 'build/phantomvault'),
+          '/opt/phantomvault/bin/phantomvault-service',
+          '/usr/local/bin/phantomvault',
+          './phantomvault'
+        ];
+        
+        let foundPath = null;
+        for (const fallbackPath of fallbackPaths) {
+          if (existsSync(fallbackPath)) {
+            foundPath = fallbackPath;
+            break;
+          }
+        }
+        
+        if (foundPath) {
+          console.log('[Main] Using fallback service path:', foundPath);
+          servicePath = foundPath;
         } else {
+          console.error('[Main] No valid service executable found in any location');
           resolve(false);
           return;
         }
@@ -262,14 +286,8 @@ function createSystemIntegration(): void {
       app.setAsDefaultProtocolClient('phantomvault');
     }
     
-    // Create desktop shortcut on first run (Windows/Linux)
-    if (!isPackaged && (process.platform === 'win32' || process.platform === 'linux')) {
-      const shortcutCreated = app.getLoginItemSettings().wasOpenedAsHidden;
-      if (!shortcutCreated) {
-        // This would create a desktop shortcut in a real implementation
-        console.log('[Main] Desktop shortcut creation would happen here');
-      }
-    }
+    // Create desktop shortcut on first run
+    createDesktopShortcut();
     
     // Register file associations for .phantomvault files
     if (process.platform === 'win32') {
@@ -277,10 +295,99 @@ function createSystemIntegration(): void {
       console.log('[Main] File associations handled by installer on Windows');
     }
     
+    // Set up auto-start (optional)
+    setupAutoStart();
+    
     console.log('[Main] System integration completed');
     
   } catch (error) {
     console.warn('[Main] System integration failed:', error);
+  }
+}
+
+/**
+ * Create desktop shortcut
+ */
+function createDesktopShortcut(): void {
+  try {
+    const { execPath } = process;
+    const appName = 'PhantomVault';
+    
+    if (process.platform === 'win32') {
+      // Windows desktop shortcut creation
+      const desktopPath = join(require('os').homedir(), 'Desktop');
+      const shortcutPath = join(desktopPath, `${appName}.lnk`);
+      
+      if (!existsSync(shortcutPath)) {
+        // In a real implementation, we'd use a Windows API or shell command
+        console.log('[Main] Would create Windows desktop shortcut at:', shortcutPath);
+      }
+    } else if (process.platform === 'linux') {
+      // Linux desktop entry creation
+      const desktopPath = join(require('os').homedir(), 'Desktop');
+      const applicationsPath = join(require('os').homedir(), '.local/share/applications');
+      const desktopFile = `${appName.toLowerCase()}.desktop`;
+      
+      const desktopEntry = `[Desktop Entry]
+Version=1.0
+Type=Application
+Name=${appName}
+Comment=Invisible Folder Security with Profile-Based Management
+Exec=${execPath}
+Icon=${join(__dirname, '../assets/icon.png')}
+Terminal=false
+Categories=Security;Utility;
+StartupWMClass=${appName}
+`;
+      
+      // Create in applications directory
+      if (existsSync(applicationsPath)) {
+        const appDesktopPath = join(applicationsPath, desktopFile);
+        if (!existsSync(appDesktopPath)) {
+          require('fs').writeFileSync(appDesktopPath, desktopEntry);
+          console.log('[Main] Created Linux application entry:', appDesktopPath);
+        }
+      }
+      
+      // Create on desktop
+      if (existsSync(desktopPath)) {
+        const desktopShortcutPath = join(desktopPath, desktopFile);
+        if (!existsSync(desktopShortcutPath)) {
+          require('fs').writeFileSync(desktopShortcutPath, desktopEntry);
+          // Make executable
+          require('fs').chmodSync(desktopShortcutPath, 0o755);
+          console.log('[Main] Created Linux desktop shortcut:', desktopShortcutPath);
+        }
+      }
+    } else if (process.platform === 'darwin') {
+      // macOS - shortcuts are typically handled by the installer
+      console.log('[Main] macOS shortcuts handled by installer');
+    }
+  } catch (error) {
+    console.warn('[Main] Desktop shortcut creation failed:', error);
+  }
+}
+
+/**
+ * Setup auto-start functionality
+ */
+function setupAutoStart(): void {
+  try {
+    // Only enable auto-start if user has admin privileges and it's not already set
+    const loginSettings = app.getLoginItemSettings();
+    
+    if (!loginSettings.openAtLogin && checkAdminPrivileges()) {
+      // Enable auto-start for admin users
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        openAsHidden: true,
+        name: 'PhantomVault',
+        args: ['--hidden', '--service']
+      });
+      console.log('[Main] Auto-start enabled for admin user');
+    }
+  } catch (error) {
+    console.warn('[Main] Auto-start setup failed:', error);
   }
 }
 
@@ -531,6 +638,20 @@ function updateTrayMenu(): void {
       type: 'separator',
     },
     {
+      label: 'Quick Unlock (Ctrl+Alt+V)',
+      type: 'normal',
+      enabled: serviceRunning,
+      click: () => {
+        // Simulate Ctrl+Alt+V hotkey
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('protocol:unlock', '');
+        }
+      },
+    },
+    {
+      type: 'separator',
+    },
+    {
       label: 'Show Dashboard',
       type: 'normal',
       click: () => {
@@ -556,6 +677,37 @@ function updateTrayMenu(): void {
       type: 'separator',
     },
     {
+      label: 'Settings',
+      type: 'normal',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+          // Navigate to settings page
+          mainWindow.webContents.send('navigate', '/settings');
+        } else {
+          createMainWindow();
+        }
+      },
+    },
+    {
+      label: 'Analytics',
+      type: 'normal',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+          // Navigate to analytics page
+          mainWindow.webContents.send('navigate', '/analytics');
+        } else {
+          createMainWindow();
+        }
+      },
+    },
+    {
+      type: 'separator',
+    },
+    {
       label: 'About PhantomVault',
       type: 'normal',
       click: () => {
@@ -563,7 +715,7 @@ function updateTrayMenu(): void {
           type: 'info',
           title: 'About PhantomVault',
           message: 'PhantomVault v1.0.0',
-          detail: 'Invisible Folder Security with Profile-Based Management\n\nBuilt with Electron and C++\nCopyright © 2025 PhantomVault Team',
+          detail: 'Invisible Folder Security with Profile-Based Management\n\nBuilt with Electron and C++\nCopyright © 2025 PhantomVault Team\n\nGlobal Hotkey: Ctrl+Alt+V',
         });
       },
     },

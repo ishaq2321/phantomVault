@@ -77,6 +77,25 @@ const App: React.FC = () => {
     }
   }, [isConnected, appState.isLoading]);
 
+  // Listen for navigation events from main process
+  useEffect(() => {
+    const handleNavigate = (path: string) => {
+      // This would be handled by React Router in a real implementation
+      console.log('[App] Navigation requested:', path);
+    };
+
+    // Listen for navigation events
+    if (window.phantomVault?.on) {
+      // Note: This would need to be implemented in the preload script
+      // window.phantomVault.on.navigate(handleNavigate);
+    }
+
+    return () => {
+      // Cleanup navigation listener
+      // window.phantomVault.off.navigate(handleNavigate);
+    };
+  }, []);
+
   // Show loading screen
   if (appState.isLoading) {
     return <LoadingScreen />;

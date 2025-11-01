@@ -109,27 +109,54 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
     
     // Listen for service status changes
     const handleServiceStatusChange = (status: any) => {
-      console.log('Service status changed:', status);
+      console.log('[Dashboard] Service status changed:', status);
       // Refresh data when service status changes
       if (status.running && selectedProfile && isProfileAuthenticated) {
         loadFolders(selectedProfile.id);
+      } else if (!status.running) {
+        // Service stopped, clear sensitive data
+        setSelectedProfile(null);
+        setIsProfileAuthenticated(false);
+        setAuthenticatedMasterKey('');
+        setFolders([]);
+        setVaultStats(null);
+        setError('Service connection lost. Please restart the application.');
       }
     };
     
-    // Listen for protocol unlock events
+    // Listen for protocol unlock events (Ctrl+Alt+V hotkey)
     const handleProtocolUnlock = (params: string) => {
-      console.log('Protocol unlock requested:', params);
-      setSuccess('Unlock request received via system protocol');
+      console.log('[Dashboard] Protocol unlock requested:', params);
+      setSuccess('Unlock request received via Ctrl+Alt+V hotkey');
+      
+      // If we have an authenticated profile, trigger unlock
+      if (selectedProfile && isProfileAuthenticated && authenticatedMasterKey) {
+        handleUnlockFolders(false); // Temporary unlock by default
+      } else {
+        setError('Please authenticate a profile first to use hotkey unlock');
+      }
+    };
+    
+    // Listen for security events
+    const handleSecurityEvent = (event: any) => {
+      console.log('[Dashboard] Security event:', event);
+      if (event.type === 'AUTHENTICATION_FAILURE') {
+        setError(`Security Alert: ${event.description}`);
+      } else if (event.type === 'VAULT_CORRUPTION') {
+        setError(`Critical: Vault corruption detected - ${event.description}`);
+      }
     };
     
     window.phantomVault.on.serviceStatusChanged(handleServiceStatusChange);
     window.phantomVault.on.protocolUnlock(handleProtocolUnlock);
+    window.phantomVault.on.securityEvent(handleSecurityEvent);
     
     return () => {
       window.phantomVault.off.serviceStatusChanged(handleServiceStatusChange);
       window.phantomVault.off.protocolUnlock(handleProtocolUnlock);
+      window.phantomVault.off.securityEvent(handleSecurityEvent);
     };
-  }, []);
+  }, [selectedProfile, isProfileAuthenticated, authenticatedMasterKey]);
 
   // Load folders when profile is selected
   useEffect(() => {
@@ -206,6 +233,31 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
       }
     } catch (err) {
       setError('Failed to minimize to tray: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
+  const handleRestartService = async () => {
+    try {
+      setLoading(true);
+      setSuccess('Restarting PhantomVault service...');
+      
+      const success = await window.phantomVault.service.restart();
+      if (success) {
+        setSuccess('Service restarted successfully');
+        // Reload data after service restart
+        setTimeout(() => {
+          loadProfiles();
+          if (selectedProfile && isProfileAuthenticated) {
+            loadFolders(selectedProfile.id);
+          }
+        }, 2000);
+      } else {
+        setError('Failed to restart service');
+      }
+    } catch (err) {
+      setError('Failed to restart service: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -384,6 +436,17 @@ const Dashboard: React.FC<DashboardProps> = ({ isAdmin, serviceStatus }) => {
               <Typography variant="body2" sx={{ mt: 1, opacity: 0.7 }}>
                 Memory: 5.6MB • Uptime: 2h 15m
               </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleRestartService}
+                  disabled={loading}
+                  fullWidth
+                >
+                  Restart Service
+                </Button>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

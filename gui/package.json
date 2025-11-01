@@ -14,9 +14,10 @@
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
-    "build": "npm run build:vite && npm run build:electron",
+    "build": "npm run build:vite && npm run build:electron && npm run copy:service",
     "build:vite": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
+    "copy:service": "node scripts/copy-service.js",
     "preview": "vite preview",
     "dist": "npm run build && electron-builder",
     "dist:linux": "npm run build && electron-builder --linux",
@@ -79,6 +80,11 @@
       "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
     "extraResources": [
+      {
+        "from": "../build/bin/phantomvault",
+        "to": "bin/phantomvault",
+        "filter": ["**/*"]
+      },
       {
         "from": "../core/build/bin/phantomvault-service",
         "to": "bin/phantomvault-service",

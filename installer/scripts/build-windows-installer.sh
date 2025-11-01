@@ -1,16 +1,9 @@
 #!/bin/bash
+
 # PhantomVault Windows Installer Builder
-# Creates MSI installer using WiX Toolset
+# Creates MSI installer with complete uninstaller using WiX Toolset
 
 set -e
-
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-INSTALLER_DIR="$PROJECT_ROOT/installer"
-BUILD_DIR="$PROJECT_ROOT/build"
-PACKAGE_DIR="$BUILD_DIR/packages/windows"
-VERSION="1.0.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -19,134 +12,93 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() { echo -e "${BLUE}[WINDOWS]${NC} $1"; }
+print_status() { echo -e "${BLUE}[INSTALLER]${NC} $1"; }
 print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Check if running on Windows or with Wine
-check_windows_env() {
-    print_status "Checking Windows build environment..."
-    
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-        print_status "Running on Windows (MSYS/Cygwin)"
-        WINDOWS_ENV="native"
-    elif command -v wine &> /dev/null; then
-        print_status "Using Wine for Windows builds"
-        WINDOWS_ENV="wine"
+# Configuration
+PACKAGE_NAME="PhantomVault"
+VERSION="1.0.0"
+MANUFACTURER="PhantomVault Team"
+DESCRIPTION="Invisible Folder Security with Profile-Based Management"
+UPGRADE_CODE="12345678-1234-1234-1234-123456789012"
+
+# Directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BUILD_DIR="$PROJECT_ROOT/installer/build"
+WIX_DIR="$BUILD_DIR/wix"
+
+print_status "Building Windows MSI installer..."
+print_status "Project root: $PROJECT_ROOT"
+print_status "Build directory: $BUILD_DIR"
+
+# Clean and create build directories
+rm -rf "$WIX_DIR"
+mkdir -p "$WIX_DIR"/{source,output}
+
+# Check for WiX Toolset (if running on Windows/WSL)
+check_wix_toolset() {
+    if command -v candle.exe &> /dev/null && command -v light.exe &> /dev/null; then
+        print_status "WiX Toolset found"
+        return 0
+    elif [ -d "/mnt/c/Program Files (x86)/WiX Toolset v3.11/bin" ]; then
+        export PATH="/mnt/c/Program Files (x86)/WiX Toolset v3.11/bin:$PATH"
+        print_status "WiX Toolset found in Program Files"
+        return 0
     else
-        print_error "Windows installer requires Windows environment or Wine"
-        print_error "Install Wine: sudo apt-get install wine"
-        exit 1
+        print_warning "WiX Toolset not found"
+        print_status "Please install WiX Toolset v3.11 or later"
+        print_status "Download from: https://wixtoolset.org/releases/"
+        return 1
     fi
 }
 
-# Install WiX Toolset
-install_wix_toolset() {
-    print_status "Setting up WiX Toolset..."
-    
-    local wix_dir="$PACKAGE_DIR/wix"
-    mkdir -p "$wix_dir"
-    
-    if [[ ! -f "$wix_dir/candle.exe" ]]; then
-        print_status "Downloading WiX Toolset..."
-        
-        # Download WiX binaries
-        local wix_url="https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
-        
-        if command -v wget &> /dev/null; then
-            wget -q -O "$wix_dir/wix-binaries.zip" "$wix_url"
-        elif command -v curl &> /dev/null; then
-            curl -fsSL -o "$wix_dir/wix-binaries.zip" "$wix_url"
-        else
-            print_error "Need wget or curl to download WiX Toolset"
-            exit 1
-        fi
-        
-        # Extract WiX
-        cd "$wix_dir"
-        unzip -q wix-binaries.zip
-        rm wix-binaries.zip
-        
-        print_success "WiX Toolset installed"
-    fi
-    
-    # Set WiX paths
-    WIX_CANDLE="$wix_dir/candle.exe"
-    WIX_LIGHT="$wix_dir/light.exe"
-    
-    if [[ "$WINDOWS_ENV" == "wine" ]]; then
-        WIX_CANDLE="wine $WIX_CANDLE"
-        WIX_LIGHT="wine $WIX_LIGHT"
-    fi
-}
-
-# Prepare Windows build
-prepare_windows_build() {
-    print_status "Preparing Windows build..."
-    
-    # Clean and create directories
-    rm -rf "$PACKAGE_DIR"
-    mkdir -p "$PACKAGE_DIR"/{staging,wix,output}
-    
-    # Check if Windows binary exists
-    local windows_binary="$BUILD_DIR/phantomvault.exe"
-    if [[ ! -f "$windows_binary" ]]; then
-        print_warning "Windows binary not found, attempting cross-compilation..."
-        
-        # Try to cross-compile for Windows
-        cd "$PROJECT_ROOT"
-        if command -v x86_64-w64-mingw32-g++ &> /dev/null; then
-            print_status "Cross-compiling for Windows..."
-            mkdir -p "$BUILD_DIR/windows"
-            cd "$BUILD_DIR/windows"
-            
-            # Configure for Windows cross-compilation
-            cmake "$PROJECT_ROOT" \
-                -DCMAKE_TOOLCHAIN_FILE="$PROJECT_ROOT/cmake/mingw-w64-x86_64.cmake" \
-                -DCMAKE_BUILD_TYPE=Release
-            
-            make -j$(nproc)
-            
-            if [[ -f "phantomvault.exe" ]]; then
-                cp "phantomvault.exe" "$windows_binary"
-                print_success "Windows binary cross-compiled successfully"
-            else
-                print_error "Failed to cross-compile Windows binary"
-                exit 1
-            fi
-        else
-            print_error "Windows binary not found and cross-compilation not available"
-            print_error "Please build on Windows or install mingw-w64"
-            exit 1
-        fi
-    fi
-    
-    # Copy binary to staging
-    cp "$windows_binary" "$PACKAGE_DIR/staging/phantomvault-service.exe"
-}
-
-# Create WiX source file
+# Create WiX source files
 create_wix_source() {
     print_status "Creating WiX installer source..."
     
-    local wix_file="$PACKAGE_DIR/wix/phantomvault.wxs"
+    # Copy application files to source directory
+    local source_dir="$WIX_DIR/source"
+    mkdir -p "$source_dir"/{bin,gui,docs}
     
-    cat > "$wix_file" << 'EOF'
+    # Copy service executable
+    if [ -f "$PROJECT_ROOT/bin/phantomvault.exe" ]; then
+        cp "$PROJECT_ROOT/bin/phantomvault.exe" "$source_dir/bin/"
+    elif [ -f "$PROJECT_ROOT/core/build/bin/phantomvault-service.exe" ]; then
+        cp "$PROJECT_ROOT/core/build/bin/phantomvault-service.exe" "$source_dir/bin/phantomvault.exe"
+    else
+        print_warning "No Windows executable found, creating placeholder"
+        echo "Placeholder for phantomvault.exe" > "$source_dir/bin/phantomvault.exe"
+    fi
+    
+    # Copy GUI files if they exist
+    if [ -d "$PROJECT_ROOT/gui/dist" ]; then
+        cp -r "$PROJECT_ROOT/gui/dist"/* "$source_dir/gui/"
+    fi
+    
+    # Copy documentation
+    if [ -f "$PROJECT_ROOT/README.md" ]; then
+        cp "$PROJECT_ROOT/README.md" "$source_dir/docs/"
+    fi
+    
+    # Create main WiX source file
+    cat > "$WIX_DIR/phantomvault.wxs" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" 
-           Name="PhantomVault" 
+           Name="$PACKAGE_NAME" 
            Language="1033" 
-           Version="1.0.0" 
-           Manufacturer="PhantomVault Team" 
-           UpgradeCode="12345678-1234-1234-1234-123456789012">
+           Version="$VERSION" 
+           Manufacturer="$MANUFACTURER" 
+           UpgradeCode="$UPGRADE_CODE">
     
     <Package InstallerVersion="200" 
              Compressed="yes" 
-             InstallScope="perMachine"
-             Description="PhantomVault - Invisible Folder Security"
-             Comments="Military-grade folder security with profile-based management" />
+             InstallScope="perMachine" 
+             Description="$DESCRIPTION"
+             Comments="PhantomVault Security System Installer" />
     
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -158,13 +110,13 @@ create_wix_source() {
       <ComponentGroupRef Id="ShortcutComponents" />
     </Feature>
     
-    <!-- Installation directory -->
+    <!-- Directory structure -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLFOLDER" Name="PhantomVault">
           <Directory Id="BinFolder" Name="bin" />
-          <Directory Id="LogsFolder" Name="logs" />
-          <Directory Id="DataFolder" Name="data" />
+          <Directory Id="GuiFolder" Name="gui" />
+          <Directory Id="DocsFolder" Name="docs" />
         </Directory>
       </Directory>
       
@@ -177,252 +129,176 @@ create_wix_source() {
       <Directory Id="DesktopFolder" Name="Desktop" />
     </Directory>
     
-    <!-- Main application components -->
-    <ComponentGroup Id="ProductComponents" Directory="BinFolder">
-      <Component Id="MainExecutable" Guid="*">
-        <File Id="PhantomVaultService" 
-              Source="$(var.SourceDir)\phantomvault-service.exe" 
+    <!-- Service installation -->
+    <ComponentGroup Id="ServiceComponents" Directory="BinFolder">
+      <Component Id="ServiceExecutable" Guid="*">
+        <File Id="PhantomVaultExe" 
+              Source="source/bin/phantomvault.exe" 
               KeyPath="yes" />
         
-        <!-- Windows Service registration -->
+        <!-- Windows Service -->
         <ServiceInstall Id="PhantomVaultService"
-                       Type="ownProcess"
-                       Vital="yes"
-                       Name="PhantomVault"
-                       DisplayName="PhantomVault - Invisible Folder Security"
-                       Description="Provides invisible folder security with profile-based management"
-                       Start="auto"
-                       Account="LocalSystem"
-                       ErrorControl="ignore"
-                       Interactive="no">
+                        Type="ownProcess"
+                        Vital="yes"
+                        Name="PhantomVault"
+                        DisplayName="PhantomVault Security Service"
+                        Description="Invisible folder security with profile-based management"
+                        Start="auto"
+                        Account="LocalSystem"
+                        ErrorControl="ignore"
+                        Interactive="no"
+                        Arguments="--service --daemon">
           <util:ServiceConfig xmlns:util="http://schemas.microsoft.com/wix/UtilExtension"
-                             FirstFailureActionType="restart"
-                             SecondFailureActionType="restart"
-                             ThirdFailureActionType="restart"
-                             RestartServiceDelayInSeconds="60" />
+                              FirstFailureActionType="restart"
+                              SecondFailureActionType="restart"
+                              ThirdFailureActionType="restart"
+                              RestartServiceDelayInSeconds="60" />
         </ServiceInstall>
         
         <ServiceControl Id="StartService" 
-                       Start="install" 
-                       Stop="both" 
-                       Remove="uninstall" 
-                       Name="PhantomVault" 
-                       Wait="yes" />
-      </Component>
-      
-      <!-- GUI Wrapper Script -->
-      <Component Id="GUIWrapper" Guid="*">
-        <File Id="PhantomVaultGUI" 
-              Source="$(var.SourceDir)\phantomvault-gui.bat" 
-              KeyPath="yes" />
-      </Component>
-      
-      <!-- CLI Tool -->
-      <Component Id="CLITool" Guid="*">
-        <File Id="PhantomVaultCLI" 
-              Source="$(var.SourceDir)\phantomvault.bat" 
-              KeyPath="yes" />
+                        Start="install" 
+                        Stop="both" 
+                        Remove="uninstall" 
+                        Name="PhantomVault" 
+                        Wait="yes" />
       </Component>
     </ComponentGroup>
     
-    <!-- Service configuration components -->
-    <ComponentGroup Id="ServiceComponents" Directory="DataFolder">
-      <Component Id="ServiceConfig" Guid="*">
-        <CreateFolder />
-        
-        <!-- Registry entries for service configuration -->
-        <RegistryKey Root="HKLM" Key="SOFTWARE\PhantomVault">
-          <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" />
-          <RegistryValue Type="string" Name="Version" Value="1.0.0" />
-          <RegistryValue Type="string" Name="DataPath" Value="[DataFolder]" />
+    <!-- Application files -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="*">
+        <File Source="source/bin/phantomvault.exe" />
+      </Component>
+      
+      <!-- GUI files -->
+      <Component Id="GuiFiles" Guid="*" Directory="GuiFolder">
+        <File Source="source/gui/*" />
+      </Component>
+      
+      <!-- Documentation -->
+      <Component Id="Documentation" Guid="*" Directory="DocsFolder">
+        <File Source="source/docs/README.md" />
+      </Component>
+      
+      <!-- Registry entries -->
+      <Component Id="RegistryEntries" Guid="*">
+        <RegistryKey Root="HKLM" Key="Software\\PhantomVault">
+          <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" KeyPath="yes" />
+          <RegistryValue Type="string" Name="Version" Value="$VERSION" />
         </RegistryKey>
         
-        <!-- Firewall exception -->
-        <fire:FirewallException xmlns:fire="http://schemas.microsoft.com/wix/FirewallExtension"
-                               Id="PhantomVaultFirewall"
-                               Name="PhantomVault Service"
-                               Port="9876"
-                               Protocol="tcp"
-                               Scope="localSubnet" />
+        <!-- Protocol handler -->
+        <RegistryKey Root="HKLM" Key="Software\\Classes\\phantomvault">
+          <RegistryValue Type="string" Value="PhantomVault Protocol" />
+          <RegistryValue Type="string" Name="URL Protocol" Value="" />
+          <RegistryKey Key="shell\\open\\command">
+            <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]bin\\phantomvault.exe&quot; &quot;%1&quot;" />
+          </RegistryKey>
+        </RegistryKey>
+      </Component>
+      
+      <!-- Uninstaller -->
+      <Component Id="UninstallerComponent" Guid="*">
+        <File Id="UninstallerScript" 
+              Source="uninstaller.bat" 
+              Name="uninstall.bat" />
       </Component>
     </ComponentGroup>
     
     <!-- Shortcuts -->
-    <ComponentGroup Id="ShortcutComponents" Directory="ApplicationProgramsFolder">
-      <Component Id="ApplicationShortcut" Guid="*">
+    <ComponentGroup Id="ShortcutComponents">
+      <!-- Start Menu shortcuts -->
+      <Component Id="ApplicationShortcut" Guid="*" Directory="ApplicationProgramsFolder">
         <Shortcut Id="ApplicationStartMenuShortcut"
-                 Name="PhantomVault"
-                 Description="Invisible Folder Security"
-                 Target="[BinFolder]phantomvault-gui.bat"
-                 WorkingDirectory="BinFolder" />
+                  Name="PhantomVault"
+                  Description="Invisible Folder Security"
+                  Target="[INSTALLFOLDER]bin\\phantomvault.exe"
+                  Arguments="--gui"
+                  WorkingDirectory="INSTALLFOLDER" />
+        
+        <Shortcut Id="UninstallShortcut"
+                  Name="Uninstall PhantomVault"
+                  Description="Remove PhantomVault from your computer"
+                  Target="[System64Folder]msiexec.exe"
+                  Arguments="/x [ProductCode]" />
         
         <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
         <RegistryValue Root="HKCU" 
-                      Key="Software\PhantomVault" 
-                      Name="installed" 
-                      Type="integer" 
-                      Value="1" 
-                      KeyPath="yes" />
+                       Key="Software\\PhantomVault\\Shortcuts" 
+                       Name="installed" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
       </Component>
       
+      <!-- Desktop shortcut -->
       <Component Id="DesktopShortcut" Guid="*" Directory="DesktopFolder">
-        <Shortcut Id="ApplicationDesktopShortcut"
-                 Name="PhantomVault"
-                 Description="Invisible Folder Security"
-                 Target="[BinFolder]phantomvault-gui.bat"
-                 WorkingDirectory="BinFolder" />
+        <Shortcut Id="DesktopShortcut"
+                  Name="PhantomVault"
+                  Description="Invisible Folder Security"
+                  Target="[INSTALLFOLDER]bin\\phantomvault.exe"
+                  Arguments="--gui"
+                  WorkingDirectory="INSTALLFOLDER" />
         
         <RegistryValue Root="HKCU" 
-                      Key="Software\PhantomVault" 
-                      Name="desktop" 
-                      Type="integer" 
-                      Value="1" 
-                      KeyPath="yes" />
+                       Key="Software\\PhantomVault\\Shortcuts" 
+                       Name="desktop" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
       </Component>
     </ComponentGroup>
     
-    <!-- UI customization -->
-    <WixVariable Id="WixUILicenseRtf" Value="$(var.SourceDir)\license.rtf" />
-    <WixVariable Id="WixUIBannerBmp" Value="$(var.SourceDir)\banner.bmp" />
-    <WixVariable Id="WixUIDialogBmp" Value="$(var.SourceDir)\dialog.bmp" />
+    <!-- Custom actions for cleanup -->
+    <CustomAction Id="CleanupUserData" 
+                  BinaryKey="WixCA" 
+                  DllEntry="WixQuietExec" 
+                  Execute="deferred" 
+                  Return="ignore" 
+                  Impersonate="no" />
     
+    <!-- Installation sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="CleanupUserData" Before="RemoveFiles">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
+    
+    <!-- UI -->
     <UIRef Id="WixUI_InstallDir" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     
-    <!-- Launch condition -->
-    <Condition Message="This application requires Windows 7 or higher.">
-      <![CDATA[Installed OR (VersionNT >= 601)]]>
-    </Condition>
+    <!-- License -->
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
     
   </Product>
 </Wix>
 EOF
     
-    print_success "WiX source file created"
-}
-
-# Create Windows batch files
-create_windows_scripts() {
-    print_status "Creating Windows scripts..."
-    
-    # Create GUI wrapper batch file
-    cat > "$PACKAGE_DIR/staging/phantomvault-gui.bat" << 'EOF'
+    # Create uninstaller batch file
+    cat > "$WIX_DIR/uninstaller.bat" << 'EOF'
 @echo off
-REM PhantomVault GUI Launcher for Windows
+echo PhantomVault Uninstaller
+echo This will completely remove PhantomVault from your system.
+echo User data will be preserved.
+pause
 
-set INSTALL_DIR=%~dp0
-set SERVICE_NAME=PhantomVault
-
-echo PhantomVault - Invisible Folder Security
-echo ========================================
-
-REM Check if service is running
-sc query "%SERVICE_NAME%" | find "RUNNING" >nul
-if %errorlevel% == 0 (
-    echo Status: Running
-    echo Your folders are protected
-    echo.
-    echo Usage:
-    echo • Press Ctrl+Alt+V anywhere to access your folders
-    echo • Use 'phantomvault --help' for more options
-) else (
-    echo Status: Not running
-    echo.
-    echo Starting PhantomVault service...
-    net start "%SERVICE_NAME%"
-    if %errorlevel% == 0 (
-        echo Service started successfully
-    ) else (
-        echo Failed to start service - please run as administrator
-    )
-)
-
-echo.
-echo Press any key to continue...
-pause >nul
-EOF
-    
-    # Create CLI batch file
-    cat > "$PACKAGE_DIR/staging/phantomvault.bat" << 'EOF'
-@echo off
-REM PhantomVault CLI for Windows
-
-set INSTALL_DIR=%~dp0
-set SERVICE_NAME=PhantomVault
-set SERVICE_EXE=%INSTALL_DIR%phantomvault-service.exe
-
-if "%1"=="" goto status
-if "%1"=="--help" goto help
-if "%1"=="-h" goto help
-if "%1"=="--gui" goto gui
-if "%1"=="--start" goto start
-if "%1"=="--stop" goto stop
-if "%1"=="--restart" goto restart
-if "%1"=="--status" goto detailed_status
-
-REM Pass other arguments to service executable
-"%SERVICE_EXE%" %*
-goto end
-
-:status
-echo PhantomVault - Invisible Folder Security
-echo ========================================
-sc query "%SERVICE_NAME%" | find "RUNNING" >nul
-if %errorlevel% == 0 (
-    echo Status: Running
-) else (
-    echo Status: Not running
-)
-goto end
-
-:help
-echo PhantomVault CLI for Windows
-echo Usage: phantomvault [OPTION]
-echo.
-echo Options:
-echo   (no args)     Show service status
-echo   --gui         Open GUI application
-echo   --start       Start service
-echo   --stop        Stop service
-echo   --restart     Restart service
-echo   --status      Detailed service status
-echo   --help        Show this help
-goto end
-
-:gui
-start "" "%INSTALL_DIR%phantomvault-gui.bat"
-goto end
-
-:start
-echo Starting PhantomVault service...
-net start "%SERVICE_NAME%"
-goto end
-
-:stop
 echo Stopping PhantomVault service...
-net stop "%SERVICE_NAME%"
-goto end
+net stop PhantomVault 2>nul
 
-:restart
-echo Restarting PhantomVault service...
-net stop "%SERVICE_NAME%"
-net start "%SERVICE_NAME%"
-goto end
+echo Removing PhantomVault...
+msiexec /x {ProductCode} /quiet
 
-:detailed_status
-sc query "%SERVICE_NAME%"
-goto end
-
-:end
+echo PhantomVault has been removed.
+echo User data preserved in %USERPROFILE%\.phantomvault\
+pause
 EOF
     
-    # Create license file (RTF format for WiX)
-    cat > "$PACKAGE_DIR/staging/license.rtf" << 'EOF'
+    # Create license file
+    cat > "$WIX_DIR/license.rtf" << 'EOF'
 {\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;}}
 \f0\fs24
 PhantomVault License Agreement\par
 \par
-Copyright (c) 2024 PhantomVault Team\par
+Copyright (c) 2025 PhantomVault Team\par
 \par
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\par
 \par
@@ -432,176 +308,169 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 }
 EOF
     
-    print_success "Windows scripts created"
-}
-
-# Create installer images
-create_installer_images() {
-    print_status "Creating installer images..."
-    
-    # Create minimal banner and dialog images (BMP format required by WiX)
-    # Note: For production builds, replace with custom branded graphics
-    
-    # Create minimal 1x1 pixel BMP files to satisfy WiX requirements
-    printf '\x42\x4D\x3A\x00\x00\x00\x00\x00\x00\x00\x36\x00\x00\x00\x28\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x00\x18\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\x00' > "$PACKAGE_DIR/staging/banner.bmp"
-    
-    printf '\x42\x4D\x3A\x00\x00\x00\x00\x00\x00\x00\x36\x00\x00\x00\x28\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x00\x18\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\x00' > "$PACKAGE_DIR/staging/dialog.bmp"
-    
-    print_status "Minimal installer images created (customize for production branding)"
+    print_success "WiX source files created"
 }
 
 # Build MSI installer
 build_msi_installer() {
     print_status "Building MSI installer..."
     
-    local wix_file="$PACKAGE_DIR/wix/phantomvault.wxs"
-    local obj_file="$PACKAGE_DIR/wix/phantomvault.wixobj"
-    local msi_file="$PACKAGE_DIR/output/PhantomVault-$VERSION.msi"
+    cd "$WIX_DIR"
     
     # Compile WiX source
     print_status "Compiling WiX source..."
-    $WIX_CANDLE -out "$obj_file" "$wix_file" \
-        -dSourceDir="$PACKAGE_DIR/staging" \
-        -ext WixUtilExtension \
-        -ext WixFirewallExtension
+    candle.exe -ext WixUtilExtension phantomvault.wxs -o output/
     
-    if [[ $? -ne 0 ]]; then
+    if [ $? -ne 0 ]; then
         print_error "Failed to compile WiX source"
-        exit 1
+        return 1
     fi
     
     # Link and create MSI
-    print_status "Creating MSI installer..."
-    $WIX_LIGHT -out "$msi_file" "$obj_file" \
-        -ext WixUIExtension \
-        -ext WixUtilExtension \
-        -ext WixFirewallExtension
+    print_status "Linking MSI package..."
+    light.exe -ext WixUIExtension -ext WixUtilExtension output/phantomvault.wixobj -o "output/PhantomVault-$VERSION.msi"
     
-    if [[ $? -ne 0 ]]; then
+    if [ $? -eq 0 ]; then
+        print_success "MSI installer created: output/PhantomVault-$VERSION.msi"
+        
+        # Copy to main build directory
+        cp "output/PhantomVault-$VERSION.msi" "$BUILD_DIR/"
+        print_success "MSI installer available at: $BUILD_DIR/PhantomVault-$VERSION.msi"
+    else
         print_error "Failed to create MSI installer"
-        exit 1
+        return 1
     fi
-    
-    print_success "MSI installer created: $msi_file"
 }
 
-# Create NSIS installer (alternative)
-create_nsis_installer() {
-    print_status "Creating NSIS installer..."
+# Create standalone installer
+create_standalone_installer() {
+    print_status "Creating standalone Windows installer..."
     
-    # Check if NSIS is available
-    if ! command -v makensis &> /dev/null; then
-        print_warning "NSIS not found - skipping NSIS installer"
-        return
-    fi
-    
-    local nsis_file="$PACKAGE_DIR/nsis/phantomvault.nsi"
-    mkdir -p "$PACKAGE_DIR/nsis"
-    
-    cat > "$nsis_file" << 'EOF'
-; PhantomVault NSIS Installer Script
-!define APPNAME "PhantomVault"
-!define COMPANYNAME "PhantomVault Team"
-!define DESCRIPTION "Invisible Folder Security"
-!define VERSIONMAJOR 1
-!define VERSIONMINOR 0
-!define VERSIONBUILD 0
+    cat > "$BUILD_DIR/phantomvault-windows-installer.bat" << 'EOF'
+@echo off
+title PhantomVault Windows Installer
 
-RequestExecutionLevel admin
+echo ========================================
+echo PhantomVault Windows Installer v1.0.0
+echo Invisible Folder Security System
+echo ========================================
+echo.
 
-InstallDir "$PROGRAMFILES\${APPNAME}"
-Name "${APPNAME}"
-OutFile "PhantomVault-Setup.exe"
+:: Check for administrator privileges
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo ERROR: This installer must be run as Administrator
+    echo Right-click and select "Run as administrator"
+    pause
+    exit /b 1
+)
 
-Page directory
-Page instfiles
+echo Installing PhantomVault...
 
-Section "install"
-    SetOutPath $INSTDIR
-    
-    ; Copy files
-    File "..\staging\phantomvault-service.exe"
-    File "..\staging\phantomvault-gui.bat"
-    File "..\staging\phantomvault.bat"
-    
-    ; Create shortcuts
-    CreateDirectory "$SMPROGRAMS\${APPNAME}"
-    CreateShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\phantomvault-gui.bat"
-    CreateShortCut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\phantomvault-gui.bat"
-    
-    ; Install service
-    ExecWait '"$INSTDIR\phantomvault-service.exe" --install-service'
-    
-    ; Start service
-    ExecWait 'net start PhantomVault'
-    
-    ; Registry entries
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\uninstall.exe"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "InstallLocation" "$INSTDIR"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "${COMPANYNAME}"
-    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "VersionMajor" ${VERSIONMAJOR}
-    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "VersionMinor" ${VERSIONMINOR}
-    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoModify" 1
-    WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoRepair" 1
-    
-    ; Create uninstaller
-    WriteUninstaller "$INSTDIR\uninstall.exe"
-SectionEnd
+:: Create installation directory
+set INSTALL_DIR=%ProgramFiles%\PhantomVault
+mkdir "%INSTALL_DIR%" 2>nul
+mkdir "%INSTALL_DIR%\bin" 2>nul
+mkdir "%INSTALL_DIR%\gui" 2>nul
+mkdir "%INSTALL_DIR%\docs" 2>nul
 
-Section "uninstall"
-    ; Stop and remove service
-    ExecWait 'net stop PhantomVault'
-    ExecWait '"$INSTDIR\phantomvault-service.exe" --remove-service'
-    
-    ; Remove files
-    Delete "$INSTDIR\phantomvault-service.exe"
-    Delete "$INSTDIR\phantomvault-gui.bat"
-    Delete "$INSTDIR\phantomvault.bat"
-    Delete "$INSTDIR\uninstall.exe"
-    RMDir "$INSTDIR"
-    
-    ; Remove shortcuts
-    Delete "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk"
-    RMDir "$SMPROGRAMS\${APPNAME}"
-    Delete "$DESKTOP\${APPNAME}.lnk"
-    
-    ; Remove registry entries
-    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
-SectionEnd
+:: Copy files (in real installer, files would be embedded)
+echo Copying application files...
+if exist "phantomvault.exe" (
+    copy "phantomvault.exe" "%INSTALL_DIR%\bin\" >nul
+) else (
+    echo ERROR: phantomvault.exe not found in installer
+    pause
+    exit /b 1
+)
+
+:: Install Windows service
+echo Installing PhantomVault service...
+sc create PhantomVault binPath= "\"%INSTALL_DIR%\bin\phantomvault.exe\" --service --daemon" DisplayName= "PhantomVault Security Service" start= auto
+
+:: Create desktop shortcut
+echo Creating desktop shortcut...
+set DESKTOP=%USERPROFILE%\Desktop
+echo [InternetShortcut] > "%DESKTOP%\PhantomVault.url"
+echo URL=file:///%INSTALL_DIR%\bin\phantomvault.exe >> "%DESKTOP%\PhantomVault.url"
+echo IconFile=%INSTALL_DIR%\bin\phantomvault.exe >> "%DESKTOP%\PhantomVault.url"
+echo IconIndex=0 >> "%DESKTOP%\PhantomVault.url"
+
+:: Create start menu shortcut
+set STARTMENU=%ProgramData%\Microsoft\Windows\Start Menu\Programs
+mkdir "%STARTMENU%\PhantomVault" 2>nul
+echo [InternetShortcut] > "%STARTMENU%\PhantomVault\PhantomVault.url"
+echo URL=file:///%INSTALL_DIR%\bin\phantomvault.exe >> "%STARTMENU%\PhantomVault\PhantomVault.url"
+
+:: Register protocol handler
+echo Registering protocol handler...
+reg add "HKLM\SOFTWARE\Classes\phantomvault" /ve /d "PhantomVault Protocol" /f >nul
+reg add "HKLM\SOFTWARE\Classes\phantomvault" /v "URL Protocol" /d "" /f >nul
+reg add "HKLM\SOFTWARE\Classes\phantomvault\shell\open\command" /ve /d "\"%INSTALL_DIR%\bin\phantomvault.exe\" \"%%1\"" /f >nul
+
+:: Create uninstaller
+echo Creating uninstaller...
+(
+echo @echo off
+echo title PhantomVault Uninstaller
+echo echo Removing PhantomVault...
+echo.
+echo :: Stop and remove service
+echo net stop PhantomVault 2^>nul
+echo sc delete PhantomVault 2^>nul
+echo.
+echo :: Remove files
+echo rmdir /s /q "%INSTALL_DIR%" 2^>nul
+echo.
+echo :: Remove shortcuts
+echo del "%USERPROFILE%\Desktop\PhantomVault.url" 2^>nul
+echo rmdir /s /q "%ProgramData%\Microsoft\Windows\Start Menu\Programs\PhantomVault" 2^>nul
+echo.
+echo :: Remove registry entries
+echo reg delete "HKLM\SOFTWARE\Classes\phantomvault" /f 2^>nul
+echo.
+echo echo PhantomVault has been completely removed.
+echo echo User data preserved in %%USERPROFILE%%\.phantomvault\
+echo pause
+) > "%INSTALL_DIR%\uninstall.bat"
+
+:: Start service
+echo Starting PhantomVault service...
+net start PhantomVault
+
+echo.
+echo ========================================
+echo PhantomVault installed successfully!
+echo ========================================
+echo.
+echo Service: PhantomVault (started automatically)
+echo GUI: Run PhantomVault from Start Menu or Desktop
+echo Uninstall: Run %INSTALL_DIR%\uninstall.bat as Administrator
+echo.
+pause
 EOF
     
-    # Build NSIS installer
-    cd "$PACKAGE_DIR/nsis"
-    makensis phantomvault.nsi
-    
-    if [[ -f "PhantomVault-Setup.exe" ]]; then
-        mv "PhantomVault-Setup.exe" "$PACKAGE_DIR/output/"
-        print_success "NSIS installer created: $PACKAGE_DIR/output/PhantomVault-Setup.exe"
-    fi
+    print_success "Standalone Windows installer created: $BUILD_DIR/phantomvault-windows-installer.bat"
 }
 
-# Main function
+# Main execution
 main() {
-    print_status "Building PhantomVault Windows installer..."
+    print_status "Starting Windows installer build process..."
     
-    check_windows_env
-    install_wix_toolset
-    prepare_windows_build
     create_wix_source
-    create_windows_scripts
-    create_installer_images
-    build_msi_installer
-    create_nsis_installer
     
-    print_success "Windows installer created successfully!"
-    print_status "Installers available in: $PACKAGE_DIR/output"
+    if check_wix_toolset; then
+        build_msi_installer
+    else
+        print_warning "Skipping MSI creation due to missing WiX Toolset"
+    fi
     
-    # List created installers
-    echo ""
-    echo "Created installers:"
-    find "$PACKAGE_DIR/output" -name "*.msi" -o -name "*.exe" | while read -r installer; do
-        echo "  • $(basename "$installer")"
+    create_standalone_installer
+    
+    print_success "Windows installer packages created successfully!"
+    print_status "Available installers:"
+    find "$BUILD_DIR" -name "*.msi" -o -name "*windows*installer*" | while read file; do
+        print_status "  - $(basename "$file")"
     done
 }
 

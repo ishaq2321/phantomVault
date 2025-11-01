@@ -1,19 +1,9 @@
 #!/bin/bash
+
 # PhantomVault macOS Installer Builder
-# Creates DMG installer with proper code signing and LaunchDaemon
+# Creates DMG installer with complete uninstaller
 
 set -e
-
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-INSTALLER_DIR="$PROJECT_ROOT/installer"
-BUILD_DIR="$PROJECT_ROOT/build"
-PACKAGE_DIR="$BUILD_DIR/packages/macos"
-VERSION="1.0.0"
-APP_NAME="PhantomVault"
-BUNDLE_ID="com.phantomvault.app"
-DEVELOPER_ID="${DEVELOPER_ID:-}"  # Set via environment variable
 
 # Colors for output
 RED='\033[0;31m'
@@ -22,178 +12,73 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() { echo -e "${BLUE}[MACOS]${NC} $1"; }
+print_status() { echo -e "${BLUE}[INSTALLER]${NC} $1"; }
 print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Check macOS environment
-check_macos_env() {
-    print_status "Checking macOS build environment..."
-    
-    if [[ "$(uname -s)" != "Darwin" ]]; then
-        print_error "macOS installer must be built on macOS"
-        exit 1
-    fi
-    
-    # Check for required tools
-    local missing_tools=()
-    
-    if ! command -v pkgbuild &> /dev/null; then
-        missing_tools+=("pkgbuild")
-    fi
-    
-    if ! command -v productbuild &> /dev/null; then
-        missing_tools+=("productbuild")
+# Configuration
+PACKAGE_NAME="PhantomVault"
+VERSION="1.0.0"
+BUNDLE_ID="dev.phantomvault.app"
+DEVELOPER_ID="PhantomVault Team"
+DESCRIPTION="Invisible Folder Security with Profile-Based Management"
+
+# Directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BUILD_DIR="$PROJECT_ROOT/installer/build"
+MACOS_DIR="$BUILD_DIR/macos"
+
+print_status "Building macOS DMG installer..."
+print_status "Project root: $PROJECT_ROOT"
+print_status "Build directory: $BUILD_DIR"
+
+# Clean and create build directories
+rm -rf "$MACOS_DIR"
+mkdir -p "$MACOS_DIR"/{app,dmg,pkg}
+
+# Check if running on macOS
+check_macos_tools() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        print_warning "Not running on macOS - creating installer template only"
+        return 1
     fi
     
     if ! command -v hdiutil &> /dev/null; then
-        missing_tools+=("hdiutil")
-    fi
-    
-    if [[ ${#missing_tools[@]} -gt 0 ]]; then
-        print_error "Missing required tools: ${missing_tools[*]}"
-        print_error "Install Xcode Command Line Tools: xcode-select --install"
-        exit 1
-    fi
-    
-    # Check for code signing certificate
-    if [[ -n "$DEVELOPER_ID" ]]; then
-        if ! security find-identity -v -p codesigning | grep -q "$DEVELOPER_ID"; then
-            print_warning "Developer ID certificate not found: $DEVELOPER_ID"
-            print_warning "Code signing will be skipped"
-            DEVELOPER_ID=""
-        else
-            print_status "Found code signing certificate: $DEVELOPER_ID"
-        fi
-    else
-        print_warning "No DEVELOPER_ID set - code signing will be skipped"
-        print_warning "Set DEVELOPER_ID environment variable for production builds"
-    fi
-}
-
-# Prepare macOS build
-prepare_macos_build() {
-    print_status "Preparing macOS build..."
-    
-    # Clean and create directories
-    rm -rf "$PACKAGE_DIR"
-    mkdir -p "$PACKAGE_DIR"/{staging,app,pkg,dmg}
-    
-    # Check if macOS binary exists
-    local macos_binary="$BUILD_DIR/phantomvault"
-    if [[ ! -f "$macos_binary" ]]; then
-        print_status "Building PhantomVault for macOS..."
-        cd "$PROJECT_ROOT"
-        ./build.sh
-        
-        if [[ ! -f "$BUILD_DIR/phantomvault" ]]; then
-            print_error "Failed to build macOS binary"
-            exit 1
-        fi
-    fi
-    
-    # Copy binary to staging
-    cp "$BUILD_DIR/phantomvault" "$PACKAGE_DIR/staging/phantomvault-service"
-    chmod +x "$PACKAGE_DIR/staging/phantomvault-service"
-    
-    print_success "macOS build prepared"
-}
-
-# Create macOS application bundle
-create_app_bundle() {
-    print_status "Creating application bundle..."
-    
-    local app_bundle="$PACKAGE_DIR/app/$APP_NAME.app"
-    local contents_dir="$app_bundle/Contents"
-    local macos_dir="$contents_dir/MacOS"
-    local resources_dir="$contents_dir/Resources"
-    
-    # Create bundle structure
-    mkdir -p "$macos_dir" "$resources_dir"
-    
-    # Copy executable
-    cp "$PACKAGE_DIR/staging/phantomvault-service" "$macos_dir/"
-    
-    # Create GUI wrapper script
-    cat > "$macos_dir/phantomvault-gui" << 'EOF'
-#!/bin/bash
-# PhantomVault GUI Launcher for macOS
-
-BUNDLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVICE_BIN="$BUNDLE_DIR/MacOS/phantomvault-service"
-PLIST_PATH="/Library/LaunchDaemons/com.phantomvault.service.plist"
-
-# Function to check if service is running
-is_service_running() {
-    launchctl list | grep -q "com.phantomvault.service"
-}
-
-# Function to start service
-start_service() {
-    if [[ -f "$PLIST_PATH" ]]; then
-        sudo launchctl load "$PLIST_PATH" 2>/dev/null || true
-    else
-        echo "Service not installed. Please run the installer."
+        print_error "hdiutil not found (required for DMG creation)"
         return 1
     fi
+    
+    if ! command -v pkgbuild &> /dev/null; then
+        print_error "pkgbuild not found (required for PKG creation)"
+        return 1
+    fi
+    
+    return 0
 }
 
-# Check if service is running
-if ! is_service_running; then
-    echo "Starting PhantomVault service..."
-    if ! start_service; then
-        echo "Failed to start service automatically."
-        echo "Please install PhantomVault properly or run with administrator privileges."
-        exit 1
-    fi
-    sleep 2
-fi
-
-# Show status in terminal
-osascript << 'APPLESCRIPT'
-tell application "Terminal"
-    activate
-    do script "
-echo 'PhantomVault - Invisible Folder Security'
-echo '========================================'
-
-if pgrep -f phantomvault-service > /dev/null; then
-    echo 'Status: ✅ Running'
-    echo 'Your folders are protected'
-    echo ''
-    echo 'Usage:'
-    echo '• Press Ctrl+Alt+V anywhere to access your folders'
-    echo '• Use phantomvault --help for more options'
-else
-    echo 'Status: ❌ Not running'
-    echo 'Please check the installation'
-fi
-
-echo ''
-echo 'Press any key to continue...'
-read -n 1
-exit
-"
-end tell
-APPLESCRIPT
-EOF
-    chmod +x "$macos_dir/phantomvault-gui"
+# Create macOS app bundle
+create_app_bundle() {
+    print_status "Creating macOS app bundle..."
+    
+    local app_dir="$MACOS_DIR/app/PhantomVault.app"
+    mkdir -p "$app_dir/Contents"/{MacOS,Resources,Frameworks}
     
     # Create Info.plist
-    cat > "$contents_dir/Info.plist" << EOF
+    cat > "$app_dir/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>phantomvault-gui</string>
+    <string>phantomvault</string>
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
     <key>CFBundleName</key>
-    <string>$APP_NAME</string>
+    <string>$PACKAGE_NAME</string>
     <key>CFBundleDisplayName</key>
-    <string>PhantomVault</string>
+    <string>$PACKAGE_NAME</string>
     <key>CFBundleVersion</key>
     <string>$VERSION</string>
     <key>CFBundleShortVersionString</key>
@@ -202,500 +87,251 @@ EOF
     <string>APPL</string>
     <key>CFBundleSignature</key>
     <string>PVLT</string>
-    <key>CFBundleIconFile</key>
-    <string>phantomvault.icns</string>
     <key>LSMinimumSystemVersion</key>
-    <string>10.12</string>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.security</string>
+    <string>10.14</string>
     <key>NSHighResolutionCapable</key>
     <true/>
-    <key>NSRequiresAquaSystemAppearance</key>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>LSUIElement</key>
     <false/>
-</dict>
-</plist>
-EOF
-    
-    # Create minimal application icon
-    # Note: For production builds, replace with custom branded icon
-    # Create minimal ICNS file structure
-    echo "icns" > "$resources_dir/phantomvault.icns"
-    
-    print_success "Application bundle created"
-}
-
-# Create LaunchDaemon plist
-create_launch_daemon() {
-    print_status "Creating LaunchDaemon configuration..."
-    
-    local plist_file="$PACKAGE_DIR/staging/com.phantomvault.service.plist"
-    
-    cat > "$plist_file" << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.phantomvault.service</string>
-    
-    <key>ProgramArguments</key>
+    <key>CFBundleURLTypes</key>
     <array>
-        <string>/usr/local/bin/phantomvault-service</string>
-        <string>--daemon</string>
-        <string>--log-level</string>
-        <string>INFO</string>
-        <string>--port</string>
-        <string>9876</string>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>PhantomVault Protocol</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>phantomvault</string>
+            </array>
+        </dict>
     </array>
-    
-    <key>RunAtLoad</key>
-    <true/>
-    
-    <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
-    
-    <key>StandardOutPath</key>
-    <string>/usr/local/var/log/phantomvault.log</string>
-    
-    <key>StandardErrorPath</key>
-    <string>/usr/local/var/log/phantomvault-error.log</string>
-    
-    <key>WorkingDirectory</key>
-    <string>/usr/local/var/phantomvault</string>
-    
-    <key>UserName</key>
-    <string>root</string>
-    
-    <key>GroupName</key>
-    <string>wheel</string>
-    
-    <key>ThrottleInterval</key>
-    <integer>10</integer>
-    
-    <key>ProcessType</key>
-    <string>Background</string>
-    
-    <key>LowPriorityIO</key>
-    <true/>
-    
-    <key>Nice</key>
-    <integer>1</integer>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>PhantomVault needs access to control other applications for security operations.</string>
+    <key>NSSystemAdministrationUsageDescription</key>
+    <string>PhantomVault requires administrator privileges for folder security operations.</string>
 </dict>
 </plist>
 EOF
     
-    print_success "LaunchDaemon configuration created"
-}
-
-# Create CLI tool
-create_cli_tool() {
-    print_status "Creating CLI tool..."
-    
-    cat > "$PACKAGE_DIR/staging/phantomvault" << 'EOF'
-#!/bin/bash
-# PhantomVault CLI for macOS
-
-SERVICE_BIN="/usr/local/bin/phantomvault-service"
-SERVICE_LABEL="com.phantomvault.service"
-
-# Function to check if service is running
-is_service_running() {
-    launchctl list | grep -q "$SERVICE_LABEL"
-}
-
-# Handle commands
-case "${1:-status}" in
-    status)
-        echo "PhantomVault - Invisible Folder Security"
-        echo "========================================"
-        if is_service_running; then
-            echo "Status: ✅ Running"
-            local pid=$(launchctl list | grep "$SERVICE_LABEL" | awk '{print $1}')
-            if [[ "$pid" != "-" ]]; then
-                local memory=$(ps -o rss= -p "$pid" 2>/dev/null | awk '{print $1/1024 " MB"}')
-                echo "Memory: ${memory:-"Unknown"}"
-            fi
-        else
-            echo "Status: ❌ Not running"
-        fi
-        ;;
-    --gui)
-        open -a "PhantomVault"
-        ;;
-    --start)
-        echo "Starting PhantomVault service..."
-        sudo launchctl load /Library/LaunchDaemons/com.phantomvault.service.plist
-        ;;
-    --stop)
-        echo "Stopping PhantomVault service..."
-        sudo launchctl unload /Library/LaunchDaemons/com.phantomvault.service.plist
-        ;;
-    --restart)
-        echo "Restarting PhantomVault service..."
-        sudo launchctl unload /Library/LaunchDaemons/com.phantomvault.service.plist
-        sleep 1
-        sudo launchctl load /Library/LaunchDaemons/com.phantomvault.service.plist
-        ;;
-    --status)
-        launchctl list | grep "$SERVICE_LABEL" || echo "Service not running"
-        ;;
-    --logs)
-        echo "PhantomVault Service Logs:"
-        echo "========================="
-        tail -f /usr/local/var/log/phantomvault.log
-        ;;
-    --help|-h)
-        echo "PhantomVault CLI for macOS"
-        echo "Usage: phantomvault [OPTION]"
-        echo ""
-        echo "Options:"
-        echo "  status        Show service status (default)"
-        echo "  --gui         Open GUI application"
-        echo "  --start       Start service"
-        echo "  --stop        Stop service"
-        echo "  --restart     Restart service"
-        echo "  --status      Detailed service status"
-        echo "  --logs        Show service logs"
-        echo "  --help        Show this help"
-        ;;
-    *)
-        # Pass other arguments to service
-        exec "$SERVICE_BIN" "$@"
-        ;;
-esac
-EOF
-    chmod +x "$PACKAGE_DIR/staging/phantomvault"
-    
-    print_success "CLI tool created"
-}
-
-# Create installer scripts
-create_installer_scripts() {
-    print_status "Creating installer scripts..."
-    
-    # Create preinstall script
-    cat > "$PACKAGE_DIR/staging/preinstall" << 'EOF'
-#!/bin/bash
-# PhantomVault preinstall script
-
-# Stop service if running
-if launchctl list | grep -q "com.phantomvault.service"; then
-    launchctl unload /Library/LaunchDaemons/com.phantomvault.service.plist 2>/dev/null || true
-fi
-
-# Create necessary directories
-mkdir -p /usr/local/bin
-mkdir -p /usr/local/var/{phantomvault,log}
-mkdir -p /Library/LaunchDaemons
-
-exit 0
-EOF
-    chmod +x "$PACKAGE_DIR/staging/preinstall"
-    
-    # Create postinstall script
-    cat > "$PACKAGE_DIR/staging/postinstall" << 'EOF'
-#!/bin/bash
-# PhantomVault postinstall script
-
-# Set proper permissions
-chown root:wheel /usr/local/bin/phantomvault-service
-chmod 755 /usr/local/bin/phantomvault-service
-
-chown root:wheel /usr/local/bin/phantomvault
-chmod 755 /usr/local/bin/phantomvault
-
-chown root:wheel /Library/LaunchDaemons/com.phantomvault.service.plist
-chmod 644 /Library/LaunchDaemons/com.phantomvault.service.plist
-
-# Set up data directories
-chown -R root:wheel /usr/local/var/phantomvault
-chmod -R 755 /usr/local/var/phantomvault
-
-# Load and start service
-launchctl load /Library/LaunchDaemons/com.phantomvault.service.plist
-
-echo "PhantomVault installed successfully!"
-echo "The service will start automatically on boot."
-echo "Use 'phantomvault --help' for CLI options or open PhantomVault.app"
-
-exit 0
-EOF
-    chmod +x "$PACKAGE_DIR/staging/postinstall"
-    
-    print_success "Installer scripts created"
-}
-
-# Code sign files
-code_sign_files() {
-    if [[ -z "$DEVELOPER_ID" ]]; then
-        print_warning "Skipping code signing - no DEVELOPER_ID set"
-        return
+    # Copy executable
+    if [ -f "$PROJECT_ROOT/bin/phantomvault" ]; then
+        cp "$PROJECT_ROOT/bin/phantomvault" "$app_dir/Contents/MacOS/"
+        chmod +x "$app_dir/Contents/MacOS/phantomvault"
+    elif [ -f "$PROJECT_ROOT/core/build/bin/phantomvault-service" ]; then
+        cp "$PROJECT_ROOT/core/build/bin/phantomvault-service" "$app_dir/Contents/MacOS/phantomvault"
+        chmod +x "$app_dir/Contents/MacOS/phantomvault"
+    else
+        print_warning "No macOS executable found, creating placeholder"
+        echo '#!/bin/bash\necho "PhantomVault placeholder executable"' > "$app_dir/Contents/MacOS/phantomvault"
+        chmod +x "$app_dir/Contents/MacOS/phantomvault"
     fi
     
-    print_status "Code signing files..."
+    # Create app icon (placeholder)
+    if [ -f "$PROJECT_ROOT/gui/assets/icon.icns" ]; then
+        cp "$PROJECT_ROOT/gui/assets/icon.icns" "$app_dir/Contents/Resources/"
+    else
+        print_warning "App icon not found, using placeholder"
+        # Create a simple icon placeholder
+        mkdir -p "$app_dir/Contents/Resources/PhantomVault.iconset"
+        # In real implementation, would create proper icon files
+        touch "$app_dir/Contents/Resources/PhantomVault.icns"
+    fi
     
-    # Sign the service binary
-    codesign --force --sign "$DEVELOPER_ID" \
-        --options runtime \
-        --timestamp \
-        "$PACKAGE_DIR/staging/phantomvault-service"
-    
-    # Sign the app bundle
-    codesign --force --sign "$DEVELOPER_ID" \
-        --options runtime \
-        --timestamp \
-        --deep \
-        "$PACKAGE_DIR/app/$APP_NAME.app"
-    
-    print_success "Files code signed"
+    print_success "App bundle created: $app_dir"
 }
 
 # Create PKG installer
 create_pkg_installer() {
     print_status "Creating PKG installer..."
     
-    local component_pkg="$PACKAGE_DIR/pkg/PhantomVault-Service.pkg"
-    local product_pkg="$PACKAGE_DIR/pkg/PhantomVault-$VERSION.pkg"
+    local pkg_root="$MACOS_DIR/pkg/root"
+    local scripts_dir="$MACOS_DIR/pkg/scripts"
+    mkdir -p "$pkg_root/Applications" "$scripts_dir"
     
-    # Create component package
-    pkgbuild --root "$PACKAGE_DIR/staging" \
-        --identifier "$BUNDLE_ID.service" \
-        --version "$VERSION" \
-        --scripts "$PACKAGE_DIR/staging" \
-        --install-location "/" \
-        "$component_pkg"
+    # Copy app bundle to pkg root
+    cp -R "$MACOS_DIR/app/PhantomVault.app" "$pkg_root/Applications/"
     
-    # Create distribution XML
-    cat > "$PACKAGE_DIR/pkg/distribution.xml" << EOF
-<?xml version="1.0" encoding="utf-8"?>
-<installer-gui-script minSpecVersion="1">
-    <title>PhantomVault $VERSION</title>
-    <organization>com.phantomvault</organization>
-    <domains enable_localSystem="true"/>
-    <options customize="never" require-scripts="true" rootVolumeOnly="true"/>
-    
-    <welcome file="welcome.html"/>
-    <license file="license.html"/>
-    <conclusion file="conclusion.html"/>
-    
-    <pkg-ref id="$BUNDLE_ID.service"/>
-    
-    <choices-outline>
-        <line choice="default">
-            <line choice="$BUNDLE_ID.service"/>
-        </line>
-    </choices-outline>
-    
-    <choice id="default"/>
-    <choice id="$BUNDLE_ID.service" visible="false">
-        <pkg-ref id="$BUNDLE_ID.service"/>
-    </choice>
-    
-    <pkg-ref id="$BUNDLE_ID.service" version="$VERSION" onConclusion="none">$component_pkg</pkg-ref>
-</installer-gui-script>
+    # Create preinstall script
+    cat > "$scripts_dir/preinstall" << 'EOF'
+#!/bin/bash
+
+# Stop any running PhantomVault processes
+pkill -f phantomvault || true
+
+# Remove old installation if it exists
+if [ -d "/Applications/PhantomVault.app" ]; then
+    rm -rf "/Applications/PhantomVault.app"
+fi
+
+exit 0
 EOF
     
-    # Create welcome HTML
-    cat > "$PACKAGE_DIR/pkg/welcome.html" << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Welcome to PhantomVault</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
-        h1 { color: #2563eb; }
-    </style>
-</head>
-<body>
-    <h1>Welcome to PhantomVault</h1>
-    <p>This installer will install PhantomVault - Invisible Folder Security with Profile-Based Management.</p>
-    <p><strong>Features:</strong></p>
-    <ul>
-        <li>Military-grade folder security</li>
-        <li>Invisible folder management</li>
-        <li>Profile-based access control</li>
-        <li>Real-time integrity monitoring</li>
-        <li>Cross-platform compatibility</li>
-    </ul>
-    <p>Click Continue to proceed with the installation.</p>
-</body>
-</html>
+    # Create postinstall script
+    cat > "$scripts_dir/postinstall" << 'EOF'
+#!/bin/bash
+
+# Set proper permissions
+chown -R root:admin "/Applications/PhantomVault.app"
+chmod -R 755 "/Applications/PhantomVault.app"
+
+# Create LaunchDaemon for service
+cat > "/Library/LaunchDaemons/dev.phantomvault.service.plist" << 'PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.phantomvault.service</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/PhantomVault.app/Contents/MacOS/phantomvault</string>
+        <string>--service</string>
+        <string>--daemon</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/phantomvault.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/phantomvault.error.log</string>
+</dict>
+</plist>
+PLIST_EOF
+
+# Load the service
+launchctl load "/Library/LaunchDaemons/dev.phantomvault.service.plist"
+
+# Create uninstaller
+cat > "/Applications/PhantomVault.app/Contents/MacOS/uninstall.sh" << 'UNINSTALL_EOF'
+#!/bin/bash
+
+# PhantomVault macOS Uninstaller
+
+echo "PhantomVault Uninstaller"
+echo "This will completely remove PhantomVault from your system."
+echo "User data in ~/.phantomvault/ will be preserved."
+read -p "Continue? (y/N): " -n 1 -r
+echo
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Uninstall cancelled."
+    exit 0
+fi
+
+echo "Stopping PhantomVault service..."
+launchctl unload "/Library/LaunchDaemons/dev.phantomvault.service.plist" 2>/dev/null || true
+
+echo "Removing PhantomVault..."
+rm -f "/Library/LaunchDaemons/dev.phantomvault.service.plist"
+rm -rf "/Applications/PhantomVault.app"
+
+echo "PhantomVault has been completely removed."
+echo "User data preserved in ~/.phantomvault/"
+UNINSTALL_EOF
+
+chmod +x "/Applications/PhantomVault.app/Contents/MacOS/uninstall.sh"
+
+echo "PhantomVault installed successfully!"
+echo "Launch from Applications folder or use: open -a PhantomVault"
+
+exit 0
 EOF
     
-    # Create license HTML
-    cat > "$PACKAGE_DIR/pkg/license.html" << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>License Agreement</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
-        pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow: auto; }
-    </style>
-</head>
-<body>
-    <h1>License Agreement</h1>
-    <pre>
-MIT License
-
-Copyright (c) 2024 PhantomVault Team
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-    </pre>
-</body>
-</html>
-EOF
+    # Make scripts executable
+    chmod +x "$scripts_dir"/{preinstall,postinstall}
     
-    # Create conclusion HTML
-    cat > "$PACKAGE_DIR/pkg/conclusion.html" << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Installation Complete</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
-        h1 { color: #16a34a; }
-        .command { background: #f5f5f5; padding: 10px; border-radius: 5px; font-family: monospace; }
-    </style>
-</head>
-<body>
-    <h1>Installation Complete</h1>
-    <p>PhantomVault has been successfully installed!</p>
-    
-    <h2>Getting Started</h2>
-    <p><strong>GUI Application:</strong> Open PhantomVault from Applications or Launchpad</p>
-    <p><strong>Command Line:</strong> Use the <code>phantomvault</code> command in Terminal</p>
-    
-    <h2>Quick Commands</h2>
-    <div class="command">
-        phantomvault status      # Check service status<br>
-        phantomvault --gui       # Open GUI application<br>
-        phantomvault --help      # Show all options
-    </div>
-    
-    <p>The PhantomVault service is now running and will start automatically on boot.</p>
-    <p>Press <strong>Ctrl+Alt+V</strong> anywhere to access your protected folders!</p>
-</body>
-</html>
-EOF
-    
-    # Build product package
-    productbuild --distribution "$PACKAGE_DIR/pkg/distribution.xml" \
-        --package-path "$PACKAGE_DIR/pkg" \
-        --resources "$PACKAGE_DIR/pkg" \
-        "$product_pkg"
-    
-    # Sign the package if developer ID is available
-    if [[ -n "$DEVELOPER_ID" ]]; then
-        print_status "Signing PKG installer..."
-        productsign --sign "$DEVELOPER_ID" "$product_pkg" "$product_pkg.signed"
-        mv "$product_pkg.signed" "$product_pkg"
+    # Build PKG
+    if check_macos_tools; then
+        pkgbuild --root "$pkg_root" \
+                 --scripts "$scripts_dir" \
+                 --identifier "$BUNDLE_ID" \
+                 --version "$VERSION" \
+                 --install-location "/" \
+                 "$MACOS_DIR/PhantomVault-$VERSION.pkg"
+        
+        if [ $? -eq 0 ]; then
+            print_success "PKG installer created: $MACOS_DIR/PhantomVault-$VERSION.pkg"
+        else
+            print_error "Failed to create PKG installer"
+            return 1
+        fi
+    else
+        print_warning "Skipping PKG creation (not on macOS)"
     fi
-    
-    print_success "PKG installer created: $product_pkg"
 }
 
-# Create DMG disk image
+# Create DMG installer
 create_dmg_installer() {
     print_status "Creating DMG installer..."
     
-    local dmg_staging="$PACKAGE_DIR/dmg/staging"
-    local dmg_file="$PACKAGE_DIR/dmg/PhantomVault-$VERSION.dmg"
+    local dmg_source="$MACOS_DIR/dmg/source"
+    local dmg_temp="$MACOS_DIR/dmg/temp"
+    mkdir -p "$dmg_source" "$dmg_temp"
     
-    # Create staging directory
-    mkdir -p "$dmg_staging"
-    
-    # Copy app bundle
-    cp -R "$PACKAGE_DIR/app/$APP_NAME.app" "$dmg_staging/"
-    
-    # Copy PKG installer
-    cp "$PACKAGE_DIR/pkg/PhantomVault-$VERSION.pkg" "$dmg_staging/Install PhantomVault.pkg"
+    # Copy app bundle to DMG source
+    cp -R "$MACOS_DIR/app/PhantomVault.app" "$dmg_source/"
     
     # Create Applications symlink
-    ln -s /Applications "$dmg_staging/Applications"
+    ln -sf "/Applications" "$dmg_source/Applications"
     
-    # Create README
-    cat > "$dmg_staging/README.txt" << 'EOF'
-PhantomVault - Invisible Folder Security
-========================================
+    # Create README file
+    cat > "$dmg_source/README.txt" << EOF
+PhantomVault v$VERSION
+Invisible Folder Security with Profile-Based Management
 
-Installation Options:
+INSTALLATION:
+1. Drag PhantomVault.app to the Applications folder
+2. Launch PhantomVault from Applications
+3. Grant necessary permissions when prompted
 
-1. RECOMMENDED: Double-click "Install PhantomVault.pkg" for full system installation
-   - Installs service that starts automatically on boot
-   - Adds command line tools
-   - Proper system integration
+UNINSTALLATION:
+Run: /Applications/PhantomVault.app/Contents/MacOS/uninstall.sh
 
-2. PORTABLE: Drag PhantomVault.app to Applications folder
-   - Manual installation
-   - Service must be started manually
-   - Limited functionality
+SUPPORT:
+Visit: https://github.com/ishaq2321/phantomVault
+Email: team@phantomvault.dev
 
-For support: https://github.com/ishaq2321/phantomVault
-
-Usage:
-• Press Ctrl+Alt+V anywhere to access your folders
-• Use 'phantomvault --help' for command line options
-• Open PhantomVault.app for GUI interface
+Copyright © 2025 PhantomVault Team
 EOF
     
-    # Create temporary DMG
-    local temp_dmg="$PACKAGE_DIR/dmg/temp.dmg"
-    hdiutil create -srcfolder "$dmg_staging" \
-        -volname "PhantomVault $VERSION" \
-        -fs HFS+ \
-        -fsargs "-c c=64,a=16,e=16" \
-        -format UDRW \
-        "$temp_dmg"
-    
-    # Mount and customize DMG
-    local mount_point="/Volumes/PhantomVault $VERSION"
-    hdiutil attach "$temp_dmg" -readwrite -noverify -noautoopen
-    
-    # Set custom icon and background (if available)
-    if [[ -f "$INSTALLER_DIR/assets/dmg-background.png" ]]; then
-        cp "$INSTALLER_DIR/assets/dmg-background.png" "$mount_point/.background.png"
+    # Create DMG background image (placeholder)
+    if [ -f "$PROJECT_ROOT/gui/assets/dmg-background.png" ]; then
+        cp "$PROJECT_ROOT/gui/assets/dmg-background.png" "$dmg_source/.background.png"
     fi
     
-    # Set Finder view options using AppleScript
-    osascript << EOF
+    # Create DS_Store for DMG layout (if on macOS)
+    if check_macos_tools; then
+        # Create temporary DMG
+        hdiutil create -srcfolder "$dmg_source" \
+                       -volname "PhantomVault $VERSION" \
+                       -fs HFS+ \
+                       -fsargs "-c c=64,a=16,e=16" \
+                       -format UDRW \
+                       -size 100m \
+                       "$dmg_temp/temp.dmg"
+        
+        # Mount temporary DMG
+        local mount_point="/Volumes/PhantomVault $VERSION"
+        hdiutil attach "$dmg_temp/temp.dmg" -mountpoint "$mount_point"
+        
+        # Set DMG window properties using AppleScript
+        osascript << EOF
 tell application "Finder"
     tell disk "PhantomVault $VERSION"
         open
         set current view of container window to icon view
         set toolbar visible of container window to false
         set statusbar visible of container window to false
-        set the bounds of container window to {400, 100, 900, 400}
+        set the bounds of container window to {400, 100, 920, 420}
         set viewOptions to the icon view options of container window
         set arrangement of viewOptions to not arranged
         set icon size of viewOptions to 72
         set background picture of viewOptions to file ".background.png"
-        set position of item "PhantomVault.app" of container window to {150, 200}
-        set position of item "Applications" of container window to {350, 200}
-        set position of item "Install PhantomVault.pkg" of container window to {250, 100}
-        set position of item "README.txt" of container window to {250, 300}
+        set position of item "PhantomVault.app" of container window to {130, 220}
+        set position of item "Applications" of container window to {410, 220}
         close
         open
         update without registering applications
@@ -703,44 +339,197 @@ tell application "Finder"
     end tell
 end tell
 EOF
-    
-    # Unmount and convert to read-only
-    hdiutil detach "$mount_point"
-    hdiutil convert "$temp_dmg" -format UDZO -imagekey zlib-level=9 -o "$dmg_file"
-    rm "$temp_dmg"
-    
-    print_success "DMG installer created: $dmg_file"
+        
+        # Unmount temporary DMG
+        hdiutil detach "$mount_point"
+        
+        # Convert to compressed DMG
+        hdiutil convert "$dmg_temp/temp.dmg" \
+                        -format UDZO \
+                        -imagekey zlib-level=9 \
+                        -o "$MACOS_DIR/PhantomVault-$VERSION.dmg"
+        
+        # Clean up
+        rm "$dmg_temp/temp.dmg"
+        
+        if [ -f "$MACOS_DIR/PhantomVault-$VERSION.dmg" ]; then
+            print_success "DMG installer created: $MACOS_DIR/PhantomVault-$VERSION.dmg"
+            
+            # Copy to main build directory
+            cp "$MACOS_DIR/PhantomVault-$VERSION.dmg" "$BUILD_DIR/"
+        else
+            print_error "Failed to create DMG installer"
+            return 1
+        fi
+    else
+        print_warning "Skipping DMG creation (not on macOS)"
+        
+        # Create a simple tar.gz archive instead
+        cd "$dmg_source"
+        tar -czf "$BUILD_DIR/PhantomVault-$VERSION-macos.tar.gz" *
+        cd - > /dev/null
+        print_success "macOS archive created: $BUILD_DIR/PhantomVault-$VERSION-macos.tar.gz"
+    fi
 }
 
-# Main function
-main() {
-    print_status "Building PhantomVault macOS installer..."
+# Create standalone installer script
+create_standalone_installer() {
+    print_status "Creating standalone macOS installer script..."
     
-    check_macos_env
-    prepare_macos_build
+    cat > "$BUILD_DIR/phantomvault-macos-installer.sh" << 'EOF'
+#!/bin/bash
+
+# PhantomVault macOS Standalone Installer
+# Self-extracting installer with complete uninstaller
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+print_status() { echo -e "${BLUE}[INSTALLER]${NC} $1"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Check if running on macOS
+if [[ "$OSTYPE" != "darwin"* ]]; then
+    print_error "This installer is for macOS only"
+    exit 1
+fi
+
+print_status "PhantomVault macOS Installer v1.0.0"
+print_status "Installing invisible folder security system..."
+
+# Check for admin privileges
+if [ "$EUID" -ne 0 ]; then
+    print_error "This installer must be run with sudo"
+    exit 1
+fi
+
+# Create application directory
+APP_DIR="/Applications/PhantomVault.app"
+mkdir -p "$APP_DIR/Contents"/{MacOS,Resources}
+
+print_status "Installing PhantomVault application..."
+
+# Copy executable (placeholder - would be embedded in real installer)
+if [ -f "./phantomvault" ]; then
+    cp "./phantomvault" "$APP_DIR/Contents/MacOS/"
+    chmod +x "$APP_DIR/Contents/MacOS/phantomvault"
+else
+    print_error "PhantomVault executable not found in installer"
+    exit 1
+fi
+
+# Create Info.plist
+cat > "$APP_DIR/Contents/Info.plist" << 'PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>phantomvault</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.phantomvault.app</string>
+    <key>CFBundleName</key>
+    <string>PhantomVault</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+</dict>
+</plist>
+PLIST_EOF
+
+# Set proper permissions
+chown -R root:admin "$APP_DIR"
+chmod -R 755 "$APP_DIR"
+
+# Create LaunchDaemon for service
+cat > "/Library/LaunchDaemons/dev.phantomvault.service.plist" << 'SERVICE_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.phantomvault.service</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/PhantomVault.app/Contents/MacOS/phantomvault</string>
+        <string>--service</string>
+        <string>--daemon</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
+SERVICE_EOF
+
+# Load the service
+launchctl load "/Library/LaunchDaemons/dev.phantomvault.service.plist"
+
+# Create uninstaller
+cat > "$APP_DIR/Contents/MacOS/uninstall.sh" << 'UNINSTALL_EOF'
+#!/bin/bash
+
+echo "PhantomVault macOS Uninstaller"
+echo "This will completely remove PhantomVault from your system."
+echo "User data in ~/.phantomvault/ will be preserved."
+read -p "Continue? (y/N): " -n 1 -r
+echo
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Uninstall cancelled."
+    exit 0
+fi
+
+echo "Stopping PhantomVault service..."
+sudo launchctl unload "/Library/LaunchDaemons/dev.phantomvault.service.plist" 2>/dev/null || true
+
+echo "Removing PhantomVault..."
+sudo rm -f "/Library/LaunchDaemons/dev.phantomvault.service.plist"
+sudo rm -rf "/Applications/PhantomVault.app"
+
+echo "PhantomVault has been completely removed."
+echo "User data preserved in ~/.phantomvault/"
+UNINSTALL_EOF
+
+chmod +x "$APP_DIR/Contents/MacOS/uninstall.sh"
+
+print_success "PhantomVault installed successfully!"
+print_status "Launch: open -a PhantomVault"
+print_status "Service: Automatically started"
+print_status "Uninstall: $APP_DIR/Contents/MacOS/uninstall.sh"
+
+EOF
+    
+    chmod +x "$BUILD_DIR/phantomvault-macos-installer.sh"
+    print_success "Standalone macOS installer created: $BUILD_DIR/phantomvault-macos-installer.sh"
+}
+
+# Main execution
+main() {
+    print_status "Starting macOS installer build process..."
+    
     create_app_bundle
-    create_launch_daemon
-    create_cli_tool
-    create_installer_scripts
-    code_sign_files
     create_pkg_installer
     create_dmg_installer
+    create_standalone_installer
     
-    print_success "macOS installer created successfully!"
-    print_status "Installers available in: $PACKAGE_DIR"
-    
-    # List created installers
-    echo ""
-    echo "Created installers:"
-    find "$PACKAGE_DIR" -name "*.pkg" -o -name "*.dmg" | while read -r installer; do
-        echo "  • $(basename "$installer")"
+    print_success "macOS installer packages created successfully!"
+    print_status "Available packages:"
+    find "$BUILD_DIR" -name "*.dmg" -o -name "*.pkg" -o -name "*macos*installer*" -o -name "*macos*.tar.gz" | while read file; do
+        print_status "  - $(basename "$file")"
     done
-    
-    echo ""
-    echo "Installation methods:"
-    echo "1. DMG: Mount and run installer package"
-    echo "2. PKG: Direct installer package"
-    echo "3. App Bundle: Drag to Applications (manual setup required)"
 }
 
 # Run main function
