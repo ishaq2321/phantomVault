@@ -50,7 +50,6 @@ void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 #endif
 
 class KeyboardSequenceDetector::Implementation {
-    friend void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 public:
     // KeyEvent structure for ring buffer
     struct KeyEvent {
@@ -906,14 +905,7 @@ private:
 #ifdef PLATFORM_LINUX
 // X11 keyboard callback function - must match XRecordInterceptProc signature
 extern "C" void x11KeyboardCallback(::XPointer closure, ::XRecordInterceptData* data) {
-    phantomvault::KeyboardSequenceDetector::Implementation* impl = 
-        reinterpret_cast<phantomvault::KeyboardSequenceDetector::Implementation*>(closure);
-    
-    if (impl && data) {
-        impl->handleX11KeyEvent(data);
-    }
-    
-    XRecordFreeData(data);
+    phantomvault::KeyboardSequenceDetector::handleX11Callback(closure, data);
 }
 #endif
 
@@ -1001,6 +993,19 @@ std::chrono::system_clock::time_point KeyboardSequenceDetector::getLastDetection
 
 std::string KeyboardSequenceDetector::getLastError() const {
     return pimpl->getLastError();
+}
+
+void KeyboardSequenceDetector::handleX11Callback(void* closure, void* data) {
+    #ifdef PLATFORM_LINUX
+    Implementation* impl = reinterpret_cast<Implementation*>(closure);
+    ::XRecordInterceptData* x11_data = reinterpret_cast<::XRecordInterceptData*>(data);
+    
+    if (impl && x11_data) {
+        impl->handleX11KeyEvent(x11_data);
+    }
+    
+    XRecordFreeData(x11_data);
+    #endif
 }
 
 void KeyboardSequenceDetector::enableHardwareLevelMonitoring() {

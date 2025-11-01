@@ -13,12 +13,7 @@
 #include <functional>
 #include <chrono>
 
-// Forward declarations for X11 (outside namespace to match C linkage)
-#ifdef PLATFORM_LINUX
-extern "C" {
-    void x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
-}
-#endif
+
 
 namespace phantomvault {
 
@@ -53,7 +48,6 @@ struct PlatformCapabilities {
 };
 
 class KeyboardSequenceDetector {
-    friend void ::x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
 public:
     KeyboardSequenceDetector();
     ~KeyboardSequenceDetector();
@@ -105,6 +99,9 @@ public:
     
     // Error handling
     std::string getLastError() const;
+    
+    // Static callback handler for X11 (public to allow C callback access)
+    static void handleX11Callback(void* closure, void* data);
 
 private:
     class Implementation;
