@@ -20,7 +20,7 @@ namespace phantomvault {
 // Forward declarations to avoid header pollution
 typedef char* XPointer;
 struct XRecordInterceptData;
-void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
+void x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
 #endif
 
 /**
@@ -54,7 +54,7 @@ struct PlatformCapabilities {
 };
 
 class KeyboardSequenceDetector {
-    friend void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
+    friend void x11KeyboardCallback(char* closure, struct XRecordInterceptData* data);
 public:
     KeyboardSequenceDetector();
     ~KeyboardSequenceDetector();
