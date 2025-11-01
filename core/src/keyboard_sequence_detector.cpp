@@ -52,6 +52,13 @@ void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 class KeyboardSequenceDetector::Implementation {
     friend void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 public:
+    // KeyEvent structure for ring buffer
+    struct KeyEvent {
+        std::chrono::high_resolution_clock::time_point timestamp;
+        uint32_t keycode;
+        bool is_press;
+        uint8_t modifiers;
+    };
     Implementation()
         : running_(false)
         , sequence_active_(false)
@@ -716,12 +723,6 @@ private:
     
     // Lock-free ring buffer for keyboard events (power of 2 size for fast modulo)
     static constexpr size_t RING_BUFFER_SIZE = 4096;
-    struct KeyEvent {
-        std::chrono::high_resolution_clock::time_point timestamp;
-        uint32_t keycode;
-        bool is_press;
-        uint8_t modifiers;
-    };
     
     std::array<KeyEvent, RING_BUFFER_SIZE> event_ring_buffer_;
     std::atomic<size_t> ring_buffer_head_;
