@@ -553,7 +553,7 @@ public:
     
     // Platform-specific keyboard event handling
     #ifdef PLATFORM_LINUX
-    void handleX11KeyEvent(XRecordInterceptData* data) {
+    void handleX11KeyEvent(::XRecordInterceptData* data) {
         auto start_time = std::chrono::high_resolution_clock::now();
         
         if (data->category != XRecordFromServer) {
@@ -910,10 +910,10 @@ void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data) {
         reinterpret_cast<KeyboardSequenceDetector::Implementation*>(closure);
     
     if (impl && data) {
-        impl->handleX11KeyEvent(data);
+        impl->handleX11KeyEvent(reinterpret_cast<::XRecordInterceptData*>(data));
     }
     
-    XRecordFreeData(data);
+    XRecordFreeData(reinterpret_cast<::XRecordInterceptData*>(data));
 }
 #endif
 
