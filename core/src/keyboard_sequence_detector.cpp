@@ -553,11 +553,11 @@ public:
             return;
         }
         
-        XEvent* event = (XEvent*)data->data;
+        XKeyEvent* event = (XKeyEvent*)data->data;
         
-        if (event->u.u.type == KeyPress || event->u.u.type == KeyRelease) {
-            KeyCode keycode = event->u.u.detail;
-            bool is_press = (event->u.u.type == KeyPress);
+        if (event->type == KeyPress || event->type == KeyRelease) {
+            KeyCode keycode = event->keycode;
+            bool is_press = (event->type == KeyPress);
             
             // Convert keycode to keysym
             KeySym keysym = XkbKeycodeToKeysym(x11_display_, keycode, 0, 0);

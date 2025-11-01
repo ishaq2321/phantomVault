@@ -1321,7 +1321,7 @@ private:
         }
     }
     
-    std::string calculateFileHash(const std::string& filePath) {
+    std::string calculateFileHash(const std::string& filePath) const {
         try {
             std::ifstream file(filePath, std::ios::binary);
             if (!file.is_open()) {
@@ -1377,7 +1377,7 @@ private:
     void secureAllVaults() {
         // Placeholder for vault securing logic
         logSecurityEvent(SecurityEventType::SYSTEM_COMPROMISE, ErrorSeverity::CRITICAL, 
-                        "", "Emergency protocol activated - securing all vaults");
+                        "", "Emergency protocol activated - securing all vaults", {});
     }
     
     void createEmergencyBackup() {
@@ -1401,24 +1401,24 @@ private:
     void reinitializeEncryption() {
         // Placeholder for encryption reinitialization
         logSecurityEvent(SecurityEventType::ENCRYPTION_FAILURE, ErrorSeverity::WARNING,
-                        "", "Attempting encryption engine reinitialization");
+                        "", "Attempting encryption engine reinitialization", {});
     }
     
     void repairVaultStructures() {
         // Placeholder for vault repair
         logSecurityEvent(SecurityEventType::VAULT_CORRUPTION, ErrorSeverity::WARNING,
-                        "", "Attempting vault structure repair");
+                        "", "Attempting vault structure repair", {});
     }
     
     void reloadProfilesFromBackup() {
         // Placeholder for profile reload
         logSecurityEvent(SecurityEventType::VAULT_CORRUPTION, ErrorSeverity::WARNING,
-                        "", "Attempting profile reload from backup");
+                        "", "Attempting profile reload from backup", {});
     }
     
     void performGenericRecovery(const std::string& component) {
         logSecurityEvent(SecurityEventType::SYSTEM_COMPROMISE, ErrorSeverity::WARNING,
-                        "", "Attempting generic recovery for component: " + component);
+                        "", "Attempting generic recovery for component: " + component, {});
     }
     
     std::string sanitizeForLogging(const std::string& input) {
