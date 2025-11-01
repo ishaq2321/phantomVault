@@ -49,6 +49,9 @@ namespace phantomvault {
 void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 #endif
 
+// Forward declaration for friend function
+void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
+
 class KeyboardSequenceDetector::Implementation {
     friend void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 public:
