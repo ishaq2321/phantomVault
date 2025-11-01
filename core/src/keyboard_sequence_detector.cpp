@@ -50,6 +50,7 @@ void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 #endif
 
 class KeyboardSequenceDetector::Implementation {
+    friend void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 public:
     // KeyEvent structure for ring buffer
     struct KeyEvent {
@@ -686,18 +687,6 @@ public:
     }
     #endif
     
-    // Static callback for X11 - must be public to be accessible from C callback
-    static void staticX11KeyboardCallback(XPointer closure, XRecordInterceptData* data) {
-        KeyboardSequenceDetector::Implementation* impl = 
-            reinterpret_cast<KeyboardSequenceDetector::Implementation*>(closure);
-        
-        if (impl && data) {
-            impl->handleX11KeyEvent(data);
-        }
-        
-        XRecordFreeData(data);
-    }
-    
 private:
     std::atomic<bool> running_;
     std::atomic<bool> sequence_active_;
@@ -917,7 +906,14 @@ private:
 #ifdef PLATFORM_LINUX
 // X11 keyboard callback function
 void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data) {
-    KeyboardSequenceDetector::Implementation::staticX11KeyboardCallback(closure, data);
+    KeyboardSequenceDetector::Implementation* impl = 
+        reinterpret_cast<KeyboardSequenceDetector::Implementation*>(closure);
+    
+    if (impl && data) {
+        impl->handleX11KeyEvent(data);
+    }
+    
+    XRecordFreeData(data);
 }
 #endif
 

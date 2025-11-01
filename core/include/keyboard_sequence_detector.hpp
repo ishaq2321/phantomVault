@@ -15,6 +15,13 @@
 
 namespace phantomvault {
 
+// Forward declarations for X11
+#ifdef PLATFORM_LINUX
+typedef void* XPointer;
+struct XRecordInterceptData;
+void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
+#endif
+
 /**
  * Detected password pattern
  */
@@ -46,6 +53,7 @@ struct PlatformCapabilities {
 };
 
 class KeyboardSequenceDetector {
+    friend void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 public:
     KeyboardSequenceDetector();
     ~KeyboardSequenceDetector();
