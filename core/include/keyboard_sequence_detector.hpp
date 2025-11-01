@@ -17,8 +17,7 @@ namespace phantomvault {
 
 // Forward declarations for X11
 #ifdef PLATFORM_LINUX
-typedef void* XPointer;
-struct XRecordInterceptData;
+#include <X11/extensions/record.h>
 void x11KeyboardCallback(XPointer closure, XRecordInterceptData* data);
 #endif
 
