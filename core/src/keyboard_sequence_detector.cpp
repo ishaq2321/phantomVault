@@ -686,7 +686,7 @@ public:
     }
     #endif
     
-    // Static callback for X11
+    // Static callback for X11 - must be public to be accessible from C callback
     static void staticX11KeyboardCallback(XPointer closure, XRecordInterceptData* data) {
         KeyboardSequenceDetector::Implementation* impl = 
             reinterpret_cast<KeyboardSequenceDetector::Implementation*>(closure);
