@@ -77,6 +77,7 @@ set(CORE_SOURCES
     core/src/enhanced_keyboard_detector.cpp
     core/src/analytics_engine.cpp
     core/src/ipc_server.cpp
+    core/src/ipc_client.cpp
     core/src/memory_manager.cpp
     core/src/performance_monitor.cpp
     core/src/encryption_engine.cpp
@@ -103,6 +104,8 @@ target_link_libraries(phantomvault
     Threads::Threads
     ${ARGON2_LIBRARIES}
     ${ZSTD_LIBRARIES}
+    curl
+    jsoncpp
 )
 
 # Platform-specific libraries

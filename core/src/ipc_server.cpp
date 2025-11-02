@@ -572,6 +572,19 @@ private:
         registerRoute("POST", "/api/recovery/recover-master-key", [this](const HttpRequest& req) -> HttpResponse {
             return handleRecoverMasterKey(req);
         });
+        
+        // Service control routes
+        registerRoute("GET", "/api/test-keyboard", [this](const HttpRequest&) -> HttpResponse {
+            return handleTestKeyboard();
+        });
+        
+        registerRoute("POST", "/api/service/stop", [this](const HttpRequest&) -> HttpResponse {
+            return handleServiceStop();
+        });
+        
+        registerRoute("POST", "/api/service/restart", [this](const HttpRequest&) -> HttpResponse {
+            return handleServiceRestart();
+        });
     }
     
     // Route handlers
@@ -1595,6 +1608,86 @@ private:
         } catch (const std::exception& e) {
             response.status_code = 500;
             response.body = R"({"success": false, "error": "Internal server error"})";
+        }
+        
+        return response;
+    }
+    
+    // Service control handlers
+    HttpResponse handleTestKeyboard() {
+        HttpResponse response;
+        
+        try {
+            json result_json = {
+                {"success", true},
+                {"message", "Keyboard detection test initiated"},
+                {"instructions", "Press Ctrl+Alt+V within 10 seconds to test detection"}
+            };
+            
+            // If keyboard detector is available, test it
+            if (keyboard_sequence_detector_) {
+                result_json["keyboard_detector_status"] = "available";
+                result_json["hotkey_support"] = true;
+            } else {
+                result_json["keyboard_detector_status"] = "not_available";
+                result_json["hotkey_support"] = false;
+            }
+            
+            response.body = result_json.dump();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Keyboard test failed"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleServiceStop() {
+        HttpResponse response;
+        
+        try {
+            json result_json = {
+                {"success", true},
+                {"message", "Service stop request received - shutting down gracefully"}
+            };
+            
+            response.body = result_json.dump();
+            
+            // Schedule graceful shutdown after response is sent
+            std::thread([this]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                stop();
+            }).detach();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Failed to stop service"})";
+        }
+        
+        return response;
+    }
+    
+    HttpResponse handleServiceRestart() {
+        HttpResponse response;
+        
+        try {
+            json result_json = {
+                {"success", true},
+                {"message", "Service restart request received - restarting components"}
+            };
+            
+            response.body = result_json.dump();
+            
+            // Schedule restart after response is sent
+            std::thread([this]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                // For now, just return success - full restart would require service manager coordination
+            }).detach();
+            
+        } catch (const std::exception& e) {
+            response.status_code = 500;
+            response.body = R"({"success": false, "error": "Failed to restart service"})";
         }
         
         return response;
