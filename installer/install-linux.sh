@@ -197,7 +197,7 @@ install_files() {
     # Download service binary
     log_info "Downloading PhantomVault service..."
     if curl -fsSL -o "$INSTALL_DIR/bin/phantomvault-service" \
-        "https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-service-linux"; then
+        "https://github.com/ishaq2321/phantomVault/releases/download/v1.1.0/phantomvault-service-linux"; then
         chmod +x "$INSTALL_DIR/bin/phantomvault-service"
         log_success "Downloaded and installed service binary"
     else
@@ -208,7 +208,7 @@ install_files() {
     # Download and install GUI application
     log_info "Downloading PhantomVault GUI..."
     if curl -fsSL -o "/tmp/phantomvault-gui.tar.gz" \
-        "https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault-gui-linux.tar.gz"; then
+        "https://github.com/ishaq2321/phantomVault/releases/download/v1.1.0/phantomvault-gui-linux.tar.gz"; then
         
         # Extract GUI to installation directory
         mkdir -p "$INSTALL_DIR/gui"

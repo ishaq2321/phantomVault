@@ -19,7 +19,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Configuration
 PACKAGE_NAME="phantomvault"
-VERSION="1.0.0"
+VERSION="1.1.0"
 MAINTAINER="PhantomVault Team <team@phantomvault.dev>"
 DESCRIPTION="Invisible Folder Security with Profile-Based Management"
 HOMEPAGE="https://github.com/ishaq2321/phantomVault"
