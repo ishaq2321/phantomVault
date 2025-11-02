@@ -394,17 +394,18 @@ After=network.target
 Wants=network.target
 
 [Service]
-Type=forking
+Type=exec
 User=root
 Group=root
 WorkingDirectory=/opt/phantomvault
 Environment=HOME=/root
 ExecStart=$INSTALL_DIR/bin/phantomvault-service --service --daemon --log-level INFO --port 9876
-ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10
 StartLimitInterval=300s
 StartLimitBurst=5
+TimeoutStartSec=30
+TimeoutStopSec=30
 
 # Logging
 StandardOutput=append:$INSTALL_DIR/logs/phantomvault.log
@@ -419,7 +420,6 @@ ProtectHome=false
 # Resource limits
 LimitNOFILE=65536
 MemoryMax=50M
-CPUQuota=10%
 
 [Install]
 WantedBy=multi-user.target
