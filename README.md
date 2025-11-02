@@ -48,8 +48,10 @@ PhantomVault is a professional-grade security application that makes your sensit
 ### Installation
 
 **Linux (Recommended - Tested Platform)**
+
+**LATEST RELEASE - Pure Client-Server Architecture (CLI Fixed!)**
 ```bash
-# Download the DEB package
+# Download the latest DEB package (Architecture Fixed)
 wget https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault_1.0.0_amd64.deb
 
 # Install the package
@@ -61,6 +63,10 @@ sudo apt-get install -f
 # Start the service
 sudo systemctl start phantomvault
 sudo systemctl enable phantomvault
+
+# Test CLI (Now Working!)
+phantomvault --cli status
+phantomvault --cli profiles
 ```
 
 **Windows (⚠️ Untested - Use at Your Own Risk)**
@@ -100,13 +106,42 @@ cd phantomvault
 4. **Add Folders**: Select folders to protect with encryption
 5. **Access Anytime**: Press `Ctrl+Alt+V` and type your password
 
-## 🏗️ Architecture
+### CLI Usage (NEW - Fixed in v1.0.0!)
 
-PhantomVault uses a modern, secure architecture:
+```bash
+# Check service status
+phantomvault --cli status
+
+# List profiles
+phantomvault --cli profiles
+
+# Lock profile folders
+phantomvault --cli lock profile-name
+
+# Service management
+phantomvault --cli stop      # Graceful shutdown
+phantomvault --cli restart   # Service restart
+
+# Help and version
+phantomvault --help
+phantomvault --version
+```
+
+## 🏗️ Architecture - UPDATED v1.0.0
+
+PhantomVault now uses a **Pure Client-Server Architecture** (CLI Issues Fixed!):
 
 ```
-┌─────────────────┐    HTTP/JSON    ┌──────────────────┐
-│   Electron GUI  │ ←──────────────→ │   C++ Service    │
+┌─────────────────┐    IPC/HTTP     ┌──────────────────┐
+│   CLI Client    │ ←──────────────→ │   Service Daemon │
+│                 │   (localhost)    │                  │
+│ • Pure client   │                  │ • Single instance│
+│ • No service    │                  │ • Port 9876      │
+│ • IPC calls only│                  │ • All operations │
+└─────────────────┘                  └──────────────────┘
+
+┌─────────────────┐    IPC/HTTP     ┌──────────────────┐
+│   Electron GUI  │ ←──────────────→ │   Service Daemon │
 │                 │   (localhost)    │                  │
 │ • React + MUI   │                  │ • Profile Mgmt   │
 │ • TypeScript    │                  │ • Encryption     │
@@ -115,6 +150,12 @@ PhantomVault uses a modern, secure architecture:
                                      │ • Performance    │
                                      └──────────────────┘
 ```
+
+**ARCHITECTURE IMPROVEMENTS:**
+- **CLI Fixed**: No more port conflicts or service startup issues
+- **Single Service**: One daemon handles all operations
+- **Clean IPC**: All communication via HTTP/JSON API
+- **Better Performance**: No duplicate service instances
 
 **Service Components:**
 - **Profile Manager**: Secure authentication and profile isolation
