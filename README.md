@@ -49,24 +49,24 @@ PhantomVault is a professional-grade security application that makes your sensit
 
 **Linux (Recommended - Tested Platform)**
 
-**LATEST RELEASE - Pure Client-Server Architecture (CLI Fixed!)**
+**LATEST RELEASE v1.1.0 - Architecture Refactor Complete**
 ```bash
-# Download the latest DEB package (Architecture Fixed)
-wget https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault_1.0.0_amd64.deb
+# Quick Install (Recommended)
+curl -fsSL https://raw.githubusercontent.com/ishaq2321/phantomVault/main/installer/install-linux.sh | sudo bash
 
-# Install the package
-sudo dpkg -i phantomvault_1.0.0_amd64.deb
-
-# Fix any dependency issues
+# Or Manual Install
+wget https://github.com/ishaq2321/phantomVault/releases/download/v1.1.0/phantomvault_1.1.0_amd64.deb
+sudo dpkg -i phantomvault_1.1.0_amd64.deb
 sudo apt-get install -f
 
 # Start the service
 sudo systemctl start phantomvault
 sudo systemctl enable phantomvault
 
-# Test CLI (Now Working!)
+# Test CLI (Architecture Fixed!)
 phantomvault --cli status
 phantomvault --cli profiles
+phantomvault --help
 ```
 
 **Windows (⚠️ Untested - Use at Your Own Risk)**
@@ -94,8 +94,12 @@ cd phantomvault
 # Build the project
 ./build.sh
 
-# Create installer (Linux only)
-./build.sh --installer
+# Create installer packages (Linux)
+cd installer/scripts
+./build-linux-installer.sh
+
+# Create maintenance tools
+./build-maintenance-tools.sh
 ```
 
 ### First Use
@@ -127,9 +131,9 @@ phantomvault --help
 phantomvault --version
 ```
 
-## 🏗️ Architecture - UPDATED v1.0.0
+## 🏗️ Architecture - REFACTORED v1.1.0
 
-PhantomVault now uses a **Pure Client-Server Architecture** (CLI Issues Fixed!):
+PhantomVault uses a **Pure Client-Server Architecture** with complete CLI fix:
 
 ```
 ┌─────────────────┐    IPC/HTTP     ┌──────────────────┐
@@ -151,11 +155,13 @@ PhantomVault now uses a **Pure Client-Server Architecture** (CLI Issues Fixed!):
                                      └──────────────────┘
 ```
 
-**ARCHITECTURE IMPROVEMENTS:**
-- **CLI Fixed**: No more port conflicts or service startup issues
-- **Single Service**: One daemon handles all operations
-- **Clean IPC**: All communication via HTTP/JSON API
-- **Better Performance**: No duplicate service instances
+**ARCHITECTURE IMPROVEMENTS v1.1.0:**
+- **✅ CLI Completely Fixed**: Zero port conflicts, pure client implementation
+- **✅ Single Service Daemon**: One process handles all operations on port 9876
+- **✅ Clean IPC Communication**: All CLI/GUI communication via HTTP/JSON API
+- **✅ No Resource Conflicts**: Eliminated duplicate service instances
+- **✅ Organized Installation**: Structured /opt/phantomvault/ directory layout
+- **✅ Professional Installer**: Complete installation and uninstallation system
 
 **Service Components:**
 - **Profile Manager**: Secure authentication and profile isolation
@@ -302,7 +308,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **PhantomVault** - *Your files, invisible until you need them.*
 
-[📥 Download v1.0.0](https://github.com/ishaq2321/phantomVault/releases/tag/v1.0.0) • [📖 Documentation](docs/) • [🐛 Report Issues](https://github.com/ishaq2321/phantomVault/issues) • [📧 Contact](mailto:ishaq2321@proton.me)
+[📥 Download v1.1.0](https://github.com/ishaq2321/phantomVault/releases/tag/v1.1.0) • [📖 Documentation](docs/) • [🐛 Report Issues](https://github.com/ishaq2321/phantomVault/issues) • [📧 Contact](mailto:ishaq2321@proton.me)
 
 Made with ❤️ for privacy and security
 
