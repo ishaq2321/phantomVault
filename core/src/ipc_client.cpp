@@ -158,8 +158,9 @@ private:
             
             std::istringstream stream(http_response.data);
             if (Json::parseFromStream(builder, stream, &json_response, &errors)) {
-                response.success = (http_response.response_code == 200);
-                response.message = json_response.get("message", "").asString();
+                // Check both HTTP status and JSON success field
+                response.success = (http_response.response_code == 200) && json_response.get("success", false).asBool();
+                response.message = json_response.get("message", "Service responded successfully").asString();
                 
                 // Extract data fields
                 if (json_response.isMember("data") && json_response["data"].isObject()) {
