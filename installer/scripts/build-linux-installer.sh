@@ -97,7 +97,7 @@ Wants=network.target
 Type=simple
 User=root
 Group=root
-ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
+ExecStart=/opt/phantomvault/bin/phantomvault --service
 ExecStop=/bin/kill -TERM \$MAINPID
 Restart=on-failure
 RestartSec=5
@@ -326,7 +326,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
+ExecStart=/opt/phantomvault/bin/phantomvault --service
 Restart=always
 RestartSec=10
 
@@ -441,7 +441,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
+ExecStart=/opt/phantomvault/bin/phantomvault --service
 Restart=always
 RestartSec=10
 

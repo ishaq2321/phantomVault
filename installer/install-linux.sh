@@ -394,12 +394,12 @@ After=network.target
 Wants=network.target
 
 [Service]
-Type=forking
+Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/phantomvault
 Environment=HOME=/root
-ExecStart=$INSTALL_DIR/bin/phantomvault-service --service --daemon --log-level INFO --port 9876
+ExecStart=$INSTALL_DIR/bin/phantomvault-service --service --log-level INFO --port 9876
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10
