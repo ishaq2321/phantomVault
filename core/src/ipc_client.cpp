@@ -236,6 +236,14 @@ IPCResponse IPCClient::testKeyboard() {
     return impl_->testKeyboard();
 }
 
+IPCResponse IPCClient::stopService() {
+    return impl_->stopService();
+}
+
+IPCResponse IPCClient::restartService() {
+    return impl_->restartService();
+}
+
 std::string IPCClient::getLastError() const {
     return impl_->getLastError();
 }
