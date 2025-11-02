@@ -5,9 +5,9 @@
 **Invisible Folder Security with Profile-Based Management**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20(Tested)%20%7C%20Windows%20(Untested)%20%7C%20macOS%20(Untested)-orange)](https://github.com/phantomvault/phantomvault)
-[![Security](https://img.shields.io/badge/Encryption-AES--256-green)](https://github.com/phantomvault/phantomvault)
-[![Status](https://img.shields.io/badge/Status-Continuous%20Development-yellow)](https://github.com/phantomvault/phantomvault)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20(Tested)%20%7C%20Windows%20(Untested)%20%7C%20macOS%20(Untested)-orange)](https://github.com/ishaq2321/phantomVault)
+[![Security](https://img.shields.io/badge/Encryption-AES--256-green)](https://github.com/ishaq2321/phantomVault)
+[![Status](https://img.shields.io/badge/Status-Continuous%20Development-yellow)](https://github.com/ishaq2321/phantomVault)
 
 ## ⚠️ Important Notice
 
@@ -50,7 +50,7 @@ PhantomVault is a professional-grade security application that makes your sensit
 **Linux (Recommended - Tested Platform)**
 ```bash
 # Download the DEB package
-wget https://github.com/phantomvault/phantomvault/releases/latest/download/phantomvault_1.0.0_amd64.deb
+wget https://github.com/ishaq2321/phantomVault/releases/download/v1.0.0/phantomvault_1.0.0_amd64.deb
 
 # Install the package
 sudo dpkg -i phantomvault_1.0.0_amd64.deb
@@ -66,7 +66,7 @@ sudo systemctl enable phantomvault
 **Windows (⚠️ Untested - Use at Your Own Risk)**
 ```powershell
 # Build from source (Windows support not yet tested)
-git clone https://github.com/phantomvault/phantomvault.git
+git clone https://github.com/ishaq2321/phantomVault.git
 cd phantomvault
 # Follow build instructions below
 ```
@@ -74,7 +74,7 @@ cd phantomvault
 **macOS (⚠️ Untested - Use at Your Own Risk)**
 ```bash
 # Build from source (macOS support not yet tested)
-git clone https://github.com/phantomvault/phantomvault.git
+git clone https://github.com/ishaq2321/phantomVault.git
 cd phantomvault
 # Follow build instructions below
 ```
@@ -82,7 +82,7 @@ cd phantomvault
 **Build from Source (All Platforms)**
 ```bash
 # Clone the repository
-git clone https://github.com/phantomvault/phantomvault.git
+git clone https://github.com/ishaq2321/phantomVault.git
 cd phantomvault
 
 # Build the project
@@ -220,8 +220,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Get Help:**
 - 📖 **Documentation**: Check docs/ directory
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/phantomvault/phantomvault/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/phantomvault/phantomvault/discussions)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/ishaq2321/phantomVault/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/ishaq2321/phantomVault/discussions)
 - 📧 **Contact**: ishaq2321@proton.me
 - 📄 **License**: MIT
 - 🤝 **Contributions**: Welcome!
@@ -261,7 +261,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **PhantomVault** - *Your files, invisible until you need them.*
 
-[📥 Download v1.0.0](https://github.com/phantomvault/phantomvault/releases/tag/v1.0.0) • [📖 Documentation](docs/) • [🐛 Report Issues](https://github.com/phantomvault/phantomvault/issues) • [📧 Contact](mailto:ishaq2321@proton.me)
+[📥 Download v1.0.0](https://github.com/ishaq2321/phantomVault/releases/tag/v1.0.0) • [📖 Documentation](docs/) • [🐛 Report Issues](https://github.com/ishaq2321/phantomVault/issues) • [📧 Contact](mailto:ishaq2321@proton.me)
 
 Made with ❤️ for privacy and security
 
