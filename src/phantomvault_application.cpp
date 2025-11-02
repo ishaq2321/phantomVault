@@ -362,110 +362,87 @@ int PhantomVaultApplication::checkServiceStatus() {
 }
 
 int PhantomVaultApplication::startService() {
-    std::cout << "Starting PhantomVault service..." << std::endl;
-    
-    // Initialize service manager
-    service_manager_ = std::make_unique<phantomvault::ServiceManager>();
-    
-    if (!service_manager_->initialize(config_.config_file, config_.log_level, config_.ipc_port)) {
-        std::cerr << "❌ Failed to initialize service: " << service_manager_->getLastError() << std::endl;
-        return 1;
-    }
-    
-    if (!service_manager_->start()) {
-        std::cerr << "❌ Failed to start service: " << service_manager_->getLastError() << std::endl;
-        return 1;
-    }
-    
-    std::cout << "✅ PhantomVault service started successfully" << std::endl;
-    std::cout << "   IPC Port: " << config_.ipc_port << std::endl;
-    std::cout << "   Log Level: " << config_.log_level << std::endl;
-    
-    // Keep service running in foreground for CLI start
-    std::cout << "Press Ctrl+C to stop the service..." << std::endl;
-    while (g_running && service_manager_->isRunning()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    
-    service_manager_->stop();
-    std::cout << "Service stopped." << std::endl;
-    return 0;
+    std::cout << "❌ Cannot start service from CLI" << std::endl;
+    std::cout << "   PhantomVault service should be managed by systemd" << std::endl;
+    std::cout << "   Use: sudo systemctl start phantomvault" << std::endl;
+    return 1;
 }
 
 int PhantomVaultApplication::stopService() {
     std::cout << "Stopping PhantomVault service..." << std::endl;
     
-    // Try to connect to running service via HTTP IPC
-    std::string stop_command = "curl -s -X POST http://localhost:" + std::to_string(config_.ipc_port) + "/api/service/stop";
+    // Connect to service via IPC
+    phantomvault::IPCClient client("127.0.0.1", config_.ipc_port);
     
-    int result = system(stop_command.c_str());
+    if (!client.connect()) {
+        std::cout << "❌ Cannot connect to PhantomVault service" << std::endl;
+        std::cout << "   Service may already be stopped" << std::endl;
+        return 1;
+    }
     
-    if (result == 0) {
+    auto response = client.stopService();
+    if (response.success) {
         std::cout << "✅ PhantomVault service stopped successfully" << std::endl;
+        std::cout << "   " << response.message << std::endl;
         return 0;
     } else {
-        // If IPC fails, try to find and terminate the process
-        std::cout << "IPC stop failed, attempting process termination..." << std::endl;
-        
-        // Try to find PhantomVault processes
-        int kill_result = system("pkill -f phantomvault 2>/dev/null");
-        
-        if (kill_result == 0) {
-            std::cout << "✅ PhantomVault service terminated" << std::endl;
-            return 0;
-        } else {
-            std::cerr << "❌ No running PhantomVault service found" << std::endl;
-            return 1;
-        }
+        std::cout << "❌ Failed to stop service: " << response.message << std::endl;
+        std::cout << "   Try: sudo systemctl stop phantomvault" << std::endl;
+        return 1;
     }
 }
 
 int PhantomVaultApplication::restartService() {
     std::cout << "Restarting PhantomVault service..." << std::endl;
     
-    // Stop first, then start
-    int stop_result = stopService();
-    if (stop_result != 0) {
-        return stop_result;
+    // Connect to service via IPC
+    phantomvault::IPCClient client("127.0.0.1", config_.ipc_port);
+    
+    if (!client.connect()) {
+        std::cout << "❌ Cannot connect to PhantomVault service" << std::endl;
+        std::cout << "   Try: sudo systemctl restart phantomvault" << std::endl;
+        return 1;
     }
     
-    std::this_thread::sleep_for(std::chrono::seconds(1)); // Brief pause
-    
-    return startService();
+    auto response = client.restartService();
+    if (response.success) {
+        std::cout << "✅ PhantomVault service restarted successfully" << std::endl;
+        std::cout << "   " << response.message << std::endl;
+        return 0;
+    } else {
+        std::cout << "❌ Failed to restart service: " << response.message << std::endl;
+        std::cout << "   Try: sudo systemctl restart phantomvault" << std::endl;
+        return 1;
+    }
 }
 
 int PhantomVaultApplication::listProfiles() {
     std::cout << "Listing PhantomVault profiles..." << std::endl;
     
-    // Initialize service manager to access ProfileManager
-    service_manager_ = std::make_unique<phantomvault::ServiceManager>();
+    // Connect to service via IPC
+    phantomvault::IPCClient client("127.0.0.1", config_.ipc_port);
     
-    if (!service_manager_->initialize()) {
-        std::cerr << "❌ Failed to initialize service: " << service_manager_->getLastError() << std::endl;
+    if (!client.connect()) {
+        std::cout << "❌ Cannot connect to PhantomVault service" << std::endl;
+        std::cout << "   Error: " << client.getLastError() << std::endl;
+        std::cout << "   Make sure the service is running: sudo systemctl start phantomvault" << std::endl;
         return 1;
     }
     
-    auto* profile_manager = service_manager_->getProfileManager();
-    if (!profile_manager) {
-        std::cerr << "❌ Failed to access profile manager" << std::endl;
+    auto response = client.listProfiles();
+    if (!response.success) {
+        std::cout << "❌ Failed to list profiles: " << response.message << std::endl;
         return 1;
     }
     
-    auto profiles = profile_manager->getAllProfiles();
-    
-    if (profiles.empty()) {
+    if (response.data.empty()) {
         std::cout << "No profiles found. Create a profile first using the GUI." << std::endl;
         return 0;
     }
     
     std::cout << "Available profiles:" << std::endl;
-    for (const auto& profile : profiles) {
-        std::cout << "  • " << profile.name << " (ID: " << profile.id << ")" << std::endl;
-        std::cout << "    Created: " << std::chrono::duration_cast<std::chrono::seconds>(
-            profile.createdAt.time_since_epoch()).count() << std::endl;
-        std::cout << "    Folders: " << profile.folderCount << std::endl;
-        std::cout << "    Status: " << (profile.isActive ? "Active" : "Inactive") << std::endl;
-        std::cout << std::endl;
+    for (const auto& [key, value] : response.data) {
+        std::cout << "  • " << key << ": " << value << std::endl;
     }
     
     return 0;
@@ -474,26 +451,23 @@ int PhantomVaultApplication::listProfiles() {
 int PhantomVaultApplication::lockProfile(const std::string& profileId) {
     std::cout << "Locking profile: " << profileId << std::endl;
     
-    // Initialize service manager to access components
-    service_manager_ = std::make_unique<phantomvault::ServiceManager>();
+    // Connect to service via IPC
+    phantomvault::IPCClient client("127.0.0.1", config_.ipc_port);
     
-    if (!service_manager_->initialize()) {
-        std::cerr << "❌ Failed to initialize service: " << service_manager_->getLastError() << std::endl;
+    if (!client.connect()) {
+        std::cout << "❌ Cannot connect to PhantomVault service" << std::endl;
+        std::cout << "   Error: " << client.getLastError() << std::endl;
+        std::cout << "   Make sure the service is running: sudo systemctl start phantomvault" << std::endl;
         return 1;
     }
     
-    auto* folder_manager = service_manager_->getFolderSecurityManager();
-    if (!folder_manager) {
-        std::cerr << "❌ Failed to access folder security manager" << std::endl;
-        return 1;
-    }
-    
-    // Lock temporary folders for the profile
-    if (folder_manager->lockTemporaryFolders(profileId)) {
+    auto response = client.lockProfile(profileId);
+    if (response.success) {
         std::cout << "✅ Profile folders locked successfully" << std::endl;
+        std::cout << "   " << response.message << std::endl;
         return 0;
     } else {
-        std::cerr << "❌ Failed to lock profile folders: " << folder_manager->getLastError() << std::endl;
+        std::cout << "❌ Failed to lock profile folders: " << response.message << std::endl;
         return 1;
     }
 }
