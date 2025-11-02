@@ -496,7 +496,7 @@ EOF
 create_cli_tool() {
     log_info "Creating command line tool..."
     
-    cat > /usr/local/bin/phantomvault << 'EOF'
+    cat > /usr/bin/phantomvault << 'EOF'
 #!/bin/bash
 # PhantomVault command line interface
 
@@ -619,7 +619,7 @@ case "$1" in
 esac
 EOF
 
-    chmod +x /usr/local/bin/phantomvault
+    chmod +x /usr/bin/phantomvault
     log_success "Created command line tool: phantomvault"
 }
 
