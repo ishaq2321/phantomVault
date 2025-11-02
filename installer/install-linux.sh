@@ -400,7 +400,6 @@ Group=root
 WorkingDirectory=/opt/phantomvault
 Environment=HOME=/root
 ExecStart=$INSTALL_DIR/bin/phantomvault-service --service --daemon --log-level INFO --port 9876
-PIDFile=$INSTALL_DIR/var/phantomvault.pid
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10
