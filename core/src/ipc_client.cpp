@@ -89,7 +89,7 @@ public:
         Json::StreamWriterBuilder builder;
         std::string json_data = Json::writeString(builder, payload);
         
-        return makeRequest("POST", "/api/lock", json_data);
+        return makeRequest("POST", "/api/vault/lock/temporary", json_data);
     }
 
     IPCResponse unlockProfile(const std::string& profile_name) {
@@ -99,11 +99,19 @@ public:
         Json::StreamWriterBuilder builder;
         std::string json_data = Json::writeString(builder, payload);
         
-        return makeRequest("POST", "/api/unlock", json_data);
+        return makeRequest("POST", "/api/vault/unlock/temporary", json_data);
     }
 
     IPCResponse testKeyboard() {
         return makeRequest("GET", "/api/test-keyboard");
+    }
+
+    IPCResponse stopService() {
+        return makeRequest("POST", "/api/service/stop");
+    }
+
+    IPCResponse restartService() {
+        return makeRequest("POST", "/api/service/restart");
     }
 
     std::string getLastError() const {

@@ -36,6 +36,8 @@ public:
     IPCResponse lockProfile(const std::string& profile_name);
     IPCResponse unlockProfile(const std::string& profile_name);
     IPCResponse testKeyboard();
+    IPCResponse stopService();
+    IPCResponse restartService();
 
     // Utility
     std::string getLastError() const;
