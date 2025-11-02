@@ -43,8 +43,8 @@ public:
             return false;
         }
 
-        // Test connection with status endpoint
-        auto response = makeRequest("GET", "/api/status");
+        // Test connection with platform endpoint (which exists)
+        auto response = makeRequest("GET", "/api/platform");
         connected_ = response.success;
         
         if (!connected_) {
@@ -63,7 +63,8 @@ public:
     }
 
     IPCResponse getStatus() {
-        return makeRequest("GET", "/api/status");
+        // Use platform endpoint to get service status
+        return makeRequest("GET", "/api/platform");
     }
 
     IPCResponse listProfiles() {

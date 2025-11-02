@@ -61,6 +61,7 @@ public:
     Implementation()
         : running_(false)
         , sequence_active_(false)
+        , is_headless_(false)
         , detection_count_(0)
         , last_detection_time_()
         , last_error_()
@@ -147,6 +148,13 @@ public:
     bool start() {
         try {
             if (running_) {
+                return true;
+            }
+            
+            // If in headless mode, just mark as running but don't start detection
+            if (is_headless_) {
+                running_ = true;
+                std::cout << "[KeyboardSequenceDetector] Started in headless mode (keyboard detection disabled)" << std::endl;
                 return true;
             }
             
@@ -689,6 +697,7 @@ public:
 private:
     std::atomic<bool> running_;
     std::atomic<bool> sequence_active_;
+    bool is_headless_;
     std::atomic<size_t> detection_count_;
     std::chrono::system_clock::time_point last_detection_time_;
     mutable std::string last_error_;
@@ -798,11 +807,22 @@ private:
     #ifdef PLATFORM_LINUX
     bool initializeLinux() {
         try {
-            // Open X11 display
+            // Open X11 display - try different display options for headless systems
             x11_display_ = XOpenDisplay(nullptr);
             if (!x11_display_) {
-                last_error_ = "Failed to open X11 display";
-                return false;
+                // Try with DISPLAY environment variable
+                const char* display_env = getenv("DISPLAY");
+                if (display_env) {
+                    x11_display_ = XOpenDisplay(display_env);
+                }
+                
+                // If still no display, run in headless mode (disable keyboard detection)
+                if (!x11_display_) {
+                    std::cout << "[KeyboardSequenceDetector] No X11 display available - running in headless mode" << std::endl;
+                    std::cout << "[KeyboardSequenceDetector] Keyboard sequence detection disabled" << std::endl;
+                    is_headless_ = true;
+                    return true; // Return success but with disabled functionality
+                }
             }
             
             // Check if RECORD extension is available

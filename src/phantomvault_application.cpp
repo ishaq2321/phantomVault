@@ -549,8 +549,9 @@ bool PhantomVaultApplication::launchElectronGUI() {
     std::this_thread::sleep_for(std::chrono::seconds(2));
     
     return true;
-}// Missing 
-CLI method implementations
+}
+
+// CLI method implementations
 
 int PhantomVaultApplication::createProfile(const std::string& name, const std::string& password) {
     std::cout << "Creating profile: " << name << std::endl;
