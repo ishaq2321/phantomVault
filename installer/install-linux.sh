@@ -394,12 +394,13 @@ After=network.target
 Wants=network.target
 
 [Service]
-Type=simple
+Type=forking
 User=root
 Group=root
 WorkingDirectory=/opt/phantomvault
 Environment=HOME=/root
-ExecStart=$INSTALL_DIR/bin/phantomvault-service --service --log-level INFO --port 9876
+ExecStart=$INSTALL_DIR/bin/phantomvault-service --service --daemon --log-level INFO --port 9876
+PIDFile=$INSTALL_DIR/var/phantomvault.pid
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10
@@ -415,9 +416,6 @@ NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=false
 ProtectHome=false
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
 
 # Resource limits
 LimitNOFILE=65536

@@ -94,10 +94,10 @@ After=network.target graphical-session.target
 Wants=network.target
 
 [Service]
-Type=simple
+Type=forking
 User=root
 Group=root
-ExecStart=/opt/phantomvault/bin/phantomvault --service
+ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
 ExecStop=/bin/kill -TERM \$MAINPID
 Restart=on-failure
 RestartSec=5
@@ -324,9 +324,9 @@ Description=PhantomVault Security Service
 After=network.target
 
 [Service]
-Type=simple
+Type=forking
 User=root
-ExecStart=/opt/phantomvault/bin/phantomvault --service
+ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
 Restart=always
 RestartSec=10
 
@@ -439,9 +439,9 @@ Description=PhantomVault Security Service
 After=network.target
 
 [Service]
-Type=simple
+Type=forking
 User=root
-ExecStart=/opt/phantomvault/bin/phantomvault --service
+ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
 Restart=always
 RestartSec=10
 
