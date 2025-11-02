@@ -395,11 +395,11 @@ Wants=network.target
 
 [Service]
 Type=forking
-User=$SERVICE_USER
-Group=$SERVICE_USER
-WorkingDirectory=/home/$SERVICE_USER
-Environment=HOME=/home/$SERVICE_USER
-ExecStart=$INSTALL_DIR/bin/phantomvault-service --daemon --log-level INFO --port 9876
+User=root
+Group=root
+WorkingDirectory=/opt/phantomvault
+Environment=HOME=/root
+ExecStart=$INSTALL_DIR/bin/phantomvault-service --service --daemon --log-level INFO --port 9876
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10

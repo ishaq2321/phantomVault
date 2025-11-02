@@ -59,13 +59,13 @@ wget https://github.com/ishaq2321/phantomVault/releases/download/v1.1.0/phantomv
 sudo dpkg -i phantomvault_1.1.0_amd64.deb
 sudo apt-get install -f
 
-# Start the service
+# Start the service (REQUIRES ROOT)
 sudo systemctl start phantomvault
 sudo systemctl enable phantomvault
 
-# Test CLI (Architecture Fixed!)
-phantomvault --cli status
-phantomvault --cli profiles
+# Test CLI (ALL COMMANDS REQUIRE SUDO)
+sudo phantomvault --cli status
+sudo phantomvault --cli profiles
 phantomvault --help
 ```
 
@@ -110,23 +110,26 @@ cd installer/scripts
 4. **Add Folders**: Select folders to protect with encryption
 5. **Access Anytime**: Press `Ctrl+Alt+V` and type your password
 
-### CLI Usage (NEW - Fixed in v1.0.0!)
+### CLI Usage (NEW - Fixed in v1.1.0!)
 
 ```bash
-# Check service status
-phantomvault --cli status
+# Check service status (REQUIRES SUDO)
+sudo phantomvault --cli status
 
-# List profiles
-phantomvault --cli profiles
+# List profiles (REQUIRES SUDO)
+sudo phantomvault --cli profiles
 
-# Lock profile folders
-phantomvault --cli lock profile-name
+# Create profile (REQUIRES SUDO)
+sudo phantomvault --cli create-profile myprofile mypassword
 
-# Service management
-phantomvault --cli stop      # Graceful shutdown
-phantomvault --cli restart   # Service restart
+# Lock profile folders (REQUIRES SUDO)
+sudo phantomvault --cli lock profile-name
 
-# Help and version
+# Service management (REQUIRES SUDO)
+sudo phantomvault --cli stop      # Graceful shutdown
+sudo phantomvault --cli restart   # Service restart
+
+# Help and version (NO SUDO NEEDED)
 phantomvault --help
 phantomvault --version
 ```
@@ -287,6 +290,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Use at Own Risk**: While designed with security in mind, use this software at your own risk
 
 ### Security Notice
+- **REQUIRES ROOT PRIVILEGES**: PhantomVault requires sudo/root for all operations
+- **Service runs as root**: The background service runs with root privileges for folder security
+- **CLI requires sudo**: All CLI commands (except --help) require sudo
 - This software has not undergone professional security audit
 - Always maintain backups of important files before using
 - Test thoroughly in a safe environment before production use
