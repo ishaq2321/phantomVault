@@ -394,7 +394,8 @@ After=network.target
 Wants=network.target
 
 [Service]
-Type=exec
+Type=notify
+NotifyAccess=main
 User=root
 Group=root
 WorkingDirectory=/opt/phantomvault
@@ -404,7 +405,7 @@ Restart=on-failure
 RestartSec=10
 StartLimitInterval=300s
 StartLimitBurst=5
-TimeoutStartSec=30
+TimeoutStartSec=60
 TimeoutStopSec=30
 
 # Logging

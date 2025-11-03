@@ -94,13 +94,15 @@ After=network.target graphical-session.target
 Wants=network.target
 
 [Service]
-Type=forking
+Type=notify
+NotifyAccess=main
 User=root
 Group=root
 ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
 ExecStop=/bin/kill -TERM \$MAINPID
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=60
 StandardOutput=journal
 StandardError=journal
 Environment=DISPLAY=:0
@@ -324,11 +326,13 @@ Description=PhantomVault Security Service
 After=network.target
 
 [Service]
-Type=forking
+Type=notify
+NotifyAccess=main
 User=root
 ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
 Restart=always
 RestartSec=10
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target
@@ -439,11 +443,13 @@ Description=PhantomVault Security Service
 After=network.target
 
 [Service]
-Type=forking
+Type=notify
+NotifyAccess=main
 User=root
 ExecStart=/opt/phantomvault/bin/phantomvault --service --daemon
 Restart=always
 RestartSec=10
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target

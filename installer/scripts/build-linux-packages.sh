@@ -163,7 +163,8 @@ After=network.target graphical-session.target
 Wants=network.target
 
 [Service]
-Type=forking
+Type=notify
+NotifyAccess=main
 User=root
 Group=root
 WorkingDirectory=/opt/phantomvault
@@ -173,6 +174,7 @@ Restart=on-failure
 RestartSec=10
 StartLimitInterval=300s
 StartLimitBurst=5
+TimeoutStartSec=60
 
 # Logging
 StandardOutput=append:/opt/phantomvault/logs/phantomvault.log
@@ -475,10 +477,12 @@ Description=PhantomVault - Invisible Folder Security Service
 After=network.target
 
 [Service]
-Type=forking
+Type=notify
+NotifyAccess=main
 User=root
 ExecStart=/opt/phantomvault/bin/phantomvault-service --daemon
 Restart=on-failure
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target

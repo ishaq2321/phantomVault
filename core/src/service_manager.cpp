@@ -23,6 +23,8 @@
 
 #ifdef PLATFORM_LINUX
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 #include <signal.h>
 #elif PLATFORM_WINDOWS
@@ -203,6 +205,27 @@ public:
             running_ = true;
             std::cout << "[ServiceManager] Service started successfully" << std::endl;
             std::cout << "[ServiceManager] Memory usage: " << getMemoryUsage() << " KB" << std::endl;
+            
+            // Notify systemd that we're ready (Linux only)
+            #ifdef PLATFORM_LINUX
+            // Try to notify systemd if we're running as a service
+            if (getenv("NOTIFY_SOCKET") != nullptr) {
+                // Simple sd_notify implementation without requiring libsystemd
+                int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+                if (fd >= 0) {
+                    struct sockaddr_un addr;
+                    memset(&addr, 0, sizeof(addr));
+                    addr.sun_family = AF_UNIX;
+                    strncpy(addr.sun_path, getenv("NOTIFY_SOCKET"), sizeof(addr.sun_path) - 1);
+                    
+                    const char* msg = "READY=1\nSTATUS=PhantomVault service is running";
+                    sendto(fd, msg, strlen(msg), 0, (struct sockaddr*)&addr, sizeof(addr));
+                    close(fd);
+                    
+                    std::cout << "[ServiceManager] Notified systemd that service is ready" << std::endl;
+                }
+            }
+            #endif
             
             return true;
             

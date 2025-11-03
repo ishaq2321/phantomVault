@@ -262,7 +262,8 @@ After=network.target graphical-session.target
 Wants=network.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=root
 Group=root
 ExecStart=$INSTALL_DIR/bin/phantomvault-service --daemon --log-level INFO --port 9876
@@ -271,6 +272,7 @@ Restart=always
 RestartSec=5
 StartLimitInterval=60s
 StartLimitBurst=3
+TimeoutStartSec=60
 
 # Logging
 StandardOutput=append:$INSTALL_DIR/logs/phantomvault.log

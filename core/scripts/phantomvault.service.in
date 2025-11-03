@@ -3,11 +3,13 @@ Description=PhantomVault Service - Invisible Folder Security
 After=network.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=root
 ExecStart=@CMAKE_INSTALL_PREFIX@/bin/phantomvault-service --daemon
 Restart=always
 RestartSec=5
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target
