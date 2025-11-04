@@ -166,18 +166,32 @@ This document provides a complete testing procedure to validate that PhantomVaul
   - With sudo: ✅ Profile created successfully (privilege level: Administrator)
   - Both profiles verified via API: `curl http://127.0.0.1:9876/api/profiles`
 
-- [x] **4.2 Profile Listing** ⚠️ (Partially Working)
+- [x] **4.2 Profile Listing** ✅ FIXED
   ```bash
   /opt/phantomvault/bin/phantomvault-service --cli profiles
   ```
   - [x] Command executes without errors
-  - [ ] Shows "No profiles found" message (UI display issue)
-  - [x] Profiles exist in backend (verified via API curl)
-  - [ ] **ISSUE**: Client code expects data in `response.data` but server returns `"profiles"` array
+  - [x] Shows all 3 profiles correctly formatted
+  - [x] Displays profile name, ID, and folder count
+  - [x] Enhanced display with emoji icons (📁)
+  - [x] **BUG FIXED**: Added `raw_json` field to IPCResponse, client now parses JSON array
   
   **Actual Results:**
-  - CLI shows: "No profiles found. Create a profile first using the GUI."
-  - API shows: 2 profiles (testprofile, testprofile2) with IDs, timestamps, folderCount
+  ```
+  Available profiles (3):
+
+    📁 testprofile
+       ID: profile_1762214932080_1037
+       Protected folders: 0
+
+    📁 testprofile2
+       ID: profile_1762214941242_1094
+       Protected folders: 0
+
+    📁 myprofile
+       ID: profile_1762215563782_8885
+       Protected folders: 0
+  ```
 
 - [ ] **4.3 Profile Authentication Test** (Not tested yet)
   ```bash
@@ -187,6 +201,14 @@ This document provides a complete testing procedure to validate that PhantomVaul
   - [ ] Command executes (may show authentication required message)
   - [ ] No crashes or connection errors
   - [ ] Appropriate response for authentication state
+
+**📊 Phase 4 Summary:**
+- ✅ **Profile Creation**: WORKING (Fixed IPC parameter mismatch: 'password' → 'masterKey')
+- ✅ **Profile Listing**: WORKING (Fixed JSON parsing: added raw_json field, parse profiles array)
+- ⚠️ **Profile Authentication**: Not tested yet (requires GUI or folder setup)
+- 🐛 **Bugs Fixed**: 2 critical bugs (parameter mismatch + JSON array parsing)
+- 📈 **Performance**: Service stable at 2.4MB memory, <1% CPU, 42ms startup
+- 🎯 **Architecture**: Confirmed pure IPC client-server model working correctly
 
 ---
 
