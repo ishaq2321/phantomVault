@@ -74,7 +74,7 @@ public:
     IPCResponse createProfile(const std::string& name, const std::string& password) {
         Json::Value payload;
         payload["name"] = name;
-        payload["password"] = password;
+        payload["masterKey"] = password;  // Server expects 'masterKey' not 'password'
         
         Json::StreamWriterBuilder builder;
         std::string json_data = Json::writeString(builder, payload);
