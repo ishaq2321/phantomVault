@@ -84,7 +84,7 @@ public:
 
     IPCResponse lockProfile(const std::string& profile_name) {
         Json::Value payload;
-        payload["profile"] = profile_name;
+        payload["profileId"] = profile_name;  // Server expects 'profileId' not 'profile'
         
         Json::StreamWriterBuilder builder;
         std::string json_data = Json::writeString(builder, payload);
@@ -94,7 +94,7 @@ public:
 
     IPCResponse unlockProfile(const std::string& profile_name) {
         Json::Value payload;
-        payload["profile"] = profile_name;
+        payload["profileId"] = profile_name;  // Server expects 'profileId' not 'profile'
         
         Json::StreamWriterBuilder builder;
         std::string json_data = Json::writeString(builder, payload);
