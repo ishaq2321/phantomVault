@@ -979,10 +979,23 @@ ipcMain.handle('app:installUpdate', async (_, packagePath) => {
 });
 
 // Service management
-ipcMain.handle('service:getStatus', () => {
+ipcMain.handle('service:getStatus', async () => {
+  // Check if service is responding (either our process or systemd service)
+  try {
+    const response = await fetch('http://127.0.0.1:9876/health');
+    if (response.ok) {
+      return {
+        running: true,
+        pid: serviceProcess?.pid || null, // Will be null for systemd service
+      };
+    }
+  } catch (e) {
+    // Service not responding
+  }
+  
   return {
-    running: serviceProcess !== null,
-    pid: serviceProcess?.pid || null,
+    running: false,
+    pid: null,
   };
 });
 

@@ -239,12 +239,17 @@ install_files() {
     cat > "$INSTALL_DIR/bin/phantomvault-gui" << 'EOF'
 #!/bin/bash
 # PhantomVault GUI Launcher
-# This script starts the PhantomVault GUI application
+# This script starts the PhantomVault GUI application with admin privileges
 
 INSTALL_DIR="/opt/phantomvault"
 GUI_DIR="$INSTALL_DIR/gui"
 SERVICE_BIN="$INSTALL_DIR/bin/phantomvault-service"
 LOG_FILE="$INSTALL_DIR/logs/phantomvault.log"
+
+# Function to check if running as admin
+is_admin() {
+    [[ $EUID -eq 0 ]]
+}
 
 # Function to check if service is running
 is_service_running() {
@@ -261,16 +266,15 @@ ensure_service_running() {
     if ! is_service_running; then
         echo "PhantomVault service is not running. Starting it..."
         
-        # Try to start the service using systemctl (no sudo needed if user is in right groups)
-        if systemctl --user start phantomvault 2>/dev/null; then
-            echo "Service started successfully"
-        elif pkexec systemctl start phantomvault 2>/dev/null; then
-            echo "Service started with elevated privileges"
+        # Start service with proper privileges
+        if is_admin; then
+            systemctl start phantomvault
         else
-            echo "Failed to start service automatically."
-            echo "Please run: sudo systemctl start phantomvault"
-            echo "Or check if the service is installed correctly."
-            return 1
+            pkexec systemctl start phantomvault 2>/dev/null || {
+                echo "Failed to start service automatically."
+                echo "Please run: sudo systemctl start phantomvault"
+                return 1
+            }
         fi
         
         # Wait for service to be ready
@@ -291,20 +295,25 @@ ensure_service_running() {
 
 # Check if GUI is available and start it
 start_gui() {
-    if [[ -d "$GUI_DIR" && -f "$GUI_DIR/package.json" ]]; then
-        # Change to GUI directory
+    # Check for packaged GUI binary first (preferred)
+    if [[ -f "$GUI_DIR/phantomvault-gui" ]]; then
+        echo "Starting PhantomVault GUI..."
+        "$GUI_DIR/phantomvault-gui" 2>/dev/null &
+        return 0
+    # Fallback to development mode
+    elif [[ -d "$GUI_DIR" && -f "$GUI_DIR/package.json" ]]; then
         cd "$GUI_DIR" || {
             echo "Failed to access GUI directory"
             return 1
         }
         
-        # Try to start Electron GUI
+        # Try to start Electron GUI in development mode
         if command -v electron &> /dev/null; then
-            echo "Starting PhantomVault GUI..."
+            echo "Starting PhantomVault GUI (development mode)..."
             electron . 2>/dev/null &
             return 0
         elif command -v node &> /dev/null && [[ -f "$GUI_DIR/node_modules/.bin/electron" ]]; then
-            echo "Starting PhantomVault GUI..."
+            echo "Starting PhantomVault GUI (development mode)..."
             "$GUI_DIR/node_modules/.bin/electron" . 2>/dev/null &
             return 0
         else
@@ -321,6 +330,18 @@ start_gui() {
 
 # Main execution
 main() {
+    # Check if we need to request admin privileges
+    if ! is_admin && [[ "$1" != "--no-admin" ]]; then
+        # Re-launch with pkexec to get admin privileges
+        if command -v pkexec &> /dev/null; then
+            exec pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" "$0" --no-admin
+        else
+            echo "Admin privileges are required to manage the PhantomVault service."
+            echo "Please run with sudo: sudo $0"
+            exit 1
+        fi
+    fi
+    
     # Ensure service is running
     if ! ensure_service_running; then
         echo "Cannot start GUI without the service running"
@@ -472,7 +493,7 @@ Version=1.0
 Type=Application
 Name=PhantomVault
 Comment=Invisible Folder Security with Profile-Based Management
-Exec=$INSTALL_DIR/bin/phantomvault-gui
+Exec=pkexec env DISPLAY=\$DISPLAY XAUTHORITY=\$XAUTHORITY $INSTALL_DIR/bin/phantomvault-gui --no-admin
 Icon=$INSTALL_DIR/share/pixmaps/phantomvault.svg
 Terminal=false
 Categories=Security;Utility;FileManager;
