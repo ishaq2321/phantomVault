@@ -17,6 +17,7 @@ struct IPCResponse {
     bool success;
     std::string message;
     std::map<std::string, std::string> data;
+    std::string raw_json;  // Raw JSON response for complex parsing
 };
 
 class IPCClient {

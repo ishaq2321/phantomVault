@@ -164,6 +164,9 @@ private:
             Json::CharReaderBuilder builder;
             std::string errors;
             
+            // Store raw JSON for complex parsing by caller
+            response.raw_json = http_response.data;
+            
             std::istringstream stream(http_response.data);
             if (Json::parseFromStream(builder, stream, &json_response, &errors)) {
                 // Check both HTTP status and JSON success field

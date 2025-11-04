@@ -18,6 +18,8 @@
 #include <chrono>
 #include <filesystem>
 #include <cstdlib>
+#include <jsoncpp/json/json.h>
+#include <sstream>
 
 // Global application instance for signal handling
 static PhantomVaultApplication* g_app_instance = nullptr;
@@ -435,14 +437,44 @@ int PhantomVaultApplication::listProfiles() {
         return 1;
     }
     
-    if (response.data.empty()) {
-        std::cout << "No profiles found. Create a profile first using the GUI." << std::endl;
-        return 0;
-    }
-    
-    std::cout << "Available profiles:" << std::endl;
-    for (const auto& [key, value] : response.data) {
-        std::cout << "  • " << key << ": " << value << std::endl;
+    // Parse the profiles array from raw JSON
+    try {
+        Json::Value root;
+        Json::CharReaderBuilder builder;
+        std::string errors;
+        std::istringstream stream(response.raw_json);
+        
+        if (!Json::parseFromStream(builder, stream, &root, &errors)) {
+            std::cout << "❌ Failed to parse profile data: " << errors << std::endl;
+            return 1;
+        }
+        
+        if (!root.isMember("profiles") || !root["profiles"].isArray()) {
+            std::cout << "No profiles found. Create a profile first using the GUI." << std::endl;
+            return 0;
+        }
+        
+        const Json::Value& profiles = root["profiles"];
+        if (profiles.empty()) {
+            std::cout << "No profiles found. Create a profile first using the GUI." << std::endl;
+            return 0;
+        }
+        
+        std::cout << "\nAvailable profiles (" << profiles.size() << "):\n" << std::endl;
+        for (const auto& profile : profiles) {
+            std::string name = profile.get("name", "Unknown").asString();
+            std::string id = profile.get("id", "").asString();
+            int folderCount = profile.get("folderCount", 0).asInt();
+            
+            std::cout << "  📁 " << name << std::endl;
+            std::cout << "     ID: " << id << std::endl;
+            std::cout << "     Protected folders: " << folderCount << std::endl;
+            std::cout << std::endl;
+        }
+        
+    } catch (const std::exception& e) {
+        std::cout << "❌ Error parsing profiles: " << e.what() << std::endl;
+        return 1;
     }
     
     return 0;
